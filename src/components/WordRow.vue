@@ -1,5 +1,5 @@
 <script setup>
-const props = defineProps({
+defineProps({
   word: { type: Object, required: true },
   input: { type: Array, required: true },
   wordIndex: { type: Number, required: true },
@@ -8,16 +8,7 @@ const props = defineProps({
   activeSlot: { type: Number, default: null },
   solved: Boolean,
 })
-const emit = defineEmits(['select-word', 'select-slot', 'tap-letter'])
-
-function buzz(ms = 12) {
-  if (navigator.vibrate) navigator.vibrate(ms)
-}
-function tapLetter(t) {
-  if (!props.active || props.pool.used.has(t.id)) return
-  buzz()
-  emit('tap-letter', t.letter)
-}
+const emit = defineEmits(['select-word', 'select-slot'])
 </script>
 
 <template>
@@ -39,17 +30,15 @@ function tapLetter(t) {
       </template>
     </div>
 
-    <div class="pool" :class="{ active }">
+    <!-- Faded preview of the word's letters; the tappable pool lives in the bottom bar. -->
+    <div class="pool">
       <TransitionGroup name="key">
-        <button
+        <span
           v-for="t in pool.tiles"
           :key="t.id"
           class="pkey"
           :class="{ used: pool.used.has(t.id) }"
-          type="button"
-          tabindex="-1"
-          @click.stop="tapLetter(t)"
-        >{{ t.letter }}</button>
+        >{{ t.letter }}</span>
       </TransitionGroup>
     </div>
   </div>
@@ -107,48 +96,30 @@ function tapLetter(t) {
 .cell:active { transform: scale(0.94); }
 .word.solved .cell.filled { background: linear-gradient(180deg, #f6d9a0, #eec078); }
 
-/* The word's own letters, always visible; enlarge + become tappable when active. */
+/* The word's own letters as a small faded hint; tapping happens in the bottom bar. */
 .pool {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.25rem;
-  margin-top: 0.35rem;
+  margin-top: 0.3rem;
   min-height: 1rem;
-  opacity: 0.4;
-  transition: opacity 0.2s ease;
+  opacity: 0.45;
 }
-.pool.active { opacity: 1; }
+.word.active .pool { opacity: 0.7; }
 .pkey {
-  width: 1.35rem;
-  height: 1.55rem;
-  border: none;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.5rem;
   border-radius: 0.22rem;
   background: var(--tan);
   color: var(--patch-dark);
-  font-family: inherit;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
-  pointer-events: none;
-  transition: width 0.18s ease, height 0.18s ease, font-size 0.18s ease,
-    transform 0.1s ease, opacity 0.2s ease, background 0.2s ease;
 }
-.pool.active .pkey {
-  width: 2.4rem;
-  height: 2.7rem;
-  font-size: 1.3rem;
-  pointer-events: auto;
-  box-shadow: 0 3px 0 var(--patch-dark);
-  cursor: pointer;
-}
-.pool.active .pkey:active { transform: translateY(3px); box-shadow: 0 0 0 var(--patch-dark); }
 .pkey.used { opacity: 0.25; }
-.pool.active .pkey.used {
-  background: color-mix(in srgb, var(--patch) 12%, #fff);
-  box-shadow: none;
-  pointer-events: none;
-}
 
 .pop-enter-active { animation: pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes pop-in {

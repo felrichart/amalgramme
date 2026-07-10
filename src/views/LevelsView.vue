@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PUZZLES } from '../data/challenges.js'
+import { PUZZLES, DIFFICULTIES } from '../data/challenges.js'
 import { levelProgress } from '../composables/useGameState.js'
 import GiraffeMark from '../components/GiraffeMark.vue'
 
@@ -13,6 +13,7 @@ const levels = computed(() =>
     return {
       index: i,
       theme: p.theme,
+      difficulty: p.difficulty,
       total: p.words.length,
       found: prog.found,
       completed: prog.completed,
@@ -21,6 +22,14 @@ const levels = computed(() =>
 )
 
 const doneCount = computed(() => levels.value.filter((l) => l.completed).length)
+
+/* One block per difficulty; empty buckets still render so new levels have a home. */
+const sections = computed(() =>
+  DIFFICULTIES.map((d) => {
+    const items = levels.value.filter((l) => l.difficulty === d.key)
+    return { ...d, items, done: items.filter((l) => l.completed).length }
+  })
+)
 
 function play(l) {
   router.push('/play/' + l.index)
@@ -35,23 +44,31 @@ function play(l) {
       <p class="tag">{{ doneCount }} / {{ levels.length }} niveaux réussis</p>
     </header>
 
-    <div class="grid">
-      <button
-        v-for="l in levels"
-        :key="l.index"
-        class="lvl"
-        :class="{ done: l.completed, started: !l.completed && l.found > 0 }"
-        type="button"
-        @click="play(l)"
-      >
-        <span class="no">{{ l.index + 1 }}</span>
-        <span class="theme">{{ l.theme }}</span>
-        <span class="score">
-          <span v-if="l.completed" class="badge">🦒 réussi</span>
-          <span v-else class="count">{{ l.found }} / {{ l.total }}</span>
-        </span>
-      </button>
-    </div>
+    <section v-for="d in sections" :key="d.key" class="section">
+      <div class="sec-head">
+        <span class="sec-name" :class="d.key">{{ d.label }}</span>
+        <span class="sec-count">{{ d.done }} / {{ d.items.length }}</span>
+      </div>
+
+      <div v-if="d.items.length" class="grid">
+        <button
+          v-for="l in d.items"
+          :key="l.index"
+          class="lvl"
+          :class="{ done: l.completed, started: !l.completed && l.found > 0 }"
+          type="button"
+          @click="play(l)"
+        >
+          <span class="no">{{ l.index + 1 }}</span>
+          <span class="theme">{{ l.theme }}</span>
+          <span class="score">
+            <span v-if="l.completed" class="badge">🦒 réussi</span>
+            <span v-else class="count">{{ l.found }} / {{ l.total }}</span>
+          </span>
+        </button>
+      </div>
+      <p v-else class="empty">Bientôt de nouveaux niveaux 🦒</p>
+    </section>
   </div>
 </template>
 
@@ -62,7 +79,27 @@ function play(l) {
 .top h1 { margin: 0; font-size: 1.8rem; color: var(--patch-dark); letter-spacing: 0.5px; }
 .tag { margin: 0.3rem 0 0; font-size: 0.85rem; opacity: 0.6; }
 
+.section { margin-bottom: 1.6rem; }
+.sec-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin: 0 0.15rem 0.6rem;
+}
+.sec-name {
+  font-size: 1.1rem; font-weight: 800; color: var(--patch-dark);
+  padding: 0.15rem 0.7rem; border-radius: 0.7rem;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.sec-name.facile { color: #4e8d5b; }
+.sec-name.normal { color: var(--orange); }
+.sec-name.difficile { color: #c0562f; }
+.sec-count { font-size: 0.85rem; font-weight: 700; opacity: 0.55; }
+
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.7rem; }
+.empty {
+  margin: 0; padding: 1.1rem; text-align: center; font-size: 0.9rem; opacity: 0.55;
+  background: var(--cream-2); border-radius: 1rem;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--patch) 18%, transparent);
+}
 
 .lvl {
   position: relative;

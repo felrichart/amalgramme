@@ -19,6 +19,16 @@ const g = useGameState(levelIndex)
 const maxSlots = Math.max(...g.words.map((w) => w.slots.length))
 const hasSelection = computed(() => g.state.selectedWord != null && !g.state.completed)
 
+/* Tappable letters for the selected word, surfaced in the bottom bar. */
+const activePool = computed(() =>
+  hasSelection.value ? g.poolFor(g.state.selectedWord) : { tiles: [], used: new Set() }
+)
+function tapLetter(t) {
+  if (activePool.value.used.has(t.id)) return
+  if (navigator.vibrate) navigator.vibrate(12)
+  g.inputLetter(t.letter)
+}
+
 /* Physical keyboard: letters type into the selected word, Tab cycles words. */
 function onKeydown(e) {
   if (g.state.completed) return
@@ -77,15 +87,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         :solved="g.state.completed"
         @select-word="g.selectWord"
         @select-slot="g.selectSlot"
-        @tap-letter="g.inputLetter"
       />
     </main>
 
     <Transition name="bar">
       <div v-if="hasSelection" class="controls">
-        <button class="ctrl" type="button" @click="g.shuffleKeyboard">⇄ melanger</button>
-        <button class="ctrl" type="button" @click="g.clearWord">✕ vider</button>
-        <button class="ctrl" type="button" @click="g.deleteLetter">⌫ effacer</button>
+        <div class="pool">
+          <TransitionGroup name="key">
+            <button
+              v-for="t in activePool.tiles"
+              :key="t.id"
+              class="pkey"
+              :class="{ used: activePool.used.has(t.id) }"
+              type="button"
+              @click="tapLetter(t)"
+            >{{ t.letter }}</button>
+          </TransitionGroup>
+        </div>
+        <div class="btns">
+          <button class="ctrl" type="button" @click="g.shuffleKeyboard">⇄ melanger</button>
+          <button class="ctrl" type="button" @click="g.clearWord">✕ vider</button>
+          <button class="ctrl" type="button" @click="g.deleteLetter">⌫ effacer</button>
+        </div>
       </div>
     </Transition>
 
@@ -146,13 +169,48 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 .controls {
   display: flex;
-  gap: 0.5rem;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.6rem;
   padding: 0.7rem 0.8rem calc(0.7rem + env(safe-area-inset-bottom));
   background: var(--cream-2);
   border-top: 2px solid color-mix(in srgb, var(--patch) 40%, transparent);
   box-shadow: 0 -4px 16px rgba(90, 59, 30, 0.08);
 }
+
+/* Big tappable letters for the active word, in the thumb zone. */
+.controls .pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.7rem;
+}
+.controls .pkey {
+  width: 2.4rem;
+  height: 2.7rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 0.35rem;
+  background: var(--tan);
+  color: var(--patch-dark);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 1.3rem;
+  text-transform: uppercase;
+  box-shadow: 0 3px 0 var(--patch-dark);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.2s ease;
+}
+.controls .pkey:active { transform: translateY(3px); box-shadow: 0 0 0 var(--patch-dark); }
+.controls .pkey.used {
+  background: color-mix(in srgb, var(--patch) 12%, #fff);
+  box-shadow: none;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.btns { display: flex; gap: 0.5rem; justify-content: center; }
 .ctrl {
   flex: 1; max-width: 10rem;
   padding: 0.7rem 0.6rem;
@@ -164,4 +222,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 .bar-enter-active, .bar-leave-active { transition: transform 0.25s ease; }
 .bar-enter-from, .bar-leave-to { transform: translateY(100%); }
+
+/* Slide letters to their new spots when the pool is shuffled. */
+.key-move { transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.4, 1); }
 </style>
