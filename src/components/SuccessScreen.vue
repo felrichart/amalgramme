@@ -1,13 +1,12 @@
 <script setup>
 import { computed } from 'vue'
-import { prettyDate } from '../utils/dates.js'
 import GiraffeMark from './GiraffeMark.vue'
 
 const props = defineProps({
   elapsedMs: { type: Number, required: true },
-  dateKey: { type: String, required: true },
+  theme: { type: String, required: true },
 })
-defineEmits(['calendar'])
+defineEmits(['levels'])
 
 const time = computed(() => {
   const total = Math.round(props.elapsedMs / 1000)
@@ -48,13 +47,13 @@ const spots = Array.from({ length: 26 }, (_, i) => ({
     <div class="card">
       <div class="emoji"><GiraffeMark /></div>
       <h1>Bravo !</h1>
-      <p class="sub">{{ prettyDate(dateKey) }}</p>
+      <p class="sub">{{ theme }}</p>
       <div class="time">
         <span class="label">Temps</span>
         <span class="value">{{ time }}</span>
       </div>
-      <button class="cta" type="button" @click="$emit('calendar')">
-        Autres defis
+      <button class="cta" type="button" @click="$emit('levels')">
+        Autres niveaux
       </button>
     </div>
   </div>
@@ -103,7 +102,7 @@ h1 {
   color: var(--patch-dark);
   letter-spacing: 0.5px;
 }
-.sub { margin: 0.2rem 0 1.1rem; color: var(--ink); opacity: 0.7; text-transform: capitalize; }
+.sub { margin: 0.2rem 0 1.1rem; color: var(--ink); opacity: 0.7; }
 .time {
   display: flex;
   flex-direction: column;

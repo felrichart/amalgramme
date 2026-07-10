@@ -1,11 +1,9 @@
-import { PUZZLES, FIRST_DATE } from '../data/challenges.js'
-import { daysBetween } from '../utils/dates.js'
+import { PUZZLES } from '../data/challenges.js'
 
-/* Deterministic puzzle for a given date key, cycling through the bank. */
-export function puzzleForDate(key) {
-  const offset = daysBetween(FIRST_DATE, key)
-  const idx = ((offset % PUZZLES.length) + PUZZLES.length) % PUZZLES.length
-  return PUZZLES[idx]
+/* Puzzle for a level index (clamped to the bank). */
+export function puzzleForLevel(idx) {
+  const i = Math.min(Math.max(0, idx | 0), PUZZLES.length - 1)
+  return PUZZLES[i]
 }
 
 /*

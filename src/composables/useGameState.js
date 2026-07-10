@@ -1,7 +1,17 @@
 import { reactive, computed, watch, ref } from 'vue'
-import { puzzleForDate, buildWords, shuffle, normalize } from '../game/puzzle.js'
+import { puzzleForLevel, buildWords, shuffle, normalize } from '../game/puzzle.js'
 
-const STORAGE_PREFIX = 'motsgirafe:v1:'
+const STORAGE_PREFIX = 'motsgirafe:v1:level:'
+
+/* Progress summary for a level, read by the level-select screen. */
+export function levelProgress(idx) {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_PREFIX + idx))
+    return { found: s?.found ?? 0, completed: !!s?.completed }
+  } catch {
+    return { found: 0, completed: false }
+  }
+}
 
 function load(key) {
   try {
@@ -19,15 +29,15 @@ function save(key, data) {
 }
 
 /*
- * Owns all mutable state for one day's challenge: 7 equal words linked by a
- * theme (shown as a free hint). Words are only judged once every cell is full.
+ * Owns all mutable state for one level: 7 equal words linked by a theme (shown
+ * as a free hint). Words are only judged once every cell is full.
  */
-export function useGameState(dateKey) {
-  const puzzle = puzzleForDate(dateKey)
+export function useGameState(levelIndex) {
+  const puzzle = puzzleForLevel(levelIndex)
   const words = buildWords(puzzle)
   const theme = puzzle.theme
 
-  const saved = load(dateKey)
+  const saved = load(levelIndex)
 
   const inputs = reactive(saved?.inputs ?? words.map((w) => Array(w.length).fill('')))
   const shuffleSeeds = reactive(saved?.shuffleSeeds ?? words.map((_, i) => i + 1))
@@ -165,10 +175,12 @@ export function useGameState(dateKey) {
     state.startTime && state.endTime ? state.endTime - state.startTime : 0
   )
 
+  const foundCount = () => words.reduce((n, _, w) => n + (wordCorrect(w) ? 1 : 0), 0)
+
   watch(
     () => JSON.stringify({ inputs, shuffleSeeds, s: state }),
-    () => save(dateKey, {
-      inputs, shuffleSeeds,
+    () => save(levelIndex, {
+      inputs, shuffleSeeds, found: foundCount(),
       completed: state.completed, startTime: state.startTime, endTime: state.endTime,
     })
   )

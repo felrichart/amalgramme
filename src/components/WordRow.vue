@@ -6,7 +6,6 @@ const props = defineProps({
   pool: { type: Object, required: true },
   active: Boolean,
   activeSlot: { type: Number, default: null },
-  shake: Boolean,
   solved: Boolean,
 })
 const emit = defineEmits(['select-word', 'select-slot', 'tap-letter'])
@@ -22,7 +21,7 @@ function tapLetter(t) {
 </script>
 
 <template>
-  <div class="word" :class="{ active, shake, solved }">
+  <div class="word" :class="{ active, solved }">
     <div class="cells" @click="emit('select-word', wordIndex)">
       <template v-for="(slot, i) in word.slots" :key="i">
         <span v-if="slot.gap" class="gap" />
@@ -158,12 +157,4 @@ function tapLetter(t) {
   100% { transform: scale(1); opacity: 1; }
 }
 .key-move { transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.4, 1); }
-
-.shake { animation: shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
-@keyframes shake {
-  10%, 90% { transform: translateX(-2px); }
-  20%, 80% { transform: translateX(4px); }
-  30%, 50%, 70% { transform: translateX(-6px); }
-  40%, 60% { transform: translateX(6px); }
-}
 </style>
