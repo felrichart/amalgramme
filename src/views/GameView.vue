@@ -3,9 +3,8 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGameState } from '../composables/useGameState.js'
 import { PUZZLES } from '../data/challenges.js'
-import WordRow from '../components/WordRow.vue'
+import LetterWheel from '../components/LetterWheel.vue'
 import SuccessScreen from '../components/SuccessScreen.vue'
-import GiraffeMark from '../components/GiraffeMark.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,42 +15,30 @@ if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= PUZZLES.len
 }
 
 const g = useGameState(levelIndex)
-const maxSlots = Math.max(...g.words.map((w) => w.slots.length))
-const hasSelection = computed(() => g.state.selectedWord != null && !g.state.completed)
 
-/* Tappable letters for the selected word, surfaced in the bottom bar. */
-const activePool = computed(() =>
-  hasSelection.value ? g.poolFor(g.state.selectedWord) : { tiles: [], used: new Set() }
-)
-function tapLetter(t) {
-  if (activePool.value.used.has(t.id)) return
-  if (navigator.vibrate) navigator.vibrate(12)
-  g.inputLetter(t.letter)
-}
+/* Slots above the wheel that fill in as the path is drawn. */
+const slots = computed(() => {
+  if (g.state.active == null) return []
+  const len = g.words[g.state.active].length
+  const cur = g.current.value
+  return Array.from({ length: len }, (_, i) => cur[i] || '')
+})
 
-/* Physical keyboard: letters type into the selected word, Tab cycles words. */
+/* Physical keyboard mirrors the drawing: type to fill, backspace/escape to undo. */
 function onKeydown(e) {
-  if (g.state.completed) return
-  if (e.key === 'Tab') {
+  if (g.state.completed || g.state.active == null) return
+  if (e.key === 'Backspace') {
     e.preventDefault()
-    g.nextWord(e.shiftKey ? -1 : 1)
+    g.backspace()
+  } else if (e.key === 'Escape') {
+    g.clearPath()
+  } else if (e.key === 'Enter') {
+    g.commit()
   } else if (e.key === ' ') {
     e.preventDefault()
-    g.shuffleKeyboard()
-  } else if (e.key === 'Backspace') {
-    e.preventDefault()
-    g.deleteLetter()
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault()
-    g.moveCursor(-1)
-  } else if (e.key === 'ArrowRight') {
-    e.preventDefault()
-    g.moveCursor(1)
-  } else if (e.key === 'Escape') {
-    g.clearWord()
+    g.shuffleWheel()
   } else if (/^[a-zA-Zà-ÿÀ-ß]$/.test(e.key)) {
-    if (g.state.selectedWord == null) g.selectWord(0)
-    g.inputLetter(e.key)
+    g.typeLetter(e.key)
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
@@ -62,55 +49,49 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <div class="game">
     <header class="top">
       <button class="icon-btn" type="button" @click="router.push('/')" aria-label="niveaux">←</button>
-      <div class="titles">
-        <h1><span class="mark"><GiraffeMark /></span>Mots Girafe</h1>
-        <p class="date">Niveau {{ levelIndex + 1 }}</p>
+      <div class="theme glass">
+        <span class="theme-label">thème</span>
+        <span class="theme-word">{{ g.theme }}</span>
       </div>
-      <div class="icon-btn ghost" />
+      <div class="spacer" />
     </header>
 
-    <div class="theme">
-      <span class="theme-label">theme</span>
-      <span class="theme-word">{{ g.theme }}</span>
-    </div>
-
-    <main class="list" :style="{ '--cell': `min(2.4rem, calc((min(100vw, 560px) - 1.6rem) / ${maxSlots} - 0.3rem))` }">
-      <WordRow
-        v-for="(w, i) in g.words"
-        :key="i"
-        :word="w"
-        :input="g.inputs[i]"
-        :word-index="i"
-        :pool="g.poolFor(i)"
-        :active="g.state.selectedWord === i"
-        :active-slot="g.state.selectedWord === i ? g.state.selectedSlot : null"
-        :solved="g.state.completed"
-        @select-word="g.selectWord"
-        @select-slot="g.selectSlot"
-      />
+    <main class="grid">
+      <template v-for="(w, i) in g.words" :key="i">
+        <div v-if="g.solved[i]" class="slot done glass">
+          <span class="answer">{{ w.text }}</span>
+        </div>
+        <button
+          v-else
+          class="slot glass"
+          :class="{ active: g.state.active === i }"
+          type="button"
+          @click="g.activate(i)"
+        >
+          <LetterWheel :tiles="g.wheelTiles(i)" />
+        </button>
+      </template>
     </main>
 
-    <Transition name="bar">
-      <div v-if="hasSelection" class="controls">
-        <div class="pool">
-          <TransitionGroup name="key">
-            <button
-              v-for="t in activePool.tiles"
-              :key="t.id"
-              class="pkey"
-              :class="{ used: activePool.used.has(t.id) }"
-              type="button"
-              @click="tapLetter(t)"
-            >{{ t.letter }}</button>
-          </TransitionGroup>
-        </div>
-        <div class="btns">
-          <button class="ctrl" type="button" @click="g.shuffleKeyboard">⇄ melanger</button>
-          <button class="ctrl" type="button" @click="g.clearWord">✕ vider</button>
-          <button class="ctrl" type="button" @click="g.deleteLetter">⌫ effacer</button>
-        </div>
+    <div v-if="g.state.active != null && !g.state.completed" class="dock">
+      <div class="track" :class="{ full: g.current.value.length === slots.length }">
+        <span v-for="(ch, i) in slots" :key="i" class="tick" :class="{ set: ch }">{{ ch }}</span>
       </div>
-    </Transition>
+
+      <div class="stage">
+        <LetterWheel
+          interactive
+          :tiles="g.wheelTiles(g.state.active)"
+          :path="g.path"
+          :shake="g.shakeSignal.value"
+          @begin="g.beginPath"
+          @enter="g.appendTile"
+          @backtrack="g.backspace"
+          @end="g.commit"
+          @shuffle="g.shuffleWheel"
+        />
+      </div>
+    </div>
 
     <SuccessScreen
       v-if="g.state.completed"
@@ -130,99 +111,105 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   max-width: 560px;
   margin: 0 auto;
 }
-.top { display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem 0.3rem; }
-.titles { flex: 1; text-align: center; }
-.titles h1 {
-  margin: 0; font-size: 1.4rem; color: var(--patch-dark); letter-spacing: 0.5px;
-  display: inline-flex; align-items: center; gap: 0.4rem;
-}
-.mark { width: 1.4rem; height: 1.4rem; color: var(--orange); }
-.date { margin: 0; font-size: 0.78rem; opacity: 0.6; }
+
+.top { display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem 0.5rem; }
 .icon-btn {
-  width: 2.5rem; height: 2.5rem; display: grid; place-items: center; font-size: 1.25rem;
-  border: none; background: var(--cream-2); border-radius: 0.7rem;
-  box-shadow: 0 3px 0 var(--patch-dark); cursor: pointer;
+  width: 2.6rem; height: 2.6rem; flex: none; display: grid; place-items: center; font-size: 1.3rem;
+  border-radius: 0.9rem; color: var(--ink); cursor: pointer;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-brd);
+  backdrop-filter: blur(12px);
+  transition: transform 0.12s ease, background 0.2s ease;
 }
-.icon-btn:active { transform: translateY(3px); box-shadow: none; }
-.icon-btn.ghost { background: transparent; box-shadow: none; pointer-events: none; }
+.icon-btn:hover { background: rgba(255, 255, 255, 0.8); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn:focus-visible { outline: 2px solid var(--sky-ink); outline-offset: 2px; }
+.spacer { width: 2.6rem; flex: none; }
 
 .theme {
-  align-self: center;
-  display: flex; align-items: baseline; gap: 0.5rem;
-  margin: 0.3rem auto 0.2rem;
-  padding: 0.45rem 1.2rem;
-  background: var(--orange); color: #fff;
-  border-radius: 0.8rem; box-shadow: 0 3px 0 var(--patch-dark);
-}
-.theme-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85; }
-.theme-word { font-size: 1.15rem; font-weight: 800; }
-
-.list {
   flex: 1;
+  display: flex; align-items: baseline; justify-content: center; gap: 0.55rem;
+  padding: 0.5rem 1rem; border-radius: 1rem;
+}
+.theme-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.theme-word { font-size: 1.1rem; font-weight: 700; }
+
+.grid {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: safe center;
-  gap: 0.1rem;
-  padding: 0.6rem 0.5rem 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 0.7rem;
+  padding: 0.6rem 1rem 0.4rem;
 }
-
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.7rem 0.8rem calc(0.7rem + env(safe-area-inset-bottom));
-  background: var(--cream-2);
-  border-top: 2px solid color-mix(in srgb, var(--patch) 40%, transparent);
-  box-shadow: 0 -4px 16px rgba(90, 59, 30, 0.08);
-}
-
-/* Big tappable letters for the active word, in the thumb zone. */
-.controls .pool {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 2.7rem;
-}
-.controls .pkey {
-  width: 2.4rem;
-  height: 2.7rem;
+.slot {
+  border-radius: 1.2rem;
+  padding: 0.7rem;
+  min-height: 5.2rem;
   display: grid;
   place-items: center;
-  border: none;
-  border-radius: 0.35rem;
-  background: var(--tan);
-  color: var(--patch-dark);
-  font-family: inherit;
-  font-weight: 800;
-  font-size: 1.3rem;
-  text-transform: uppercase;
-  box-shadow: 0 3px 0 var(--patch-dark);
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.2s ease;
+  transition: transform 0.14s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.controls .pkey:active { transform: translateY(3px); box-shadow: 0 0 0 var(--patch-dark); }
-.controls .pkey.used {
-  background: color-mix(in srgb, var(--patch) 12%, #fff);
-  box-shadow: none;
-  opacity: 0.5;
-  pointer-events: none;
+.slot:active { transform: scale(0.97); }
+.slot:focus-visible { outline: 2px solid var(--sky-ink); outline-offset: 2px; }
+.slot.active {
+  border-color: color-mix(in srgb, var(--sky-ink) 55%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sky-ink) 30%, transparent), 0 10px 24px rgba(70, 100, 150, 0.16);
 }
+.slot .wheel { max-width: 4.6rem; }
 
-.btns { display: flex; gap: 0.5rem; justify-content: center; }
-.ctrl {
-  flex: 1; max-width: 10rem;
-  padding: 0.7rem 0.6rem;
-  border: none; background: var(--orange); color: #fff;
-  font-family: inherit; font-weight: 700; font-size: 0.95rem;
-  border-radius: 0.8rem; box-shadow: 0 4px 0 var(--patch-dark); cursor: pointer;
+/* Solved word: the wheel is replaced by the answer, calmly filled. */
+.slot.done {
+  cursor: default;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--lemon) 70%, #fff), color-mix(in srgb, var(--rose) 45%, #fff));
 }
-.ctrl:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--patch-dark); }
+.slot.done:active { transform: none; }
+.answer {
+  font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--ink);
+  animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes answer-in { from { transform: scale(0.7); opacity: 0; } }
 
-.bar-enter-active, .bar-leave-active { transition: transform 0.25s ease; }
-.bar-enter-from, .bar-leave-to { transform: translateY(100%); }
+/* ── Active-word dock ─────────────────────────────────────────── */
+.dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 1rem calc(1rem + env(safe-area-inset-bottom));
+}
+.track {
+  display: flex;
+  gap: 0.35rem;
+  min-height: 2.4rem;
+}
+.track.full { animation: nudge 0.3s ease; }
+.tick {
+  width: 1.9rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  font-weight: 800;
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 -2px 0 rgba(120, 140, 180, 0.12);
+}
+.tick.set {
+  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 55%, #fff));
+  box-shadow: inset 0 1px 1px #fff, 0 3px 8px rgba(70, 100, 150, 0.16);
+  animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pop { from { transform: scale(0.4); } }
+@keyframes nudge { 50% { transform: translateY(-3px); } }
 
-/* Slide letters to their new spots when the pool is shuffled. */
-.key-move { transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.4, 1); }
+.stage { width: min(72vw, 300px); }
 </style>

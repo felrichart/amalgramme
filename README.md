@@ -1,23 +1,24 @@
-# Mots Girafe 🦒
+# Lexicool 😎
 
-Jeu de mots par niveaux. Chaque niveau : 7 mots a reconstituer a partir de
-leurs lettres melangees (anagrammes), sur un theme donne.
+Jeu de mots par niveaux. Chaque niveau : 6 mots lies par un theme, chacun
+reconstitue en reliant les lettres de sa roue.
 
 - Le **theme** est affiche d'emblee comme indice (pas a deviner).
-- Chaque mot montre ses lettres melangees en dessous (estompees, en apercu) ; les
-  lettres du mot selectionne s'affichent en grand dans la barre du bas, a portee
-  du pouce, avec les boutons melanger / vider / effacer.
-- Tape une case pour commencer a ecrire n'importe ou dans le mot.
-- Sur ordinateur : clavier physique, **Tab** pour changer de mot, **Espace**
-  pour melanger, **Backspace** pour effacer, **Echap** pour vider le mot,
-  fleches pour deplacer le curseur.
-- Une fois les 7 mots corrects, le niveau est reussi et le temps s'affiche.
-- L'ecran d'accueil liste tous les niveaux, groupes par difficulte (Facile,
-  Normal, Difficile), avec leur theme et le nombre de mots trouves ; la
-  progression est sauvegardee.
+- L'ecran d'un niveau montre 6 petites roues (deux colonnes de trois). On
+  touche une roue : elle devient la grande roue active en bas de l'ecran.
+- Pour saisir un mot : garder le doigt appuye et tracer une ligne de lettre en
+  lettre. Le mot s'affiche au-dessus de la roue.
+- Doigt relache avant la fin : le mot est simplement abandonne. Toutes les
+  lettres utilisees mais mot faux : la roue tremble.
+- Un appui au centre de la roue melange les lettres.
+- Sur ordinateur : taper le mot au clavier, **Backspace** pour effacer une
+  lettre, **Echap** pour tout annuler, **Espace** pour melanger.
+- Quand un mot est correct, sa roue est remplacee par le mot dans la colonne.
+- Les 6 mots trouves : le niveau est reussi (😎) et le temps s'affiche.
+- Chaque mot fait 5 a 9 lettres (une lettre par noeud de la roue).
 
-Pense pour le mobile d'abord, jouable aussi sur ordinateur. Style mots-croises /
-scrabble, couleurs girafe.
+Pense pour le mobile d'abord, jouable aussi sur ordinateur. Theme visuel
+« liquid glass » : pastels calmes (bleu, rose, jaune), verre depoli, fond clair.
 
 ## Developpement
 
@@ -31,14 +32,10 @@ npm run preview    # sert le build de production
 ## Structure
 
 - `src/data/challenges.js` — banque de niveaux : un `theme` (affiche, en
-  francais normal), 7 `words` (sans accents, tapes par le joueur) et une
-  `difficulty` (facile / normal / difficile). `DIFFICULTIES` liste les buckets.
-- `src/game/puzzle.js` — selection du niveau, decoupage en cases, melange.
-- `src/composables/useGameState.js` — etat du jeu, saisie, validation, chrono,
-  sauvegarde et progression par niveau (localStorage).
-- `src/components/` — `WordRow` (cases + lettres), `SuccessScreen`, `GiraffeMark`.
-- `src/views/` — `LevelsView` (choix du niveau), `GameView` (jeu + clavier).
-
-## Credits
-
-Icone girafe par Ben King (the Noun Project), recoloree.
+  francais normal), 6 `words` (5-9 lettres, sans accents) et une `difficulty`
+  (facile / normal / difficile). `DIFFICULTIES` liste les buckets.
+- `src/game/puzzle.js` — selection du niveau, construction des roues, melange.
+- `src/composables/useGameState.js` — etat du jeu, trace du doigt, validation,
+  chrono, sauvegarde et progression par niveau (localStorage).
+- `src/components/` — `LetterWheel` (roue de lettres + trace), `SuccessScreen`.
+- `src/views/` — `LevelsView` (choix du niveau), `GameView` (grille + roue active).

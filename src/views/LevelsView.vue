@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PUZZLES, DIFFICULTIES } from '../data/challenges.js'
 import { levelProgress } from '../composables/useGameState.js'
-import GiraffeMark from '../components/GiraffeMark.vue'
 
 const router = useRouter()
 
@@ -39,9 +38,8 @@ function play(l) {
 <template>
   <div class="levels">
     <header class="top">
-      <span class="mark"><GiraffeMark /></span>
-      <h1>Mots Girafe</h1>
-      <p class="tag">{{ doneCount }} / {{ levels.length }} niveaux réussis</p>
+      <h1 class="brand">Lexic<span class="oo">😎</span>l</h1>
+      <p class="tag">{{ doneCount }} / {{ levels.length }} niveaux terminés</p>
     </header>
 
     <section v-for="d in sections" :key="d.key" class="section">
@@ -54,79 +52,83 @@ function play(l) {
         <button
           v-for="l in d.items"
           :key="l.index"
-          class="lvl"
+          class="lvl glass"
           :class="{ done: l.completed, started: !l.completed && l.found > 0 }"
           type="button"
           @click="play(l)"
         >
-          <span class="no">{{ l.index + 1 }}</span>
+          <span class="no">{{ String(l.index + 1).padStart(2, '0') }}</span>
           <span class="theme">{{ l.theme }}</span>
           <span class="score">
-            <span v-if="l.completed" class="badge">🦒 réussi</span>
+            <span v-if="l.completed" class="badge">😎 terminé</span>
             <span v-else class="count">{{ l.found }} / {{ l.total }}</span>
           </span>
         </button>
       </div>
-      <p v-else class="empty">Bientôt de nouveaux niveaux 🦒</p>
+      <p v-else class="empty glass">Bientôt de nouveaux niveaux.</p>
     </section>
   </div>
 </template>
 
 <style scoped>
-.levels { max-width: 560px; margin: 0 auto; padding: 1.2rem 1rem 2.5rem; }
-.top { text-align: center; margin-bottom: 1.4rem; }
-.mark { display: block; width: 3rem; height: 3rem; margin: 0 auto 0.3rem; color: var(--orange); }
-.top h1 { margin: 0; font-size: 1.8rem; color: var(--patch-dark); letter-spacing: 0.5px; }
-.tag { margin: 0.3rem 0 0; font-size: 0.85rem; opacity: 0.6; }
+.levels { max-width: 560px; margin: 0 auto; padding: 2.2rem 1rem 3rem; }
+.top { text-align: center; margin-bottom: 2rem; }
+.brand {
+  margin: 0;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.oo { font-size: 0.86em; margin: 0 0.02em; }
+.tag { margin: 0.6rem 0 0; font-size: 0.9rem; font-weight: 600; color: var(--muted); }
 
-.section { margin-bottom: 1.6rem; }
+.section { margin-bottom: 1.7rem; }
 .sec-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin: 0 0.15rem 0.6rem;
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0.2rem 0.7rem;
 }
 .sec-name {
-  font-size: 1.1rem; font-weight: 800; color: var(--patch-dark);
-  padding: 0.15rem 0.7rem; border-radius: 0.7rem;
-  box-shadow: inset 0 0 0 2px currentColor;
+  font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0.3rem 0.8rem; border-radius: 999px;
+  color: var(--ink);
 }
-.sec-name.facile { color: #4e8d5b; }
-.sec-name.normal { color: var(--orange); }
-.sec-name.difficile { color: #c0562f; }
-.sec-count { font-size: 0.85rem; font-weight: 700; opacity: 0.55; }
+.sec-name.facile { background: color-mix(in srgb, var(--sky) 75%, #fff); }
+.sec-name.normal { background: color-mix(in srgb, var(--lemon) 75%, #fff); }
+.sec-name.difficile { background: color-mix(in srgb, var(--rose) 75%, #fff); }
+.sec-count { font-size: 0.82rem; font-weight: 700; color: var(--muted); }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.7rem; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+@media (min-width: 480px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .empty {
-  margin: 0; padding: 1.1rem; text-align: center; font-size: 0.9rem; opacity: 0.55;
-  background: var(--cream-2); border-radius: 1rem;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--patch) 18%, transparent);
+  margin: 0; padding: 1.2rem; text-align: center; font-size: 0.9rem; color: var(--muted);
+  border-radius: 1.1rem;
 }
 
 .lvl {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.9rem 0.9rem 0.8rem;
-  min-height: 6rem;
+  gap: 0.4rem;
+  padding: 0.9rem 0.95rem 0.85rem;
+  min-height: 6.2rem;
   text-align: left;
-  border: none;
-  background: var(--cream-2);
-  border-radius: 1rem;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--patch) 22%, transparent), 0 3px 0 var(--patch-dark);
+  border-radius: 1.2rem;
   cursor: pointer;
-  font-family: inherit;
-  transition: transform 0.12s ease;
+  color: var(--ink);
+  transition: transform 0.14s ease, box-shadow 0.2s ease;
 }
-.lvl:active { transform: translateY(3px); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--patch) 22%, transparent), 0 0 0 var(--patch-dark); }
-.lvl.started { box-shadow: inset 0 0 0 2px var(--orange), 0 3px 0 var(--patch-dark); }
-.lvl.done { background: var(--patch); box-shadow: 0 3px 0 var(--patch-dark); }
+.lvl:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(70, 100, 150, 0.18); }
+.lvl:active { transform: translateY(0); }
+.lvl:focus-visible { outline: 2px solid var(--sky-ink); outline-offset: 2px; }
+.lvl.started { box-shadow: 0 8px 26px rgba(70, 100, 150, 0.12), inset 0 0 0 1.5px color-mix(in srgb, var(--sky-ink) 45%, transparent); }
+.lvl.done {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sky) 55%, #fff), color-mix(in srgb, var(--rose) 45%, #fff));
+}
 
-.no { font-size: 0.75rem; font-weight: 800; opacity: 0.45; }
-.theme { flex: 1; font-size: 1.02rem; font-weight: 800; color: var(--patch-dark); line-height: 1.15; }
-.lvl.done .theme, .lvl.done .no { color: var(--cream); }
-.lvl.done .no { opacity: 0.7; }
+.no { font-size: 0.72rem; font-weight: 800; color: var(--muted); }
+.theme { flex: 1; font-size: 1.04rem; font-weight: 800; line-height: 1.15; }
 
-.score { font-size: 0.85rem; font-weight: 700; }
-.count { color: var(--ink); opacity: 0.7; }
-.badge { color: var(--cream); }
+.score { font-size: 0.82rem; font-weight: 700; }
+.count { color: var(--muted); }
+.badge { color: var(--ink); }
 </style>

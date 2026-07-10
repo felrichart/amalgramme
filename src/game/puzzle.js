@@ -7,23 +7,20 @@ export function puzzleForLevel(idx) {
 }
 
 /*
- * A word may contain spaces (multi-word answers). We model it as a flat list of
- * slots where each slot is either a letter cell (fillable) or a gap (fixed space).
- * `answer` keeps only the letters, in order, for comparison and the letter pool.
+ * Each word becomes a set of letter tiles for its wheel. `letters` carries a
+ * stable id per tile so the wheel can shuffle positions and the drawn path can
+ * reference tiles even when the answer repeats a letter. Spaces are stripped;
+ * `text` is the answer the drawn path is compared against.
  */
-export function buildWord(raw) {
-  const slots = []
-  let letterIndex = 0
-  for (const ch of raw.split('')) {
-    if (ch === ' ') slots.push({ gap: true })
-    else slots.push({ gap: false, letterIndex: letterIndex++, solution: ch })
-  }
-  const answer = raw.replace(/ /g, '')
-  return { raw, slots, answer, length: answer.length }
-}
-
 export function buildWords(puzzle) {
-  return puzzle.words.map((w) => buildWord(w))
+  return puzzle.words.map((raw) => {
+    const text = raw.replace(/ /g, '')
+    return {
+      text,
+      length: text.length,
+      letters: text.split('').map((ch, id) => ({ id, ch })),
+    }
+  })
 }
 
 /* Deterministic Fisher-Yates so shuffles vary by seed without Math.random. */
