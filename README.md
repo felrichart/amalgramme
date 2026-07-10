@@ -32,8 +32,7 @@ npm run preview    # sert le build de production
 ## Structure
 
 - `src/data/challenges.js` — banque de niveaux : un `theme` (affiche, en
-  francais normal), 6 `words` (5-9 lettres, sans accents) et une `difficulty`
-  (facile / normal / difficile). `DIFFICULTIES` liste les buckets.
+  francais normal) et 6 `words` (5-9 lettres, sans accents).
 - `src/game/puzzle.js` — selection du niveau, construction des roues, melange.
 - `src/composables/useGameState.js` — etat du jeu, trace du doigt, validation,
   chrono, sauvegarde et progression par niveau (localStorage).

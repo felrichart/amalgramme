@@ -1,56 +1,67 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useGameState } from '../composables/useGameState.js'
-import { PUZZLES } from '../data/challenges.js'
-import LetterWheel from '../components/LetterWheel.vue'
-import SuccessScreen from '../components/SuccessScreen.vue'
+import { computed, onMounted, onUnmounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useGameState } from "../composables/useGameState.js";
+import { PUZZLES } from "../data/challenges.js";
+import LetterWheel from "../components/LetterWheel.vue";
+import SuccessScreen from "../components/SuccessScreen.vue";
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
-const levelIndex = Number(route.params.level)
-if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= PUZZLES.length) {
-  router.replace('/')
+const levelIndex = Number(route.params.level);
+if (
+  !Number.isInteger(levelIndex) ||
+  levelIndex < 0 ||
+  levelIndex >= PUZZLES.length
+) {
+  router.replace("/");
 }
 
-const g = useGameState(levelIndex)
+const g = useGameState(levelIndex);
 
 /* Slots above the wheel that fill in as the path is drawn. */
 const slots = computed(() => {
-  if (g.state.active == null) return []
-  const len = g.words[g.state.active].length
-  const cur = g.current.value
-  return Array.from({ length: len }, (_, i) => cur[i] || '')
-})
+  if (g.state.active == null) return [];
+  const len = g.words[g.state.active].length;
+  const cur = g.current.value;
+  return Array.from({ length: len }, (_, i) => cur[i] || "");
+});
 
 /* Physical keyboard mirrors the drawing: type to fill, backspace/escape to undo. */
 function onKeydown(e) {
-  if (g.state.completed || g.state.active == null) return
-  if (e.key === 'Backspace') {
-    e.preventDefault()
-    g.backspace()
-  } else if (e.key === 'Escape') {
-    g.clearPath()
-  } else if (e.key === 'Enter') {
-    g.commit()
-  } else if (e.key === ' ') {
-    e.preventDefault()
-    g.shuffleWheel()
+  if (g.state.completed || g.state.active == null) return;
+  if (e.key === "Backspace") {
+    e.preventDefault();
+    g.backspace();
+  } else if (e.key === "Escape") {
+    g.clearPath();
+  } else if (e.key === "Enter") {
+    g.commit();
+  } else if (e.key === " ") {
+    e.preventDefault();
+    g.shuffleWheel();
   } else if (/^[a-zA-Zà-ÿÀ-ß]$/.test(e.key)) {
-    g.typeLetter(e.key)
+    g.typeLetter(e.key);
   }
 }
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onMounted(() => window.addEventListener("keydown", onKeydown));
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <template>
   <div class="game">
     <header class="top">
-      <button class="icon-btn" type="button" @click="router.push('/')" aria-label="niveaux">←</button>
+      <button
+        class="icon-btn"
+        type="button"
+        @click="router.push('/')"
+        aria-label="niveaux"
+      >
+        ←
+      </button>
       <div class="theme glass">
-        <span class="theme-label">thème</span>
+        <span class="theme-label">Indice</span>
         <span class="theme-word">{{ g.theme }}</span>
       </div>
       <div class="spacer" />
@@ -74,8 +85,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     </main>
 
     <div v-if="g.state.active != null && !g.state.completed" class="dock">
-      <div class="track" :class="{ full: g.current.value.length === slots.length }">
-        <span v-for="(ch, i) in slots" :key="i" class="tick" :class="{ set: ch }">{{ ch }}</span>
+      <div
+        class="track"
+        :class="{ full: g.current.value.length === slots.length }"
+      >
+        <span
+          v-for="(ch, i) in slots"
+          :key="i"
+          class="tick"
+          :class="{ set: ch }"
+          >{{ ch }}</span
+        >
       </div>
 
       <div class="stage">
@@ -112,27 +132,63 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   margin: 0 auto;
 }
 
-.top { display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem 0.5rem; }
+.top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem 0.5rem;
+}
 .icon-btn {
-  width: 2.6rem; height: 2.6rem; flex: none; display: grid; place-items: center; font-size: 1.3rem;
-  border-radius: 0.9rem; color: var(--ink); cursor: pointer;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+  border-radius: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-brd);
   backdrop-filter: blur(12px);
-  transition: transform 0.12s ease, background 0.2s ease;
+  transition:
+    transform 0.12s ease,
+    background 0.2s ease;
 }
-.icon-btn:hover { background: rgba(255, 255, 255, 0.8); }
-.icon-btn:active { transform: scale(0.92); }
-.icon-btn:focus-visible { outline: 2px solid var(--sky-ink); outline-offset: 2px; }
-.spacer { width: 2.6rem; flex: none; }
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+.icon-btn:active {
+  transform: scale(0.92);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--sky-ink);
+  outline-offset: 2px;
+}
+.spacer {
+  width: 2.6rem;
+  flex: none;
+}
 
 .theme {
   flex: 1;
-  display: flex; align-items: baseline; justify-content: center; gap: 0.55rem;
-  padding: 0.5rem 1rem; border-radius: 1rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
 }
-.theme-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
-.theme-word { font-size: 1.1rem; font-weight: 700; }
+.theme-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.theme-word {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
 
 .grid {
   flex: 1;
@@ -151,28 +207,54 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: transform 0.14s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
-.slot:active { transform: scale(0.97); }
-.slot:focus-visible { outline: 2px solid var(--sky-ink); outline-offset: 2px; }
+.slot:active {
+  transform: scale(0.97);
+}
+.slot:focus-visible {
+  outline: 2px solid var(--sky-ink);
+  outline-offset: 2px;
+}
 .slot.active {
   border-color: color-mix(in srgb, var(--sky-ink) 55%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sky-ink) 30%, transparent), 0 10px 24px rgba(70, 100, 150, 0.16);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--sky-ink) 30%, transparent),
+    0 10px 24px rgba(70, 100, 150, 0.16);
 }
-.slot .wheel { max-width: 4.6rem; }
+.slot .wheel {
+  max-width: 4.6rem;
+}
 
 /* Solved word: the wheel is replaced by the answer, calmly filled. */
 .slot.done {
   cursor: default;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--lemon) 70%, #fff), color-mix(in srgb, var(--rose) 45%, #fff));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--lemon) 70%, #fff),
+    color-mix(in srgb, var(--rose) 45%, #fff)
+  );
 }
-.slot.done:active { transform: none; }
+.slot.done:active {
+  transform: none;
+}
 .answer {
-  font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; text-transform: uppercase;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--ink);
   animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-@keyframes answer-in { from { transform: scale(0.7); opacity: 0; } }
+@keyframes answer-in {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
 
 /* ── Active-word dock ─────────────────────────────────────────── */
 .dock {
@@ -188,7 +270,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   gap: 0.35rem;
   min-height: 2.4rem;
 }
-.track.full { animation: nudge 0.3s ease; }
+.track.full {
+  animation: nudge 0.3s ease;
+}
 .tick {
   width: 1.9rem;
   height: 2.4rem;
@@ -204,12 +288,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   box-shadow: inset 0 -2px 0 rgba(120, 140, 180, 0.12);
 }
 .tick.set {
-  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 55%, #fff));
-  box-shadow: inset 0 1px 1px #fff, 0 3px 8px rgba(70, 100, 150, 0.16);
+  background: linear-gradient(
+    160deg,
+    #fff,
+    color-mix(in srgb, var(--sky) 55%, #fff)
+  );
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 3px 8px rgba(70, 100, 150, 0.16);
   animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-@keyframes pop { from { transform: scale(0.4); } }
-@keyframes nudge { 50% { transform: translateY(-3px); } }
+@keyframes pop {
+  from {
+    transform: scale(0.4);
+  }
+}
+@keyframes nudge {
+  50% {
+    transform: translateY(-3px);
+  }
+}
 
-.stage { width: min(72vw, 300px); }
+.stage {
+  width: min(72vw, 300px);
+}
 </style>
