@@ -1,12 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import {
-  PUZZLES_NEW as PUZZLES,
-  DAILY_INDEX,
-  TUTORIAL_SLUG,
-  formatChallengeDate,
-} from '../data/challenges.js';
+import { PUZZLES_NEW as PUZZLES, DAILY_INDEX, formatChallengeDate } from '../data/challenges.js';
 import { levelProgress } from '../composables/useGameState.js';
 
 const router = useRouter();
@@ -23,7 +18,7 @@ const items = computed(() =>
       partial: prog.partial,
     };
   })
-    .filter((c) => c.index < DAILY_INDEX && c.slug !== TUTORIAL_SLUG)
+    .filter((c) => c.index < DAILY_INDEX)
     .reverse(),
 );
 </script>

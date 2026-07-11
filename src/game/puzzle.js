@@ -1,7 +1,8 @@
-import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
+import { PUZZLES_NEW as PUZZLES, TUTORIAL_INDEX, TUTORIAL_PUZZLE } from '../data/challenges.js';
 
-/* Puzzle for a level index (clamped to the bank). */
+/* Puzzle for a level id: the tutorial puzzle, else a dated puzzle (clamped). */
 export function puzzleForLevel(idx) {
+  if (idx === TUTORIAL_INDEX) return TUTORIAL_PUZZLE;
   const i = Math.min(Math.max(0, idx | 0), PUZZLES.length - 1);
   return PUZZLES[i];
 }

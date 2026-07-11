@@ -109,7 +109,7 @@ export function useGameState(levelIndex) {
   };
 
   const state = reactive({
-    active: saved?.completed ? null : firstUnsolved() ?? (saved?.secretFound ? null : 'secret'),
+    active: saved?.completed ? null : (firstUnsolved() ?? (saved?.secretFound ? null : 'secret')),
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
   });

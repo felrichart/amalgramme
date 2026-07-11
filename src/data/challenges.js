@@ -15,8 +15,19 @@ import { getToday } from '../utils/today.js';
 
 export const PUZZLES_NEW = puzzles;
 
-/* Slug/date of the guided tutorial puzzle (not a dated daily challenge). */
+/* Slug of the guided tutorial (not a dated daily challenge). */
 export const TUTORIAL_SLUG = 'tutoriel';
+
+/* The tutorial puzzle, kept OUT of PUZZLES_NEW on purpose: sitting in the array
+ * would shift every daily/challenge index (and thus their saved progress) by
+ * one. Its level id is the slug string, distinct from the numeric puzzle
+ * indices and from -1 (indexForSlug's "unknown"). */
+export const TUTORIAL_INDEX = TUTORIAL_SLUG;
+export const TUTORIAL_PUZZLE = {
+  date: TUTORIAL_SLUG,
+  secret: 'soleil',
+  words: ['rayon', 'ciel', 'astre', 'chaleur'],
+};
 
 /* Today's challenge: the most recent puzzle not dated in the future. ISO dates
  * compare lexicographically, so a string compare orders them correctly.
@@ -32,12 +43,14 @@ export const DAILY_INDEX = (() => {
 
 /* Route slug for a puzzle index: "daily" for today, else its ISO date. */
 export function slugForIndex(i) {
+  if (i === TUTORIAL_INDEX) return TUTORIAL_SLUG;
   return i === DAILY_INDEX ? 'daily' : PUZZLES_NEW[i]?.date;
 }
 
-/* Resolve a route slug ("daily" or an ISO date) to a puzzle index, or -1. */
+/* Resolve a route slug ("daily", "tutoriel", or an ISO date) to a level id, or -1. */
 export function indexForSlug(slug) {
   if (slug === 'daily') return DAILY_INDEX;
+  if (slug === TUTORIAL_SLUG) return TUTORIAL_INDEX;
   return PUZZLES_NEW.findIndex((p) => p.date === slug);
 }
 

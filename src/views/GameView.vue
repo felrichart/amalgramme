@@ -5,7 +5,7 @@ import { useGameState, resetLevel } from '../composables/useGameState.js';
 import {
   PUZZLES_NEW as PUZZLES,
   DAILY_INDEX,
-  TUTORIAL_SLUG,
+  TUTORIAL_INDEX,
   formatChallengeDate,
   indexForSlug,
   slugForIndex,
@@ -21,12 +21,16 @@ const router = useRouter();
 /* Unknown slug → menu; future puzzles aren't playable yet → daily. Either way
  * fall back to the daily index so this (about-to-be-replaced) render is valid. */
 const resolved = indexForSlug(route.params.slug);
-if (resolved < 0) router.replace('/');
-else if (resolved > DAILY_INDEX) router.replace('/play/daily');
-const levelIndex = resolved >= 0 && resolved <= DAILY_INDEX ? resolved : DAILY_INDEX;
+const isTutorial = resolved === TUTORIAL_INDEX;
+if (resolved === -1) router.replace('/');
+else if (!isTutorial && resolved > DAILY_INDEX) router.replace('/play/daily');
+const levelIndex = isTutorial
+  ? TUTORIAL_INDEX
+  : resolved >= 0 && resolved <= DAILY_INDEX
+    ? resolved
+    : DAILY_INDEX;
 
 const isDaily = levelIndex === DAILY_INDEX;
-const isTutorial = PUZZLES[levelIndex].date === TUTORIAL_SLUG;
 /* The tutorial always starts fresh — wipe its saved state before state loads. */
 if (isTutorial) resetLevel(levelIndex);
 const title = isTutorial
