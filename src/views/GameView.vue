@@ -199,25 +199,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </div>
       </template>
 
-      <button
-        ref="secretEl"
-        class="secret"
-        style="grid-area: secret"
-        type="button"
-        :class="{ found: g.state.secretFound, active: g.secretActive.value }"
-        :disabled="g.state.secretFound"
-        @click="openSecret"
-      >
-        <span class="secret-boxes" :class="{ shake: secretShaking }">
-          <span
-            v-for="(s, i) in secretSlots"
-            :key="i"
-            class="sbox"
-            :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
-            >{{ s.ch }}</span
-          >
-        </span>
-      </button>
+      <!-- Wrapper stays put; the button inside translates on press so the
+           connector lines (anchored here) don't shift when it's selected. -->
+      <div ref="secretEl" class="secret-cell" style="grid-area: secret">
+        <button
+          class="secret"
+          type="button"
+          :class="{ found: g.state.secretFound, active: g.secretActive.value }"
+          :disabled="g.state.secretFound"
+          @click="openSecret"
+        >
+          <span class="secret-boxes" :class="{ shake: secretShaking }">
+            <span
+              v-for="(s, i) in secretSlots"
+              :key="i"
+              class="sbox"
+              :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
+              >{{ s.ch }}</span
+            >
+          </span>
+        </button>
+      </div>
     </main>
 
     <div class="dock" :style="wordActive ? { '--tint': CORNER_TINTS[g.state.active] } : undefined">
@@ -324,10 +326,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex: none;
 }
 
+/* Stable wrapper the connector lines anchor to; the button translates within. */
+.secret-cell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+}
 /* Secret: a button at the centre of the cross; tapping it docks the keyboard. */
 .secret {
   position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -346,11 +354,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   outline: 3px solid var(--outline);
   outline-offset: 2px;
 }
-/* Selected: sits flush with the board — offset shadow drops away, ink outline
-   stays. Center stays put so the links don't shift. */
+/* Press: the coin drops into its offset shadow, like a keyboard key. */
+.secret:active {
+  transform: translate(5px, 7px);
+  box-shadow: 0 0 0 var(--outline);
+}
+/* Selected: stays pressed into its shadow — the coin is held at the shadow
+   offset so releasing the press doesn't shift it back up. */
 .secret.active {
   background: color-mix(in srgb, var(--secret) 16%, #fff);
-  box-shadow: none;
+  box-shadow: 0 0 0 var(--outline);
+  transform: translate(5px, 7px);
 }
 .secret-boxes {
   display: flex;
@@ -454,10 +468,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   background: none;
   border: 0;
   cursor: pointer;
-  transition: transform 0.14s ease;
 }
-.slot:active {
-  transform: scale(0.97);
+/* Press: the coin drops into its offset shadow, like a keyboard key. The
+   shadow lives on the inner .wheel, so translate that rather than the wrapper. */
+.slot:active .wheel {
+  transform: translate(5px, 7px);
+  box-shadow: 0 0 0 var(--outline);
+}
+/* Selected: held at the press offset so releasing doesn't shift it back up. */
+.slot.active .wheel {
+  transform: translate(5px, 7px);
 }
 .slot:focus-visible {
   outline: 2px solid var(--tint, var(--sky-ink));
@@ -472,9 +492,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
    the wheel's height and nothing above/below shifts. */
 .slot.done {
   cursor: default;
-}
-.slot.done:active {
-  transform: none;
 }
 .answer {
   padding: 0.9rem 0.9rem;

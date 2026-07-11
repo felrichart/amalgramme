@@ -233,6 +233,7 @@ watch(
   border: 3px solid var(--outline);
   box-shadow: var(--pop-lg);
   transition:
+    transform 0.1s ease,
     box-shadow 0.18s ease,
     background 0.18s ease;
 }
