@@ -582,7 +582,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.3rem;
   font-weight: 900;
   color: #fff;
-  background: var(--sky-ink);
+  background: var(--secret);
   border: 2.5px solid var(--outline);
   box-shadow: 3px 4px 0 var(--outline);
 }
@@ -592,7 +592,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--ink);
 }
 .cta {
-  background: var(--sky-ink);
+  background: var(--secret);
   color: #fff;
   font-family: inherit;
   font-weight: 900;
