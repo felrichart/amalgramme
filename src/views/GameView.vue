@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useGameState, levelProgress } from '../composables/useGameState.js';
+import { useGameState } from '../composables/useGameState.js';
 import {
   PUZZLES_NEW as PUZZLES,
   DAILY_INDEX,
@@ -29,16 +29,12 @@ const dateLabel = formatChallengeDate(PUZZLES[levelIndex].date);
 /* Back lands where the player likely came from: menu for the daily, list otherwise. */
 const backTo = isDaily ? '/' : '/challenges';
 
-/* Next uncompleted past challenge, chronological, wrapping to the first; the
- * list if every past challenge is done. Daily lives on the menu, skipped here. */
-function goNextChallenge() {
-  const total = PUZZLES.length;
-  for (let step = 1; step <= total; step++) {
-    const i = (levelIndex + step) % total;
-    if (i === DAILY_INDEX) continue;
-    if (!levelProgress(i).completed) return router.push(`/play/${slugForIndex(i)}`);
-  }
-  router.push('/challenges');
+/* The challenge one day older, mirroring the newest-first list; null at the
+ * oldest, where the "next" button is hidden. Past levels sit below the daily,
+ * so index-1 is always another past challenge, never the daily. */
+const olderIndex = levelIndex > 0 ? levelIndex - 1 : null;
+function goOlderChallenge() {
+  if (olderIndex !== null) router.push(`/play/${slugForIndex(olderIndex)}`);
 }
 
 const helpOpen = ref(false);
@@ -301,7 +297,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </button>
           </template>
           <template v-else>
-            <button class="cta" type="button" @click="goNextChallenge">
+            <button v-if="olderIndex !== null" class="cta" type="button" @click="goOlderChallenge">
               Prochain défi
             </button>
             <button class="cta cta-ghost" type="button" @click="router.push('/challenges')">

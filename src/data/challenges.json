@@ -101,5 +101,20 @@
     "date": "2026-07-14",
     "secret": "baleine",
     "words": ["cachalot", "bleue", "plancton", "mammifere"]
+  },
+  {
+    "date": "2026-07-15",
+    "secret": "moule",
+    "words": ["gateau", "frite", "coquille", "mariniere"]
+  },
+  {
+    "date": "2026-07-16",
+    "secret": "avocat",
+    "words": ["tribunal", "noyau", "victime", "california"]
+  },
+  {
+    "date": "2026-07-17",
+    "secret": "eclair",
+    "words": ["orage", "patisserie", "electrique", "creme"]
   }
 ]
