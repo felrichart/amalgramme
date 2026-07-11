@@ -25,7 +25,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # `npm install` (not `npm ci`): some platform-specific optional deps
+      # (@emnapi/*) aren't recorded in the lockfile, which strict `npm ci` rejects.
+      - run: npm install --no-audit --no-fund
       # Project sites are served under /<repo>/, so build with that base.
       - run: npm run build
         env:

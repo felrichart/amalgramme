@@ -1,26 +1,28 @@
 # Amalgramme 😎
 
-Jeu de mots par niveaux. Chaque niveau : 6 mots lies par un theme, chacun
-reconstitue en reliant les lettres de sa roue.
+Jeu de mots quotidien. Chaque défi cache un **secret** à deviner et 4 **mots**
+qui lui sont liés. Chaque mot se reconstitue en reliant les lettres de sa roue ;
+les lettres trouvées alimentent le clavier qui sert à taper le secret.
 
-- Le **theme** est affiche d'emblee comme indice (pas a deviner).
-- L'ecran d'un niveau montre 6 petites roues (deux colonnes de trois). On
-  touche une roue : elle devient la grande roue active en bas de l'ecran.
-- Pour saisir un mot : garder le doigt appuye et tracer une ligne de lettre en
-  lettre. Le mot s'affiche au-dessus de la roue.
-- Doigt relache avant la fin : le mot est simplement abandonne. Toutes les
-  lettres utilisees mais mot faux : la roue tremble.
-- Un appui au centre de la roue melange les lettres.
-- Sur ordinateur : taper le mot au clavier, **Backspace** pour effacer une
-  lettre, **Echap** pour tout annuler, **Espace** pour melanger.
-- Quand un mot est correct, sa roue est remplacee par le mot dans la colonne.
-- Les 6 mots trouves : le niveau est reussi (😎) et le temps s'affiche.
-- Chaque mot fait 5 a 9 lettres (une lettre par noeud de la roue).
+**Jouer en ligne : https://felrichart.github.io/amalgramme/**
 
-Pense pour le mobile d'abord, jouable aussi sur ordinateur. Theme visuel
-« liquid glass » : pastels calmes (bleu, rose, jaune), verre depoli, fond clair.
+## Règles
 
-## Developpement
+- Le **secret** n'est pas affiché : il faut le deviner à partir des 4 mots.
+- Chaque mot a sa roue de lettres. Pour saisir un mot : garder le doigt appuyé
+  et tracer une ligne de lettre en lettre. La roue tremble si le mot est faux.
+- Un appui au centre de la roue mélange les lettres.
+- Les lettres des mots trouvés forment le stock de lettres pour taper le secret.
+- Un mot peut contenir un espace (réponse en deux mots) : l'espace est absent de
+  la roue mais affiché comme un blanc dans les cases de la réponse.
+- Sur ordinateur : taper au clavier, **Backspace** pour effacer, **Échap** pour
+  tout annuler, **Espace** pour mélanger.
+- Un **défi quotidien** par jour ; les défis passés restent rejouables.
+- La progression est sauvegardée par défi (localStorage).
+
+Pensé pour le mobile d'abord, jouable aussi sur ordinateur.
+
+## Développement
 
 ```bash
 npm install
@@ -29,12 +31,39 @@ npm run build      # build de production dans dist/
 npm run preview    # sert le build de production
 ```
 
+## Ajouter des niveaux
+
+Les niveaux vivent dans `src/data/challenges.json` — un simple tableau, un objet
+par défi :
+
+```json
+{ "date": "2026-07-12", "secret": "mot", "words": ["indice1", "indice2", "indice3", "indice4"] }
+```
+
+- `date` (ISO `AAAA-MM-JJ`) : un défi par jour ; le plus récent non futur est le
+  défi du jour. Garder le tableau trié par date croissante, ajouter à la fin.
+- `secret` et `words` : sans accents (le `é` tapé correspond au `e` après
+  normalisation). Un espace dans un mot = réponse en deux mots.
+
+Éditer le JSON, commiter, pousser sur `main` : le déploiement se refait tout
+seul (voir ci-dessous).
+
+## Déploiement
+
+Poussé sur `main`, le workflow `.github/workflows/deploy.yml` construit le site
+et le publie sur GitHub Pages automatiquement. Le JSON des niveaux étant importé
+au build, mettre à jour les niveaux ne demande qu'un commit.
+
 ## Structure
 
-- `src/data/challenges.js` — banque de niveaux : un `theme` (affiche, en
-  francais normal) et 6 `words` (5-9 lettres, sans accents).
-- `src/game/puzzle.js` — selection du niveau, construction des roues, melange.
-- `src/composables/useGameState.js` — etat du jeu, trace du doigt, validation,
-  chrono, sauvegarde et progression par niveau (localStorage).
-- `src/components/` — `LetterWheel` (roue de lettres + trace), `SuccessScreen`.
-- `src/views/` — `LevelsView` (choix du niveau), `GameView` (grille + roue active).
+- `src/data/challenges.json` — banque de niveaux (données pures, éditables).
+- `src/data/challenges.js` — charge le JSON, logique du défi du jour et des
+  slugs de route.
+- `src/game/puzzle.js` — sélection du niveau, construction des roues, du secret
+  et du stock de lettres, mélange déterministe.
+- `src/composables/useGameState.js` — état du jeu, tracé du doigt, validation,
+  chrono, sauvegarde et progression par défi (localStorage).
+- `src/components/` — `LetterWheel` (roue + tracé), `LetterKeyboard` (saisie du
+  secret).
+- `src/views/` — `MenuView` (accueil, défi du jour), `ChallengesView` (défis
+  passés), `GameView` (roues + saisie du secret).
