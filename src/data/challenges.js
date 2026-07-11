@@ -11,21 +11,15 @@
  * by ascending date; append new puzzles at the end.
  */
 import puzzles from './challenges.json';
+import { getToday } from '../utils/today.js';
 
 export const PUZZLES_NEW = puzzles;
 
-/* Local ISO date (YYYY-MM-DD) for today, matching the puzzle `date` format. */
-function todayISO() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
 /* Today's challenge: the most recent puzzle not dated in the future. ISO dates
- * compare lexicographically, so a string compare orders them correctly. */
+ * compare lexicographically, so a string compare orders them correctly.
+ * `getToday()` must be resolved (see resolveToday) before this module loads. */
 export const DAILY_INDEX = (() => {
-  const today = todayISO();
+  const today = getToday();
   let idx = 0;
   for (let i = 0; i < PUZZLES_NEW.length; i++) {
     if (PUZZLES_NEW[i].date <= today) idx = i;
