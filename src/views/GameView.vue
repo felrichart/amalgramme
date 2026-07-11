@@ -11,6 +11,7 @@ import {
 } from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
+import HowToPlay from '../components/HowToPlay.vue';
 import { WHEEL_TINTS } from '../palette.js';
 
 const route = useRoute();
@@ -39,6 +40,8 @@ function goNextChallenge() {
   }
   router.push('/challenges');
 }
+
+const helpOpen = ref(false);
 
 const g = useGameState(levelIndex);
 
@@ -169,8 +172,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         ←
       </button>
       <h1 class="title">{{ isDaily ? 'Défi quotidien' : dateLabel }}</h1>
-      <div class="spacer" />
+      <button class="icon-btn" type="button" @click="helpOpen = true" aria-label="comment jouer">
+        ?
+      </button>
     </header>
+
+    <HowToPlay v-if="helpOpen" @close="helpOpen = false" />
 
     <main class="board">
       <svg
@@ -355,10 +362,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.15rem;
   font-weight: 800;
   color: var(--ink);
-}
-.spacer {
-  width: 2.6rem;
-  flex: none;
 }
 
 /* Stable wrapper the connector lines anchor to; the button translates within. */
