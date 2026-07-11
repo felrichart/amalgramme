@@ -1,12 +1,3 @@
-import { PUZZLES_NEW as PUZZLES, TUTORIAL_INDEX, TUTORIAL_PUZZLE } from '../data/challenges.js';
-
-/* Puzzle for a level id: the tutorial puzzle, else a dated puzzle (clamped). */
-export function puzzleForLevel(idx) {
-  if (idx === TUTORIAL_INDEX) return TUTORIAL_PUZZLE;
-  const i = Math.min(Math.max(0, idx | 0), PUZZLES.length - 1);
-  return PUZZLES[i];
-}
-
 /*
  * Split a raw answer into its space-free form plus gap metadata. `text` is what
  * the player's input is compared against (no spaces); `display` keeps the spaces
@@ -39,33 +30,6 @@ export function buildWords(puzzle) {
 /* Secret the player types to guess a level's theme; spaces render as a gap. */
 export function buildSecret(puzzle) {
   return parseAnswer(puzzle.secret);
-}
-
-/*
- * Tile pool for the secret keyboard: every letter of the 4 answer words with its
- * total count. The player spends these tiles typing the secret; a letter absent
- * here has no key. Words carry no diacritics so letters are already a–z.
- */
-export function buildPool(words) {
-  const total = {};
-  words.forEach((w) => w.letters.forEach(({ ch }) => (total[ch] = (total[ch] || 0) + 1)));
-  return total;
-}
-
-/*
- * Secret tray grouped by source word: one row per answer word, holding that
- * word's letters in order. Unlike buildPool (which merges all four into per-letter
- * counts), this keeps a letter shared by two words as two separate tiles, so every
- * tile maps to a specific wheel. Spend/remaining stays count-based (see buildPool).
- * Each row is shuffled so the tray doesn't spell out the answer word.
- */
-export function buildPoolByWord(words) {
-  return words.map((w, i) =>
-    shuffle(
-      w.letters.map(({ ch }) => ch),
-      (i + 1) * 31,
-    ),
-  );
 }
 
 /* Deterministic Fisher-Yates so shuffles vary by seed without Math.random. */

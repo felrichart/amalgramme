@@ -81,10 +81,3 @@ button {
   /* Kill the translucent blue tap-highlight overlay on mobile. */
   -webkit-tap-highlight-color: transparent;
 }
-
-/* Comic surface: white panel, thick ink outline, hard offset shadow. */
-.glass {
-  background: var(--panel);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop);
-}

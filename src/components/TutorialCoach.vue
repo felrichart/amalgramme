@@ -110,7 +110,10 @@ const bubbleStyle = computed(() => {
 });
 
 /* Re-measure whenever the step changes; the layout may have shifted with it. */
-watch(() => props.step, () => nextTick(measure));
+watch(
+  () => props.step,
+  () => nextTick(measure),
+);
 onMounted(() => {
   nextTick(measure);
   window.addEventListener('resize', measure);

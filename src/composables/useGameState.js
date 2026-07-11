@@ -1,20 +1,37 @@
 import { reactive, computed, watch, ref } from 'vue';
-import {
-  puzzleForLevel,
-  buildWords,
-  buildSecret,
-  buildPool,
-  buildPoolByWord,
-  shuffle,
-  normalize,
-} from '../game/puzzle.js';
+import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
+import { PUZZLES, puzzleForDate } from '../data/challenges.js';
 
 const STORAGE_PREFIX = 'amalgramme:v3:level:';
 
-/* Progress summary for a level, read by the level-select screen. */
-export function levelProgress(idx) {
+/* Progress is keyed by the puzzle's date — stable across content changes, unlike
+ * an array index, which shifts whenever the bank is reordered. */
+function storageKey(date) {
+  return STORAGE_PREFIX + date;
+}
+
+/* One-time migration of the old index-based saves to date keys. Assumes saves
+ * predate the tutorial-at-index-0 shift, so index i maps to PUZZLES[i]. Idempotent:
+ * numeric keys are removed as converted, and an existing date key is never overwritten. */
+(function migrateIndexKeys() {
   try {
-    const s = JSON.parse(localStorage.getItem(STORAGE_PREFIX + idx));
+    for (let i = 0; i < PUZZLES.length; i++) {
+      const oldKey = STORAGE_PREFIX + i;
+      const raw = localStorage.getItem(oldKey);
+      if (raw === null) continue;
+      const newKey = storageKey(PUZZLES[i].date);
+      if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, raw);
+      localStorage.removeItem(oldKey);
+    }
+  } catch {
+    /* storage unavailable: nothing to migrate */
+  }
+})();
+
+/* Progress summary for a level, read by the level-select screen. */
+export function levelProgress(date) {
+  try {
+    const s = JSON.parse(localStorage.getItem(storageKey(date)));
     const found = s?.found ?? 0;
     const secretFound = !!s?.secretFound;
     const completed = !!s?.completed;
@@ -31,9 +48,9 @@ export function levelProgress(idx) {
 }
 
 /* Wipe one level's saved state (e.g. so the tutorial always starts fresh). */
-export function resetLevel(idx) {
+export function resetLevel(date) {
   try {
-    localStorage.removeItem(STORAGE_PREFIX + idx);
+    localStorage.removeItem(storageKey(date));
   } catch {
     /* storage unavailable: nothing to clear */
   }
@@ -53,16 +70,16 @@ export function resetAllProgress() {
   }
 }
 
-function load(key) {
+function load(date) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_PREFIX + key)) || null;
+    return JSON.parse(localStorage.getItem(storageKey(date))) || null;
   } catch {
     return null;
   }
 }
-function save(key, data) {
+function save(date, data) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
+    localStorage.setItem(storageKey(date), JSON.stringify(data));
   } catch {
     /* storage full or unavailable: play without persistence */
   }
@@ -74,16 +91,12 @@ function save(key, data) {
  * secret is typed letter by letter into blank boxes. The level is complete once
  * every word is solved AND the secret is guessed.
  */
-export function useGameState(levelIndex) {
-  const puzzle = puzzleForLevel(levelIndex);
+export function useGameState(date) {
+  const puzzle = puzzleForDate(date);
   const words = buildWords(puzzle);
   const secret = buildSecret(puzzle);
-  /* Total tiles per letter available across the 4 words. */
-  const pool = buildPool(words);
-  /* Same tiles, grouped by source word: one tray row per wheel. */
-  const poolRows = buildPoolByWord(words);
 
-  const saved = load(levelIndex);
+  const saved = load(date);
 
   const solved = reactive(saved?.solved ?? words.map(() => false));
   const shuffleSeeds = reactive(saved?.shuffleSeeds ?? words.map((_, i) => i + 1));
@@ -101,13 +114,6 @@ export function useGameState(levelIndex) {
     }
     return null;
   };
-  /* Where focus should land after `from`: next open word, else the still-unsolved secret, else nothing. */
-  const focusAfter = (from) => {
-    const w = nextUnsolved(from);
-    if (w !== null) return w;
-    return state.secretFound ? null : 'secret';
-  };
-
   const state = reactive({
     active: saved?.completed ? null : (firstUnsolved() ?? (saved?.secretFound ? null : 'secret')),
     secretFound: saved?.secretFound ?? false,
@@ -183,8 +189,6 @@ export function useGameState(levelIndex) {
     return null;
   }
 
-  const foundCount = () => solved.filter(Boolean).length;
-
   /* --- actions --- */
 
   /* Whole level is done only when every word and the secret are found. */
@@ -213,17 +217,13 @@ export function useGameState(levelIndex) {
     shuffleSeeds[state.active] = (shuffleSeeds[state.active] * 2 + 7) % 100000 || 1;
   }
 
-  /* Begin a fresh draw (finger pressed down). */
-  function beginPath() {
-    path.length = 0;
-  }
-
   /* Extend the draw onto a tile; repeats and re-entry are ignored. */
   function appendTile(id) {
     if (typeof state.active !== 'number' || path.includes(id)) return;
     path.push(id);
   }
 
+  /* Drop the current draw — on a fresh press (finger down) or an explicit clear. */
   function clearPath() {
     path.length = 0;
   }
@@ -253,7 +253,8 @@ export function useGameState(levelIndex) {
     if (current.value === words[w].text) {
       solved[w] = true;
       path.length = 0;
-      state.active = focusAfter(w);
+      /* Focus the next open word; when none remain, the unsolved secret, else nothing. */
+      state.active = nextUnsolved(w) ?? (state.secretFound ? null : 'secret');
       maybeFinish();
     } else if (path.length === words[w].length) {
       shakeSignal.value++;
@@ -314,10 +315,10 @@ export function useGameState(levelIndex) {
   watch(
     () => JSON.stringify({ solved, shuffleSeeds, s: state, sp: secretPicks }),
     () =>
-      save(levelIndex, {
+      save(date, {
         solved: [...solved],
         shuffleSeeds: [...shuffleSeeds],
-        found: foundCount(),
+        found: solved.filter(Boolean).length,
         secretFound: state.secretFound,
         secretPicks: [...secretPicks],
         completed: state.completed,
@@ -328,8 +329,6 @@ export function useGameState(levelIndex) {
     puzzle,
     words,
     secret,
-    pool,
-    poolRows,
     state,
     path,
     current,
@@ -346,7 +345,6 @@ export function useGameState(levelIndex) {
     activate,
     activateSecret,
     shuffleWheel,
-    beginPath,
     appendTile,
     clearPath,
     typeLetter,

@@ -1,25 +1,22 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { PUZZLES_NEW as PUZZLES, DAILY_INDEX, formatChallengeDate } from '../data/challenges.js';
+import { pastChallenges, formatChallengeDate } from '../data/challenges.js';
 import { levelProgress } from '../composables/useGameState.js';
 
 const router = useRouter();
 
 /* Past challenges only (today's daily lives on the menu), newest first. */
 const items = computed(() =>
-  PUZZLES.map((p, i) => {
-    const prog = levelProgress(i);
+  pastChallenges().map((p) => {
+    const prog = levelProgress(p.date);
     return {
-      index: i,
-      slug: p.date,
+      date: p.date,
       label: formatChallengeDate(p.date),
       completed: prog.completed,
       partial: prog.partial,
     };
-  })
-    .filter((c) => c.index < DAILY_INDEX)
-    .reverse(),
+  }),
 );
 </script>
 
@@ -32,12 +29,12 @@ const items = computed(() =>
     </header>
 
     <ul class="list">
-      <li v-for="c in items" :key="c.index">
+      <li v-for="c in items" :key="c.date">
         <button
           class="row"
           :class="{ done: c.completed, partial: c.partial }"
           type="button"
-          @click="router.push(`/play/${c.slug}`)"
+          @click="router.push(`/play/${c.date}`)"
         >
           <span class="date">{{ c.label }}</span>
           <span v-if="c.completed" class="check" aria-label="terminé">✓</span>

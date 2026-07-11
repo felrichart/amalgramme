@@ -3,12 +3,13 @@ import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from
 import { useRoute, useRouter } from 'vue-router';
 import { useGameState, resetLevel } from '../composables/useGameState.js';
 import {
-  PUZZLES_NEW as PUZZLES,
-  DAILY_INDEX,
-  TUTORIAL_INDEX,
+  TODAY_DATE,
+  TUTORIAL_DATE,
+  puzzleForDate,
+  dateForSlug,
+  slugForDate,
+  olderDate,
   formatChallengeDate,
-  indexForSlug,
-  slugForIndex,
 } from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
@@ -18,26 +19,21 @@ import { WHEEL_TINTS } from '../palette.js';
 const route = useRoute();
 const router = useRouter();
 
-/* Unknown slug → menu; future puzzles aren't playable yet → daily. Either way
- * fall back to the daily index so this (about-to-be-replaced) render is valid. */
-const resolved = indexForSlug(route.params.slug);
-const isTutorial = resolved === TUTORIAL_INDEX;
-if (resolved === -1) router.replace('/');
-else if (!isTutorial && resolved > DAILY_INDEX) router.replace('/play/daily');
-const levelIndex = isTutorial
-  ? TUTORIAL_INDEX
-  : resolved >= 0 && resolved <= DAILY_INDEX
-    ? resolved
-    : DAILY_INDEX;
+/* Resolve the route slug to a puzzle date. Unknown slug → menu; a future
+ * (not-yet-released) puzzle → today's daily. Either way fall back to today so
+ * this (about-to-be-replaced) render stays valid. */
+const requested = dateForSlug(route.params.slug);
+const playable =
+  !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || requested <= TODAY_DATE);
+if (!puzzleForDate(requested)) router.replace('/');
+else if (!playable) router.replace('/play/daily');
+const date = playable ? requested : TODAY_DATE;
 
-const isDaily = levelIndex === DAILY_INDEX;
+const isTutorial = date === TUTORIAL_DATE;
+const isDaily = date === TODAY_DATE;
 /* The tutorial always starts fresh — wipe its saved state before state loads. */
-if (isTutorial) resetLevel(levelIndex);
-const title = isTutorial
-  ? 'Tutoriel'
-  : isDaily
-    ? 'Défi quotidien'
-    : formatChallengeDate(PUZZLES[levelIndex].date);
+if (isTutorial) resetLevel(date);
+const title = isTutorial ? 'Tutoriel' : isDaily ? 'Défi quotidien' : formatChallengeDate(date);
 /* Back lands where the player likely came from: menu for daily/tutorial, list otherwise. */
 const backTo = isDaily || isTutorial ? '/' : '/challenges';
 
@@ -73,14 +69,13 @@ function coachNext() {
 }
 
 /* The challenge one day older, mirroring the newest-first list; null at the
- * oldest, where the "next" button is hidden. Past levels sit below the daily,
- * so index-1 is always another past challenge, never the daily. */
-const olderIndex = levelIndex > 0 ? levelIndex - 1 : null;
+ * oldest, where the "next" button is hidden. */
+const older = olderDate(date);
 function goOlderChallenge() {
-  if (olderIndex !== null) router.push(`/play/${slugForIndex(olderIndex)}`);
+  if (older) router.push(`/play/${slugForDate(older)}`);
 }
 
-const g = useGameState(levelIndex);
+const g = useGameState(date);
 
 /* Tutorial: the intro's one action step (writing the first word) advances when
  * a word is solved; the rest advance via Suivant/Compris. */
@@ -319,7 +314,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             :tiles="g.wheelTiles(g.state.active)"
             :path="g.path"
             :shake="g.shakeSignal.value"
-            @begin="g.beginPath"
+            @begin="g.clearPath"
             @enter="g.appendTile"
             @backtrack="g.backspace"
             @end="g.commit"
@@ -359,7 +354,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </button>
           </template>
           <template v-else>
-            <button v-if="olderIndex !== null" class="cta" type="button" @click="goOlderChallenge">
+            <button v-if="older" class="cta" type="button" @click="goOlderChallenge">
               Prochain défi
             </button>
             <button class="cta cta-ghost" type="button" @click="router.push('/challenges')">
