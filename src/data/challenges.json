@@ -93,7 +93,7 @@
   {
     "date": "2026-07-11",
     "secret": "agent",
-    "words": ["espionnage", "immobilier", "secret", "policier"]
+    "words": ["policier", "secret", "espionnage", "immobilier"]
   },
   { "date": "2026-07-12", "secret": "mars", "words": ["planete", "printemps", "guerre", "olympe"] },
   { "date": "2026-07-13", "secret": "salsa", "words": ["danser", "sauce", "porto rico", "latino"] },
