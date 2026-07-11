@@ -107,29 +107,25 @@ function resetAll() {
   cursor: pointer;
   color: var(--ink);
   transition:
-    transform 0.14s ease,
-    border-color 0.2s ease;
-}
-.lvl:hover {
-  transform: translateY(-3px);
-  border-color: var(--muted);
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
 }
 .lvl:active {
-  transform: translateY(0);
+  transform: translate(4px, 5px);
+  box-shadow: 0 0 0 var(--outline);
 }
 .lvl:focus-visible {
-  outline: 2px solid var(--sky-ink);
+  outline: 3px solid var(--outline);
   outline-offset: 2px;
 }
-/* Done: solid accent fill, dark number. */
+/* Done: solid accent fill, white number. */
 .lvl.done {
-  background: var(--sky-ink);
-  border-color: var(--sky-ink);
-  color: var(--bg);
+  background: var(--secret);
+  color: #fff;
 }
-/* Started but unfinished: accent outline, no fill. */
+/* Started but unfinished: faint accent wash. */
 .lvl.partial {
-  border-color: var(--sky-ink);
+  background: color-mix(in srgb, var(--secret) 16%, #fff);
 }
 
 .no {
@@ -156,7 +152,7 @@ function resetAll() {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--sky-ink);
+  background: var(--secret);
 }
 
 .reset {

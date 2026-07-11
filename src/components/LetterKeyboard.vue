@@ -76,52 +76,58 @@ function rowStyle(r) {
 }
 .key {
   position: relative;
-  min-width: 2.1rem;
-  height: 2.7rem;
-  padding: 0 0.35rem;
+  min-width: 2.2rem;
+  height: 2.8rem;
+  padding: 0 0.4rem;
   display: grid;
   place-items: center;
-  border-radius: 0.55rem;
-  font-weight: 800;
+  border-radius: 0.6rem;
+  font-weight: 900;
   font-size: 1.15rem;
   text-transform: uppercase;
-  color: var(--tint);
+  color: var(--ink);
   cursor: pointer;
-  background: var(--tile);
-  border: 2px solid var(--tint);
+  /* Unsolved: a light wash of the row's accent. Solved rows lock solid (.filled). */
+  background: color-mix(in srgb, var(--tint, var(--sky-ink)) 20%, #fff);
+  border: 2.5px solid var(--outline);
+  box-shadow: 3px 4px 0 var(--outline);
   transition:
-    transform 0.1s ease,
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
     opacity 0.18s ease;
 }
+/* Press: the key drops into its shadow. */
 .key:active {
-  transform: scale(0.9);
+  transform: translate(3px, 4px);
+  box-shadow: 0 0 0 var(--outline);
   background: var(--tint);
-  color: var(--bg);
+  color: #fff;
 }
 .key:focus-visible {
-  outline: 2px solid var(--tint);
+  outline: 2.5px solid var(--outline);
   outline-offset: 2px;
 }
-/* Solved word: its row is filled solid in the accent with dark glyphs. */
+/* Solved word: its row locks filled solid in the accent with white glyphs. */
 .key.filled {
-  color: var(--bg);
+  color: #fff;
   background: var(--tint);
-  border-color: var(--tint);
+  border-color: var(--outline);
 }
 .key.spent {
   cursor: default;
-  opacity: 0.24;
+  opacity: 0.32;
+  transform: translate(3px, 4px);
+  box-shadow: 0 0 0 var(--outline);
 }
 .key.wide {
   min-width: 4.4rem;
   padding: 0 0.9rem;
   font-size: 1.3rem;
-  color: var(--muted);
+  color: var(--ink);
   background: var(--panel);
-  border-color: var(--line);
 }
 .key.wide:active {
-  background: var(--tile);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--panel);
 }
 </style>

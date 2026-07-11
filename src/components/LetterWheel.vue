@@ -15,20 +15,33 @@ const props = defineProps({
 });
 const emit = defineEmits(['begin', 'enter', 'backtrack', 'end', 'shuffle']);
 
-const RING = 35; // ring radius
 const HIT = 13; // tile hit radius
 const CENTER = 15; // centre (shuffle) hit radius
+const GAP = 0.86; // neighbour clearance factor
+const OUTER = 46.5; // where a tile's outer edge sits, as % from centre
+const MAX_NODE = 27; // cap so few-letter rings don't get oversized tiles
 
 const box = ref(null);
 const pointer = ref(null);
 let dragging = false;
 let pendingShuffle = false;
 
+/*
+ * Ring radius adapts to tile count: with many (small) letters it grows so the
+ * tiles' outer edge stays near the rim, instead of leaving them stranded near
+ * the centre. When the node size hits its cap, the cap governs the radius.
+ */
+const ring = computed(() => {
+  const s = Math.sin(Math.PI / props.tiles.length);
+  const uncapped = OUTER / (1 + GAP * s);
+  return 2 * uncapped * s * GAP > MAX_NODE ? OUTER - MAX_NODE / 2 : uncapped;
+});
+
 /* Fixed positions around the ring; first tile at the top, clockwise. */
 const centers = computed(() =>
   props.tiles.map((_, k) => {
     const a = (-90 + (360 * k) / props.tiles.length) * (Math.PI / 180);
-    return { x: 50 + RING * Math.cos(a), y: 50 + RING * Math.sin(a) };
+    return { x: 50 + ring.value * Math.cos(a), y: 50 + ring.value * Math.sin(a) };
   }),
 );
 const posById = computed(() => {
@@ -46,17 +59,22 @@ const lastCenter = computed(() =>
 
 /*
  * Node diameter shrinks with tile count so neighbours never overlap, letting
- * the ring hold up to ~10 letters. Value is a % of the wheel; capped so small
- * words don't get oversized tiles. Glyphs track the tile size.
+ * the ring hold up to ~11 letters. Value is a % of the wheel; capped so small
+ * words don't get oversized tiles.
  */
 const nodeSize = computed(() => {
-  const n = props.tiles.length;
-  const fit = 2 * RING * Math.sin(Math.PI / n) * 0.86;
-  return Math.min(27, fit);
+  const fit = 2 * ring.value * Math.sin(Math.PI / props.tiles.length) * GAP;
+  return Math.min(MAX_NODE, fit);
 });
-const glyph = computed(
-  () => (nodeSize.value * (props.interactive ? 0.32 : 0.42)).toFixed(2) + 'cqw',
-);
+/*
+ * Glyphs track the tile size, but small tiles (many letters) get a
+ * proportionally larger glyph so letters stay legible near the rim.
+ */
+const glyph = computed(() => {
+  const base = props.interactive ? 0.56 : 0.6;
+  const boost = Math.min(1.2, MAX_NODE / nodeSize.value);
+  return (nodeSize.value * base * boost).toFixed(2) + 'cqw';
+});
 
 function nodeStyle(k) {
   const c = centers.value[k];
@@ -158,7 +176,7 @@ watch(
         :points="linkPoints"
         fill="none"
         stroke="var(--tint, var(--sky-ink))"
-        stroke-width="3.4"
+        stroke-width="5"
         stroke-linejoin="round"
         stroke-linecap="round"
       />
@@ -169,9 +187,9 @@ watch(
         :x2="pointer.x"
         :y2="pointer.y"
         stroke="var(--tint, var(--sky-ink))"
-        stroke-width="3.4"
+        stroke-width="5"
         stroke-linecap="round"
-        opacity="0.5"
+        opacity="0.35"
       />
     </svg>
 
@@ -209,18 +227,20 @@ watch(
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* Solid flat disc backing every wheel. */
+  /* Comic coin: one white disc, thick ink outline, hard offset shadow. */
   border-radius: 50%;
   background: var(--panel);
-  border: 2px solid var(--line);
+  border: 3px solid var(--outline);
+  box-shadow: var(--pop-lg);
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
-/* Docked / focused word: the disc rim takes the wheel's accent. */
+/* Selected word: the coin sits flush with the board — offset shadow drops
+   away, ink outline stays. Center stays put so the links don't shift. */
 .wheel.active {
-  border-color: var(--tint, var(--sky-ink));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint, var(--sky-ink)) 22%, transparent);
+  background: color-mix(in srgb, var(--tint, var(--sky-ink)) 16%, #fff);
+  box-shadow: none;
 }
 .wheel.shaking {
   animation: shake 0.4s ease-in-out;
@@ -241,28 +261,27 @@ watch(
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
-  border-radius: 50%;
   z-index: 2;
-  /* Flat dark tile, thick accent outline, accent glyph. */
-  background: var(--tile);
-  border: 2.5px solid var(--tint, var(--sky-ink));
-  color: var(--tint, var(--sky-ink));
-  font-weight: 800;
+  /* Flat bold glyph sitting directly on the disc — no tile behind it. */
+  color: var(--ink);
+  font-weight: 900;
   text-transform: uppercase;
+  border-radius: 50%;
   transition:
-    transform 0.14s ease,
-    background 0.14s ease,
-    color 0.14s ease;
+    transform 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .node span {
   display: block;
   line-height: 1;
 }
-/* Touched: solid accent fill, dark knocked-out glyph. */
+/* Touched: a solid accent circle with a white knock-out glyph, so it stays
+   readable under the drawn line. */
 .node.on {
   background: var(--tint, var(--sky-ink));
-  color: var(--bg);
-  transform: translate(-50%, -50%) scale(1.08);
+  color: #fff;
+  transform: translate(-50%, -50%) scale(1.12);
 }
 
 .wheel {
@@ -274,21 +293,19 @@ watch(
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 22%;
+  width: 24%;
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
-  border-radius: 50%;
   z-index: 1;
   pointer-events: none;
   color: var(--muted);
-  background: transparent;
-  border: 1.5px dashed var(--line);
+  opacity: 0.55;
 }
 .hub svg {
-  width: 46%;
-  height: 46%;
+  width: 100%;
+  height: 100%;
 }
 
 /* A soft damped wobble — enough to read as "no", never jarring. */

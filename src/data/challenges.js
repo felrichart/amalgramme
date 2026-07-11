@@ -26,4 +26,6 @@ export const PUZZLES_NEW = [
   { secret: 'carbone', words: ['charbon', 'respirer', 'diamant', 'quatorze'] },
   // { secret: 'verre', words: ['fenetre', 'gobelet', 'lunette', 'fragile'] },
   // { secret: 'panier', words: ['osier', 'fruits', 'basketball', 'caddie'] },
+  { secret: 'course', words: ['athlete', 'supermarche', 'poursuite', 'voiture'] },
+  { secret: 'metal', words: ['aimant', 'musique', 'alliage', 'cuivre'] },
 ];

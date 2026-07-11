@@ -109,6 +109,11 @@ watch(
   () => [...g.solved],
   () => nextTick(measureLinks),
 );
+/* Re-measure on selection changes too, so the links stay pinned to each disc. */
+watch(
+  () => [wordActive.value, g.secretActive.value, g.state.active],
+  () => nextTick(measureLinks),
+);
 
 /* Physical keyboard: routes to the secret keyboard or the active wheel. */
 function onKeydown(e) {
@@ -147,6 +152,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <button class="icon-btn" type="button" @click="router.push('/')" aria-label="niveaux">
         ←
       </button>
+      <h1 class="title">Niveau {{ levelIndex + 1 }}</h1>
       <div class="spacer" />
     </header>
 
@@ -168,7 +174,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :stroke="ln.tint"
           stroke-width="5"
           stroke-linecap="round"
-          opacity="0.45"
+          opacity="0.8"
         />
       </svg>
 
@@ -291,20 +297,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--ink);
   cursor: pointer;
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 2.5px solid var(--outline);
+  box-shadow: 3px 4px 0 var(--outline);
   transition:
-    transform 0.12s ease,
-    background 0.2s ease;
-}
-.icon-btn:hover {
-  background: var(--tile);
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
 }
 .icon-btn:active {
-  transform: scale(0.92);
+  transform: translate(3px, 4px);
+  box-shadow: 0 0 0 var(--outline);
 }
 .icon-btn:focus-visible {
   outline: 2px solid var(--sky-ink);
   outline-offset: 2px;
+}
+.title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--ink);
 }
 .spacer {
   width: 2.6rem;
@@ -320,25 +333,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   justify-content: center;
   padding: 0.7rem 1rem;
   border-radius: 1.1rem;
-  background: var(--panel);
-  border: 2px solid color-mix(in srgb, var(--secret) 55%, var(--line));
+  background: color-mix(in srgb, var(--secret) 9%, #fff);
+  border: 3px solid var(--outline);
+  box-shadow: var(--pop-lg);
   cursor: pointer;
   transition:
-    transform 0.14s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease;
-}
-.secret:not(.found):active {
-  transform: scale(0.97);
+    transform 0.1s ease,
+    box-shadow 0.1s ease,
+    background 0.2s ease;
 }
 .secret:focus-visible {
-  outline: 2px solid var(--secret);
+  outline: 3px solid var(--outline);
   outline-offset: 2px;
 }
+/* Selected: sits flush with the board — offset shadow drops away, ink outline
+   stays. Center stays put so the links don't shift. */
 .secret.active {
-  border-color: var(--secret);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secret) 22%, transparent);
+  background: color-mix(in srgb, var(--secret) 16%, #fff);
+  box-shadow: none;
 }
 .secret-boxes {
   display: flex;
@@ -369,27 +381,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 800;
   font-size: 1.35rem;
   text-transform: uppercase;
+  font-weight: 900;
   color: var(--ink);
   background: var(--tile);
-  border: 2px solid var(--line);
+  border: 2.5px solid var(--outline);
 }
 .sbox.set {
-  border-color: var(--secret);
-  color: var(--secret);
+  color: #fff;
+  background: var(--secret);
+  animation: press 0.14s ease;
 }
 /* Secret had a space after this box: widen the gap between the parts. */
 .sbox.gap-after {
   margin-right: 0.9rem;
 }
-/* Found: the strip locks with a solid fill in the secret's own colour. */
+/* Found: the strip locks solid in the secret's colour, keeping its ink outline. */
 .secret.found {
   background: var(--secret);
-  border-color: var(--secret);
+  box-shadow: var(--pop-lg);
 }
 .secret.found .sbox {
-  background: color-mix(in srgb, var(--bg) 22%, var(--secret));
+  background: rgba(255, 255, 255, 0.22);
   border-color: transparent;
-  color: var(--bg);
+  color: #fff;
   animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -397,7 +411,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* Clip (never scroll): the column is sized to fit 100dvh via the root-font
+     clamp, so a scrollbar here is spurious. The clip-margin lets each piece's
+     hard offset shadow paint past the board edge instead of being cut off —
+     and avoids the overflow-y:auto → overflow-x:auto promotion that a
+     right-offset shadow would otherwise turn into a horizontal scrollbar. */
+  overflow: clip;
+  overflow-clip-margin: 12px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas:
@@ -460,11 +480,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   padding: 0.9rem 0.9rem;
   border-radius: 0.8rem;
   background: var(--tint);
-  font-weight: 800;
+  border: 2.5px solid var(--outline);
+  box-shadow: var(--pop);
+  font-weight: 900;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--bg);
+  color: #fff;
   animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes answer-in {
@@ -480,7 +502,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
  */
 .dock {
   flex: none;
-  min-height: 21rem;
+  /* Fixed (not min): the board above must not reflow when the dock swaps
+     between the word wheel, the secret keyboard, and the finish panel —
+     any reflow would shift the wheels and drag the connector lines with them. */
+  height: 22.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -502,26 +527,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   display: grid;
   place-items: center;
   border-radius: 0.55rem;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 1.2rem;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink);
   background: var(--tile);
-  border: 1.5px solid var(--line);
+  border: 2.5px solid var(--outline);
 }
 /* Word had a space after this letter: widen the gap so parts read apart. */
 .tick.gap-after {
   margin-right: 1rem;
 }
 .tick.set {
-  color: var(--bg);
+  color: #fff;
   background: var(--tint, var(--sky-ink));
-  border-color: transparent;
   animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes pop {
   from {
     transform: scale(0.4);
+  }
+}
+/* Same press feedback as a touched wheel node (scale 1.12). */
+@keyframes press {
+  50% {
+    transform: scale(1.12);
   }
 }
 @keyframes nudge {
@@ -551,31 +581,37 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-radius: 50%;
   font-size: 1.3rem;
   font-weight: 900;
-  color: var(--bg);
+  color: #fff;
   background: var(--sky-ink);
+  border: 2.5px solid var(--outline);
+  box-shadow: 3px 4px 0 var(--outline);
 }
 .finish-time {
   font-size: 1.9rem;
-  font-weight: 800;
-  color: var(--sky-ink);
+  font-weight: 900;
+  color: var(--ink);
 }
 .cta {
-  border: 0;
   background: var(--sky-ink);
-  color: var(--bg);
+  color: #fff;
   font-family: inherit;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 1.02rem;
   padding: 0.85rem 1.9rem;
   border-radius: 1.1rem;
+  border: 2.5px solid var(--outline);
+  box-shadow: var(--pop);
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
 }
 .cta:active {
-  transform: scale(0.96);
+  transform: translate(4px, 5px);
+  box-shadow: 0 0 0 var(--outline);
 }
 .cta:focus-visible {
-  outline: 2px solid var(--sky-ink);
+  outline: 3px solid var(--outline);
   outline-offset: 2px;
 }
 
