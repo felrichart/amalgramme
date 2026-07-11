@@ -3,6 +3,15 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
 import { levelProgress, resetAllProgress } from '../composables/useGameState.js';
+import { TILE_TINTS } from '../palette.js';
+
+/* Title rendered as keyboard tiles: each letter cycles the five tints. */
+const BRAND = 'Amalgramme';
+const brandTiles = BRAND.split('').map((ch, i) => ({
+  ch,
+  tint: TILE_TINTS[i % TILE_TINTS.length],
+  solid: i % 2 >= 0, // always
+}));
 
 const router = useRouter();
 
@@ -33,7 +42,17 @@ function resetAll() {
 <template>
   <div class="levels">
     <header class="top">
-      <h1 class="brand">Amalgramme</h1>
+      <h1 class="brand" aria-label="Amalgramme">
+        <span
+          v-for="(t, i) in brandTiles"
+          :key="i"
+          class="btile"
+          :class="{ solid: t.solid }"
+          :style="{ '--tint': t.tint }"
+          aria-hidden="true"
+          >{{ t.ch }}</span
+        >
+      </h1>
       <p class="tag">{{ doneCount }} / {{ levels.length }} niveaux terminés</p>
     </header>
 
@@ -73,11 +92,38 @@ function resetAll() {
   text-align: center;
   margin-bottom: 2rem;
 }
+/* Title as a row of keyboard tiles (see LetterKeyboard .key). */
 .brand {
   margin: 0;
-  font-size: 2.6rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.btile {
+  /* Tile dimensions in em so the whole title scales with this one font-size. */
+  font-size: 1.45rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.35em;
+  height: 1.7em;
+  padding: 0 0.2em;
+  border-radius: 0.4em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--tint-wash);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+/* Hard-coloured tiles: solid accent fill, white glyph (like a solved key). */
+.btile.solid {
+  color: #fff;
+  background: var(--tint);
+}
+/* Lift every other tile for a hand-set, playful baseline. */
+.btile:nth-child(even) {
+  transform: translateY(-0.28em);
 }
 .tag {
   margin: 0.6rem 0 0;
@@ -88,12 +134,12 @@ function resetAll() {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 @media (min-width: 480px) {
   .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -101,9 +147,9 @@ function resetAll() {
   position: relative;
   display: grid;
   place-items: center;
-  padding: 0.9rem;
-  min-height: 5.4rem;
-  border-radius: 1.2rem;
+  padding: 0.4rem;
+  min-height: 2.9rem;
+  border-radius: 0.7rem;
   cursor: pointer;
   color: var(--ink);
   transition:
@@ -111,7 +157,7 @@ function resetAll() {
     box-shadow 0.08s ease;
 }
 .lvl:active {
-  transform: translate(4px, 5px);
+  transform: translate(3px, 3px);
   box-shadow: 0 0 0 var(--outline);
 }
 .lvl:focus-visible {
@@ -129,7 +175,7 @@ function resetAll() {
 }
 
 .no {
-  font-size: 2.2rem;
+  font-size: 1.2rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -137,9 +183,9 @@ function resetAll() {
 /* Success mark, top-right corner. */
 .check {
   position: absolute;
-  top: 0.5rem;
-  right: 0.6rem;
-  font-size: 1rem;
+  top: 0.25rem;
+  right: 0.35rem;
+  font-size: 0.7rem;
   font-weight: 900;
   line-height: 1;
 }
@@ -147,10 +193,10 @@ function resetAll() {
 /* In-progress dot, top-right corner. */
 .dot {
   position: absolute;
-  top: 0.7rem;
-  right: 0.7rem;
-  width: 0.5rem;
-  height: 0.5rem;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: var(--accent);
 }

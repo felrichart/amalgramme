@@ -15,6 +15,8 @@ if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= PUZZLES.len
   router.replace('/');
 }
 
+const hasNextLevel = levelIndex + 1 < PUZZLES.length;
+
 const g = useGameState(levelIndex);
 
 /* A word wheel is docked when the active target is a word index (not the secret). */
@@ -257,7 +259,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <span class="finish-mark" aria-hidden="true">✓</span>
           <span class="finish-bravo">Bravo</span>
         </div>
-        <button class="cta" type="button" @click="router.push('/')">Autres niveaux</button>
+        <div class="finish-actions">
+          <button
+            v-if="hasNextLevel"
+            class="cta"
+            type="button"
+            @click="router.push(`/play/${levelIndex + 1}`)"
+          >
+            Niveau suivant
+          </button>
+          <button class="cta cta-ghost" type="button" @click="router.push('/')">
+            Autres niveaux
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -618,6 +632,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border: var(--outline-w) solid var(--outline);
   box-shadow: var(--pop-sm);
 }
+.finish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.7rem;
+}
 .cta {
   background: var(--accent);
   color: #fff;
@@ -632,6 +652,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease;
+}
+.cta-ghost {
+  background: var(--panel);
+  color: var(--ink);
 }
 .cta:active {
   transform: translate(4px, 5px);
