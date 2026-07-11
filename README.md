@@ -1,4 +1,4 @@
-# Lexicool 😎
+# Amalgramme 😎
 
 Jeu de mots par niveaux. Chaque niveau : 6 mots lies par un theme, chacun
 reconstitue en reliant les lettres de sa roue.

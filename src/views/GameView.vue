@@ -1,21 +1,17 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { useGameState } from "../composables/useGameState.js";
-import { PUZZLES } from "../data/challenges.js";
-import LetterWheel from "../components/LetterWheel.vue";
-import SuccessScreen from "../components/SuccessScreen.vue";
+import { computed, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useGameState } from '../composables/useGameState.js';
+import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
+import LetterWheel from '../components/LetterWheel.vue';
+import SuccessScreen from '../components/SuccessScreen.vue';
 
 const route = useRoute();
 const router = useRouter();
 
 const levelIndex = Number(route.params.level);
-if (
-  !Number.isInteger(levelIndex) ||
-  levelIndex < 0 ||
-  levelIndex >= PUZZLES.length
-) {
-  router.replace("/");
+if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= PUZZLES.length) {
+  router.replace('/');
 }
 
 const g = useGameState(levelIndex);
@@ -25,45 +21,67 @@ const slots = computed(() => {
   if (g.state.active == null) return [];
   const len = g.words[g.state.active].length;
   const cur = g.current.value;
-  return Array.from({ length: len }, (_, i) => cur[i] || "");
+  return Array.from({ length: len }, (_, i) => cur[i] || '');
 });
+
+/* Secret boxes: one per letter, filled as the player types the guess. */
+const secretSlots = computed(() =>
+  Array.from({ length: g.secret.length }, (_, i) => g.secretInput.value[i] || ''),
+);
 
 /* Physical keyboard mirrors the drawing: type to fill, backspace/escape to undo. */
 function onKeydown(e) {
+  /* Typing into the secret field must not drive the wheel. */
+  if (e.target instanceof HTMLInputElement) return;
   if (g.state.completed || g.state.active == null) return;
-  if (e.key === "Backspace") {
+  if (e.key === 'Backspace') {
     e.preventDefault();
     g.backspace();
-  } else if (e.key === "Escape") {
+  } else if (e.key === 'Escape') {
     g.clearPath();
-  } else if (e.key === "Enter") {
+  } else if (e.key === 'Enter') {
     g.commit();
-  } else if (e.key === " ") {
+  } else if (e.key === ' ') {
     e.preventDefault();
     g.shuffleWheel();
   } else if (/^[a-zA-Zà-ÿÀ-ß]$/.test(e.key)) {
     g.typeLetter(e.key);
   }
 }
-onMounted(() => window.addEventListener("keydown", onKeydown));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
 
 <template>
   <div class="game">
     <header class="top">
-      <button
-        class="icon-btn"
-        type="button"
-        @click="router.push('/')"
-        aria-label="niveaux"
-      >
+      <button class="icon-btn" type="button" @click="router.push('/')" aria-label="niveaux">
         ←
       </button>
-      <div class="theme glass">
-        <span class="theme-label">Indice</span>
-        <span class="theme-word">{{ g.theme }}</span>
-      </div>
+      <label class="secret glass" :class="{ found: g.state.secretFound }">
+        <span class="secret-label">
+          {{ g.state.secretFound ? '🔑 secret' : '🔒 secret' }}
+        </span>
+        <span class="secret-boxes">
+          <input
+            class="secret-field"
+            type="text"
+            :value="g.secretInput.value"
+            :maxlength="g.secret.length"
+            :disabled="g.state.secretFound"
+            inputmode="text"
+            autocapitalize="off"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            aria-label="devine le secret"
+            @input="g.setSecretInput($event.target.value)"
+          />
+          <span v-for="(ch, i) in secretSlots" :key="i" class="sbox" :class="{ set: ch }">{{
+            ch
+          }}</span>
+        </span>
+      </label>
       <div class="spacer" />
     </header>
 
@@ -85,17 +103,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
     </main>
 
     <div v-if="g.state.active != null && !g.state.completed" class="dock">
-      <div
-        class="track"
-        :class="{ full: g.current.value.length === slots.length }"
-      >
-        <span
-          v-for="(ch, i) in slots"
-          :key="i"
-          class="tick"
-          :class="{ set: ch }"
-          >{{ ch }}</span
-        >
+      <div class="track" :class="{ full: g.current.value.length === slots.length }">
+        <span v-for="(ch, i) in slots" :key="i" class="tick" :class="{ set: ch }">{{ ch }}</span>
       </div>
 
       <div class="stage">
@@ -116,7 +125,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
     <SuccessScreen
       v-if="g.state.completed"
       :elapsed-ms="g.elapsedMs.value"
-      :theme="g.theme"
+      :secret="g.secret.text"
       @levels="router.push('/')"
     />
   </div>
@@ -170,24 +179,79 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   flex: none;
 }
 
-.theme {
+/* Secret: a hidden native input overlays the letter boxes so the OS keyboard
+   opens on tap while the guess renders box by box. */
+.secret {
   flex: 1;
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.55rem;
-  padding: 0.5rem 1rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.8rem;
   border-radius: 1rem;
+  cursor: text;
+  transition:
+    box-shadow 0.25s ease,
+    background 0.25s ease;
 }
-.theme-label {
+.secret-label {
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--muted);
 }
-.theme-word {
-  font-size: 1.1rem;
-  font-weight: 700;
+.secret-boxes {
+  position: relative;
+  display: flex;
+  gap: 0.28rem;
+}
+.secret-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font: inherit;
+  text-align: center;
+  outline: none;
+  cursor: text;
+}
+.sbox {
+  width: 1.5rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.45rem;
+  font-weight: 800;
+  font-size: 1rem;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.sbox.set {
+  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 45%, #fff));
+}
+/* Found: the whole strip turns calm-green and locks. */
+.secret.found {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--lemon) 70%, #fff),
+    color-mix(in srgb, var(--sky) 40%, #fff)
+  );
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sky-ink) 35%, transparent);
+}
+.secret.found .secret-label {
+  color: var(--sky-ink);
+}
+.secret.found .sbox {
+  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 55%, #fff));
+  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .grid {
@@ -288,11 +352,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   box-shadow: inset 0 -2px 0 rgba(120, 140, 180, 0.12);
 }
 .tick.set {
-  background: linear-gradient(
-    160deg,
-    #fff,
-    color-mix(in srgb, var(--sky) 55%, #fff)
-  );
+  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 55%, #fff));
   box-shadow:
     inset 0 1px 1px #fff,
     0 3px 8px rgba(70, 100, 150, 0.16);
