@@ -103,8 +103,6 @@ export function useGameState(levelIndex) {
     active: saved?.completed ? null : firstUnsolved() ?? (saved?.secretFound ? null : 'secret'),
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
-    startTime: saved?.startTime ?? null,
-    endTime: saved?.endTime ?? null,
   });
 
   /* Tile ids drawn so far for the active word, in order. */
@@ -153,6 +151,14 @@ export function useGameState(levelIndex) {
     state.secretFound ? secret.text : secretPicks.map((p) => p.ch).join(''),
   );
 
+  /* Guess is full but doesn't match: drives the crossed-out "wrong" styling. */
+  const secretWrong = computed(
+    () =>
+      !state.secretFound &&
+      secretInput.value.length === secret.length &&
+      secretInput.value !== secret.text,
+  );
+
   /* `${row}-${id}` of every spent tile, so the keyboard can grey the exact tiles. */
   const spentTiles = computed(() => new Set(secretPicks.map((p) => `${p.r}-${p.id}`)));
 
@@ -168,16 +174,9 @@ export function useGameState(levelIndex) {
     return null;
   }
 
-  const elapsedMs = computed(() =>
-    state.startTime && state.endTime ? state.endTime - state.startTime : 0,
-  );
   const foundCount = () => solved.filter(Boolean).length;
 
   /* --- actions --- */
-
-  function ensureStarted() {
-    if (state.startTime == null) state.startTime = Date.now();
-  }
 
   /* Whole level is done only when every word and the secret are found. */
   function maybeFinish() {
@@ -214,7 +213,6 @@ export function useGameState(levelIndex) {
   function appendTile(id) {
     if (typeof state.active !== 'number' || path.includes(id)) return;
     path.push(id);
-    ensureStarted();
   }
 
   function clearPath() {
@@ -275,7 +273,6 @@ export function useGameState(levelIndex) {
     }
     if (!pick) return;
     secretPicks.push(pick);
-    ensureStarted();
     if (secretInput.value.length < secret.length) return;
     if (secretInput.value === secret.text) {
       state.secretFound = true;
@@ -303,7 +300,6 @@ export function useGameState(levelIndex) {
   function finish() {
     state.completed = true;
     state.active = null;
-    state.endTime = Date.now();
   }
 
   watch(
@@ -316,8 +312,6 @@ export function useGameState(levelIndex) {
         secretFound: state.secretFound,
         secretPicks: [...secretPicks],
         completed: state.completed,
-        startTime: state.startTime,
-        endTime: state.endTime,
       }),
   );
 
@@ -336,9 +330,9 @@ export function useGameState(levelIndex) {
     trayRows,
     spentTiles,
     secretInput,
+    secretWrong,
     shakeSignal,
     secretShake,
-    elapsedMs,
     wheelTiles,
     activate,
     activateSecret,

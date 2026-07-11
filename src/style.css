@@ -6,22 +6,25 @@
   --ink: #16181f; /* near-black text */
   --outline: #16181f; /* thick ink outline on every piece */
   --muted: #6b7280;
-  --line: #16181f; /* borders are ink too, in comic style */
 
   /* Four word accents, one per wheel (w0..w3). Flat, saturated; glyphs knock out to white. */
-  --sky: #17b3a3; /* teal   */
-  --rose: #f0559f; /* pink   */
-  --lemon: #f4a81f; /* gold   */
-  --mint: #8b5cf6; /* violet */
-  --sky-ink: #17b3a3; /* generic accent: focus rings, links */
-  --secret: #4f7cf7; /* the secret word's own signature color */
+  --gold: #f4a81f;
+  --teal: #17b3a3;
+  --violet: #8b5cf6;
+  --pink: #f0559f;
+  --accent: #4f7cf7; /* app accent: secret word, level tiles, primary actions */
+
+  /* 20% wash of the accent over white — the faint fills. */
+  --accent-wash: color-mix(in srgb, var(--accent) 20%, #fff);
+
+  /* Ink outline widths, standard and thick (wheels, secret coin). */
+  --outline-w: 2.5px;
+  --outline-w-lg: 3px;
 
   /* Perspective: a hard ink shadow offset down-right. Press collapses it. */
-  --outline-w: 2.5px;
+  --pop-sm: 3px 4px 0 var(--outline);
   --pop: 4px 5px 0 var(--outline);
   --pop-lg: 5px 7px 0 var(--outline);
-  --shadow: var(--pop);
-  --shadow-sm: 2px 3px 0 var(--outline);
 
   font-family:
     'Nunito',
@@ -35,6 +38,10 @@
 
 * {
   box-sizing: border-box;
+  /* Same 20% wash, but of the element's local --tint (set per wheel/row).
+     Declared on every element so it recomputes against each element's own
+     --tint — a :root-only definition would bake in root's undefined --tint. */
+  --tint-wash: color-mix(in srgb, var(--tint) 20%, #fff);
 }
 
 /*

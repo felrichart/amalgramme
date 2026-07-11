@@ -120,12 +120,12 @@ function resetAll() {
 }
 /* Done: solid accent fill, white number. */
 .lvl.done {
-  background: var(--secret);
+  background: var(--accent);
   color: #fff;
 }
 /* Started but unfinished: faint accent wash. */
 .lvl.partial {
-  background: color-mix(in srgb, var(--secret) 16%, #fff);
+  background: var(--accent-wash);
 }
 
 .no {
@@ -152,7 +152,7 @@ function resetAll() {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--secret);
+  background: var(--accent);
 }
 
 .reset {

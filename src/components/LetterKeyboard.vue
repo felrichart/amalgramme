@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { WHEEL_TINTS } from '../palette.js';
 
 const props = defineProps({
   /* One row of { id, ch } tiles per source word, in wheel/corner order (w0..w3). */
@@ -12,9 +13,6 @@ const props = defineProps({
 
 const emit = defineEmits(['key', 'backspace', 'clear']);
 
-/* Per-row accent, matched to each corner wheel in GameView (w0..w3). */
-const ROW_TINTS = ['var(--sky)', 'var(--rose)', 'var(--lemon)', 'var(--mint)'];
-
 /* Tray cells keyed by their exact tile so the pressed tile — not a look-alike — greys out. */
 const grid = computed(() =>
   props.rows.map((row, r) =>
@@ -23,7 +21,7 @@ const grid = computed(() =>
 );
 
 function rowStyle(r) {
-  return { '--tint': ROW_TINTS[r] ?? ROW_TINTS[0] };
+  return { '--tint': WHEEL_TINTS[r] ?? WHEEL_TINTS[0] };
 }
 </script>
 
@@ -88,9 +86,9 @@ function rowStyle(r) {
   color: var(--ink);
   cursor: pointer;
   /* Unsolved: a light wash of the row's accent. Solved rows lock solid (.filled). */
-  background: color-mix(in srgb, var(--tint, var(--sky-ink)) 20%, #fff);
-  border: 2.5px solid var(--outline);
-  box-shadow: 3px 4px 0 var(--outline);
+  background: var(--tint-wash);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease,

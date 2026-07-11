@@ -5,6 +5,7 @@ import { useGameState } from '../composables/useGameState.js';
 import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
+import { WHEEL_TINTS } from '../palette.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,8 +22,6 @@ const wordActive = computed(() => typeof g.state.active === 'number');
 
 /* Cross layout: words fill the four corners, the secret sits between them. */
 const AREAS = ['w0', 'w1', 'w2', 'w3'];
-/* Per-corner accent, matched to the secret tray's rows (see LetterKeyboard). */
-const CORNER_TINTS = ['var(--sky)', 'var(--rose)', 'var(--lemon)', 'var(--mint)'];
 
 /* Slots above the wheel that fill in as the path is drawn. */
 const slots = computed(() => {
@@ -37,14 +36,6 @@ const slots = computed(() => {
 const secretSlots = computed(() =>
   g.secret.layout.map((spaceAfter, i) => ({ ch: g.secretInput.value[i] || '', spaceAfter })),
 );
-
-/* Finish time, shown in the dock once the level is completed. */
-const finishTime = computed(() => {
-  const total = Math.round(g.elapsedMs.value / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return m > 0 ? `${m} min ${String(s).padStart(2, '0')} s` : `${s} s`;
-});
 
 /* Remount the keyboard on each reveal so its shuffle-in animation replays. */
 const revealTick = ref(0);
@@ -91,7 +82,7 @@ function measureLinks() {
         y1: cy,
         x2: r.left + r.width / 2 - o.left,
         y2: r.top + r.height / 2 - o.top,
-        tint: CORNER_TINTS[i],
+        tint: WHEEL_TINTS[i],
       };
     })
     .filter(Boolean);
@@ -182,7 +173,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <div
           class="cell"
           :ref="(el) => setCell(el, i)"
-          :style="{ gridArea: AREAS[i], '--tint': CORNER_TINTS[i] }"
+          :style="{ gridArea: AREAS[i], '--tint': WHEEL_TINTS[i] }"
         >
           <div v-if="g.solved[i]" class="slot done">
             <span class="answer">{{ w.display }}</span>
@@ -209,7 +200,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :disabled="g.state.secretFound"
           @click="openSecret"
         >
-          <span class="secret-boxes" :class="{ shake: secretShaking }">
+          <span class="secret-boxes" :class="{ shake: secretShaking, wrong: g.secretWrong.value }">
             <span
               v-for="(s, i) in secretSlots"
               :key="i"
@@ -222,7 +213,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </div>
     </main>
 
-    <div class="dock" :style="wordActive ? { '--tint': CORNER_TINTS[g.state.active] } : undefined">
+    <div class="dock" :style="wordActive ? { '--tint': WHEEL_TINTS[g.state.active] } : undefined">
       <template v-if="wordActive && !g.state.completed">
         <div class="track" :class="{ full: g.current.value.length === slots.length }">
           <span
@@ -264,7 +255,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <div v-else-if="g.state.completed" class="finish">
         <div class="finish-head">
           <span class="finish-mark" aria-hidden="true">✓</span>
-          <span class="finish-time">{{ finishTime }}</span>
+          <span class="finish-bravo">Bravo</span>
         </div>
         <button class="cta" type="button" @click="router.push('/')">Autres niveaux</button>
       </div>
@@ -299,8 +290,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--ink);
   cursor: pointer;
   background: var(--panel);
-  border: 2.5px solid var(--outline);
-  box-shadow: 3px 4px 0 var(--outline);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease;
@@ -310,7 +301,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   box-shadow: 0 0 0 var(--outline);
 }
 .icon-btn:focus-visible {
-  outline: 2px solid var(--sky-ink);
+  outline: 2px solid var(--outline);
   outline-offset: 2px;
 }
 .title {
@@ -341,8 +332,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   justify-content: center;
   padding: 0.7rem 1rem;
   border-radius: 1.1rem;
-  background: color-mix(in srgb, var(--secret) 9%, #fff);
-  border: 3px solid var(--outline);
+  background: var(--accent-wash);
+  border: var(--outline-w-lg) solid var(--outline);
   box-shadow: var(--pop-lg);
   cursor: pointer;
   transition:
@@ -362,7 +353,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 /* Selected: stays pressed into its shadow — the coin is held at the shadow
    offset so releasing the press doesn't shift it back up. */
 .secret.active {
-  background: color-mix(in srgb, var(--secret) 16%, #fff);
+  /* Same wash as the base; press feedback stays via shadow + translate. */
   box-shadow: 0 0 0 var(--outline);
   transform: translate(5px, 7px);
 }
@@ -398,12 +389,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 900;
   color: var(--ink);
   background: var(--tile);
-  border: 2.5px solid var(--outline);
+  border: var(--outline-w) solid var(--outline);
 }
 .sbox.set {
   color: #fff;
-  background: var(--secret);
+  background: var(--accent);
   animation: press 0.14s ease;
+}
+/* Wrong full guess: fade the tiles and strike each with a diagonal bar. */
+.secret-boxes.wrong .sbox {
+  position: relative;
+  opacity: 0.45;
+}
+.secret-boxes.wrong .sbox::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1.5px),
+    var(--outline) calc(50% - 1.5px),
+    var(--outline) calc(50% + 1.5px),
+    transparent calc(50% + 1.5px)
+  );
+  opacity: 0.5;
+  border-radius: inherit;
 }
 /* Secret had a space after this box: widen the gap between the parts. */
 .sbox.gap-after {
@@ -411,7 +421,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 /* Found: the strip locks solid in the secret's colour, keeping its ink outline. */
 .secret.found {
-  background: var(--secret);
+  background: var(--accent);
   box-shadow: var(--pop-lg);
 }
 .secret.found .sbox {
@@ -480,7 +490,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transform: translate(5px, 7px);
 }
 .slot:focus-visible {
-  outline: 2px solid var(--tint, var(--sky-ink));
+  outline: 2px solid var(--tint);
   outline-offset: 2px;
   border-radius: 1rem;
 }
@@ -497,7 +507,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   padding: 0.9rem 0.9rem;
   border-radius: 0.8rem;
   background: var(--tint);
-  border: 2.5px solid var(--outline);
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--pop);
   font-weight: 900;
   font-size: 1.05rem;
@@ -549,7 +559,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   text-transform: uppercase;
   color: var(--ink);
   background: var(--tile);
-  border: 2.5px solid var(--outline);
+  border: var(--outline-w) solid var(--outline);
 }
 /* Word had a space after this letter: widen the gap so parts read apart. */
 .tick.gap-after {
@@ -557,7 +567,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .tick.set {
   color: #fff;
-  background: var(--tint, var(--sky-ink));
+  background: var(--tint);
   animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes pop {
@@ -590,6 +600,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   align-items: center;
   gap: 0.7rem;
 }
+.finish-bravo {
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--ink);
+}
 .finish-mark {
   width: 2.4rem;
   height: 2.4rem;
@@ -599,24 +614,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.3rem;
   font-weight: 900;
   color: #fff;
-  background: var(--secret);
-  border: 2.5px solid var(--outline);
-  box-shadow: 3px 4px 0 var(--outline);
-}
-.finish-time {
-  font-size: 1.9rem;
-  font-weight: 900;
-  color: var(--ink);
+  background: var(--accent);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
 }
 .cta {
-  background: var(--secret);
+  background: var(--accent);
   color: #fff;
   font-family: inherit;
   font-weight: 900;
   font-size: 1.02rem;
   padding: 0.85rem 1.9rem;
   border-radius: 1.1rem;
-  border: 2.5px solid var(--outline);
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--pop);
   cursor: pointer;
   transition:

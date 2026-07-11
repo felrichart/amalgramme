@@ -175,7 +175,7 @@ watch(
         v-if="path.length > 1"
         :points="linkPoints"
         fill="none"
-        stroke="var(--tint, var(--sky-ink))"
+        stroke="var(--tint)"
         stroke-width="5"
         stroke-linejoin="round"
         stroke-linecap="round"
@@ -186,7 +186,7 @@ watch(
         :y1="lastCenter.y"
         :x2="pointer.x"
         :y2="pointer.y"
-        stroke="var(--tint, var(--sky-ink))"
+        stroke="var(--tint)"
         stroke-width="5"
         stroke-linecap="round"
         opacity="0.35"
@@ -230,7 +230,7 @@ watch(
   /* Comic coin: one white disc, thick ink outline, hard offset shadow. */
   border-radius: 50%;
   background: var(--panel);
-  border: 3px solid var(--outline);
+  border: var(--outline-w-lg) solid var(--outline);
   box-shadow: var(--pop-lg);
   transition:
     transform 0.1s ease,
@@ -240,7 +240,7 @@ watch(
 /* Selected word: the coin sits flush with the board — offset shadow drops
    away, ink outline stays. Center stays put so the links don't shift. */
 .wheel.active {
-  background: color-mix(in srgb, var(--tint, var(--sky-ink)) 16%, #fff);
+  background: var(--tint-wash);
   box-shadow: none;
 }
 .wheel.shaking {
@@ -280,7 +280,7 @@ watch(
 /* Touched: a solid accent circle with a white knock-out glyph, so it stays
    readable under the drawn line. */
 .node.on {
-  background: var(--tint, var(--sky-ink));
+  background: var(--tint);
   color: #fff;
   transform: translate(-50%, -50%) scale(1.12);
 }
