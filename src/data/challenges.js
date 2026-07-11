@@ -1,42 +1,18 @@
 /*
- * Puzzle bank. Each level is a hidden `secret` the player must guess and 4
- * `words` linked to it. Each word is spelled on its own letter wheel; words may
- * contain a space (two-word answers) — the space is dropped on the wheel but
- * shown as a gap in the answer slots. Secrets and words carry no diacritics
- * (e == e, c == c) so typed accents match after normalisation.
+ * Puzzle bank, loaded from challenges.json for easy editing. Each level is a
+ * hidden `secret` the player must guess and 4 `words` linked to it. Each word is
+ * spelled on its own letter wheel; words may contain a space (two-word answers)
+ * — the space is dropped on the wheel but shown as a gap in the answer slots.
+ * Secrets and words carry no diacritics (e == e, c == c) so typed accents match
+ * after normalisation.
  *
  * `date` (ISO) makes each puzzle one day's challenge: they run one per day so
- * the last is today's daily challenge (see DAILY_INDEX).
+ * the last is today's daily challenge (see DAILY_INDEX). Keep the array sorted
+ * by ascending date; append new puzzles at the end.
  */
-export const PUZZLES_NEW = [
-  { date: '2026-06-15', secret: 'mars', words: ['planete', 'printemps', 'guerre', 'olympe'] },
-  { date: '2026-06-16', secret: 'salsa', words: ['danser', 'sauce', 'porto rico', 'latino'] },
-  { date: '2026-06-17', secret: 'baleine', words: ['cachalot', 'bleue', 'plancton', 'mammifere'] },
-  { date: '2026-06-18', secret: 'suite', words: ['appartement', 'sequence', 'apres', 'logique'] },
-  { date: '2026-06-19', secret: 'couteau', words: ['coquillage', 'tranchant', 'aiguiser', 'blanche'] },
-  { date: '2026-06-20', secret: 'console', words: ['meuble', 'jeu video', 'terminal', 'joystick'] },
-  { date: '2026-06-21', secret: 'grue', words: ['chantier', 'heron', 'engin', 'hauteur'] },
-  { date: '2026-06-22', secret: 'mule', words: ['pantoufle', 'obstine', 'jument', 'transport'] },
-  { date: '2026-06-23', secret: 'langue', words: ['bouche', 'dialecte', 'anglais', 'papille'] },
-  { date: '2026-06-24', secret: 'batterie', words: ['recharge', 'cuisine', 'tambour', 'voiture'] },
-  { date: '2026-06-25', secret: 'franc', words: ['monnaie', 'sincere', 'france', 'peuple'] },
-  { date: '2026-06-26', secret: 'carbone', words: ['charbon', 'respirer', 'diamant', 'quatorze'] },
-  { date: '2026-06-27', secret: 'course', words: ['athlete', 'supermarche', 'poursuite', 'vitesse'] },
-  { date: '2026-06-28', secret: 'metal', words: ['aimant', 'musique', 'alliage', 'cuivre'] },
-  { date: '2026-06-29', secret: 'fantome', words: ['spectre', 'defunt', 'opera', 'cimetiere'] },
-  { date: '2026-06-30', secret: 'corail', words: ['ocean', 'barriere', 'polype', 'couleur'] },
-  { date: '2026-07-01', secret: 'cirque', words: ['chapiteau', 'equestre', 'acrobate', 'spectacle'] },
-  { date: '2026-07-02', secret: 'planche', words: ['charpente', 'theatre', 'skateboard', 'rectangle'] },
-  { date: '2026-07-03', secret: 'voler', words: ['aviation', 'papillon', 'derober', 'planer'] },
-  { date: '2026-07-04', secret: 'melon', words: ['orange', 'spherique', 'aliment', 'chapeau'] },
-  { date: '2026-07-05', secret: 'creche', words: ['garderie', 'couche', 'roi mage', 'nativite'] },
-  { date: '2026-07-06', secret: 'pigeon', words: ['plumage', 'urbain', 'voyageur', 'arnaque'] },
-  { date: '2026-07-07', secret: 'verre', words: ['vitre', 'gobelet', 'lunette', 'fragile'] },
-  { date: '2026-07-08', secret: 'baguette', words: ['baton', 'magique', 'tradition', 'chinoise'] },
-  { date: '2026-07-09', secret: 'castor', words: ['barrage', 'queue', 'rongeur', 'contes'] },
-  { date: '2026-07-10', secret: 'defense', words: ['securite', 'elephant', 'fortifier', 'interdit'] },
-  { date: '2026-07-11', secret: 'agent', words: ['espionnage', 'immobilier', 'secret', 'policier'] },
-];
+import puzzles from './challenges.json';
+
+export const PUZZLES_NEW = puzzles;
 
 /* Local ISO date (YYYY-MM-DD) for today, matching the puzzle `date` format. */
 function todayISO() {
