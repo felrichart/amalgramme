@@ -7,7 +7,7 @@
  */
 export const PUZZLES_NEW = [
   // { secret: 'castor', words: ['barrage', 'queue', 'rongeur', 'histoire'] },
-  { secret: 'mars', words: ['planete', 'printemps', 'guerrier', 'olympe'] },
+  { secret: 'mars', words: ['planete', 'printemps', 'guerre', 'olympe'] },
   //  { secret: 'clavier', words: ['piano', 'ordinateur', 'souris', 'touche'] },
   // { secret: 'chine', words: ['ideogramme', 'muraille', 'canton', 'panda'] },
   { secret: 'salsa', words: ['danser', 'sauce', 'porto rico', 'latino'] },

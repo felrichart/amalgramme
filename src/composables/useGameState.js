@@ -1,5 +1,13 @@
 import { reactive, computed, watch, ref } from 'vue';
-import { puzzleForLevel, buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
+import {
+  puzzleForLevel,
+  buildWords,
+  buildSecret,
+  buildPool,
+  buildPoolByWord,
+  shuffle,
+  normalize,
+} from '../game/puzzle.js';
 
 const STORAGE_PREFIX = 'amalgramme:v3:level:';
 
@@ -42,6 +50,10 @@ export function useGameState(levelIndex) {
   const puzzle = puzzleForLevel(levelIndex);
   const words = buildWords(puzzle);
   const secret = buildSecret(puzzle);
+  /* Total tiles per letter available across the 4 words. */
+  const pool = buildPool(words);
+  /* Same tiles, grouped by source word: one tray row per wheel. */
+  const poolRows = buildPoolByWord(words);
 
   const saved = load(levelIndex);
 
@@ -73,9 +85,11 @@ export function useGameState(levelIndex) {
   /* Tile ids drawn so far for the active word, in order. */
   const path = reactive([]);
   /* Letters typed toward the secret (normalised, ≤ secret length). */
-  const secretInput = ref(state.secretFound ? secret.text : '');
+  const secretInput = ref(saved?.secretFound ? secret.text : (saved?.secretInput ?? ''));
   /* Bumped whenever a full-but-wrong word is committed, so the wheel can shake. */
   const shakeSignal = ref(0);
+  /* Bumped on a full-but-wrong secret guess, so the boxes can shake. */
+  const secretShake = ref(0);
 
   /* --- derived --- */
 
@@ -85,12 +99,21 @@ export function useGameState(levelIndex) {
   }
 
   const current = computed(() => {
-    if (state.active == null) return '';
+    if (typeof state.active !== 'number') return '';
     const byId = Object.fromEntries(words[state.active].letters.map((t) => [t.id, t.ch]));
     return path.map((id) => byId[id]).join('');
   });
 
   const allSolved = computed(() => solved.every(Boolean));
+
+  const secretActive = computed(() => state.active === 'secret');
+
+  /* Tiles left per letter: total pool minus what the current guess already spent. */
+  const remaining = computed(() => {
+    const left = { ...pool };
+    for (const ch of secretInput.value) left[ch] = (left[ch] ?? 0) - 1;
+    return left;
+  });
 
   const elapsedMs = computed(() =>
     state.startTime && state.endTime ? state.endTime - state.startTime : 0,
@@ -117,6 +140,13 @@ export function useGameState(levelIndex) {
     }
   }
 
+  /* Swap the dock to the secret keyboard; a no-op once the secret is found. */
+  function activateSecret() {
+    if (state.completed || state.secretFound) return;
+    state.active = 'secret';
+    path.length = 0;
+  }
+
   function shuffleWheel() {
     if (state.active == null) return;
     shuffleSeeds[state.active] = (shuffleSeeds[state.active] * 2 + 7) % 100000 || 1;
@@ -129,7 +159,7 @@ export function useGameState(levelIndex) {
 
   /* Extend the draw onto a tile; repeats and re-entry are ignored. */
   function appendTile(id) {
-    if (state.active == null || path.includes(id)) return;
+    if (typeof state.active !== 'number' || path.includes(id)) return;
     path.push(id);
     ensureStarted();
   }
@@ -140,7 +170,7 @@ export function useGameState(levelIndex) {
 
   /* Keyboard entry: consume the next unused tile matching the typed letter. */
   function typeLetter(raw) {
-    if (state.active == null) return;
+    if (typeof state.active !== 'number') return;
     const ch = normalize(raw);
     if (ch.length !== 1) return;
     const t = words[state.active].letters.find((t) => t.ch === ch && !path.includes(t.id));
@@ -159,7 +189,7 @@ export function useGameState(levelIndex) {
    */
   function commit() {
     const w = state.active;
-    if (w == null) return;
+    if (typeof w !== 'number') return;
     if (current.value === words[w].text) {
       solved[w] = true;
       path.length = 0;
@@ -174,23 +204,38 @@ export function useGameState(levelIndex) {
   }
 
   /*
-   * Update the secret guess from the native input. Diacritics are folded and
-   * non-letters dropped so a typed "é"/"ç" matches the accent-free answer; once
-   * the full secret matches it locks and can complete the level.
+   * Spend one pooled tile of `raw` onto the secret guess. Ignored when the tile
+   * is exhausted or the guess is already full; a full guess auto-checks — a match
+   * locks the secret, a mismatch shakes and clears (restoring every tile).
    */
-  function setSecretInput(raw) {
-    if (state.secretFound) return;
-    const cleaned = Array.from(raw)
-      .map((ch) => normalize(ch))
-      .filter((ch) => /^[a-z]$/.test(ch))
-      .join('')
-      .slice(0, secret.length);
-    secretInput.value = cleaned;
-    if (cleaned) ensureStarted();
-    if (cleaned === secret.text) {
+  function typeSecret(raw) {
+    if (state.secretFound || secretInput.value.length >= secret.length) return;
+    const ch = normalize(raw);
+    if (!/^[a-z]$/.test(ch) || (remaining.value[ch] ?? 0) <= 0) return;
+    secretInput.value += ch;
+    ensureStarted();
+    if (secretInput.value.length < secret.length) return;
+    if (secretInput.value === secret.text) {
       state.secretFound = true;
       maybeFinish();
+      /* Level not done yet → drop back onto a word wheel instead of a locked keyboard. */
+      if (!state.completed) state.active = firstUnsolved();
+    } else {
+      /* Wrong: shake but keep the letters so the player can edit and retry. */
+      secretShake.value++;
     }
+  }
+
+  /* Take back the last typed letter, returning its tile to the pool. */
+  function backspaceSecret() {
+    if (state.secretFound) return;
+    secretInput.value = secretInput.value.slice(0, -1);
+  }
+
+  /* Wipe the whole secret guess, returning every tile to the pool. */
+  function clearSecret() {
+    if (state.secretFound) return;
+    secretInput.value = '';
   }
 
   function finish() {
@@ -200,13 +245,14 @@ export function useGameState(levelIndex) {
   }
 
   watch(
-    () => JSON.stringify({ solved, shuffleSeeds, s: state }),
+    () => JSON.stringify({ solved, shuffleSeeds, s: state, si: secretInput.value }),
     () =>
       save(levelIndex, {
         solved: [...solved],
         shuffleSeeds: [...shuffleSeeds],
         found: foundCount(),
         secretFound: state.secretFound,
+        secretInput: secretInput.value,
         completed: state.completed,
         startTime: state.startTime,
         endTime: state.endTime,
@@ -217,16 +263,22 @@ export function useGameState(levelIndex) {
     puzzle,
     words,
     secret,
+    pool,
+    poolRows,
     state,
     path,
     current,
     solved,
     allSolved,
+    secretActive,
+    remaining,
     secretInput,
     shakeSignal,
+    secretShake,
     elapsedMs,
     wheelTiles,
     activate,
+    activateSecret,
     shuffleWheel,
     beginPath,
     appendTile,
@@ -234,6 +286,8 @@ export function useGameState(levelIndex) {
     typeLetter,
     backspace,
     commit,
-    setSecretInput,
+    typeSecret,
+    backspaceSecret,
+    clearSecret,
   };
 }

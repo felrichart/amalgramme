@@ -18,9 +18,9 @@ const time = computed(() => {
 <template>
   <div class="overlay">
     <div class="card glass">
-      <div class="emoji">😎</div>
+      <div class="mark" aria-hidden="true">✓</div>
       <h1>Terminé</h1>
-      <p class="sub">🔑 {{ secret }}</p>
+      <p class="sub">Mot secret&nbsp;: {{ secret }}</p>
       <div class="time">
         <span class="label">Temps</span>
         <span class="value">{{ time }}</span>
@@ -38,8 +38,7 @@ const time = computed(() => {
   display: grid;
   place-items: center;
   padding: 1.5rem;
-  background: color-mix(in srgb, var(--paper) 55%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
   animation: fade 0.4s ease;
 }
 @keyframes fade {
@@ -62,22 +61,30 @@ const time = computed(() => {
     opacity: 0;
   }
 }
-.emoji {
-  font-size: 3.6rem;
-  line-height: 1;
-  animation: drop 0.7s cubic-bezier(0.34, 1.6, 0.5, 1) 0.15s both;
+.mark {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--bg);
+  background: var(--sky-ink);
+  animation: drop 0.6s cubic-bezier(0.34, 1.6, 0.5, 1) 0.1s both;
 }
 @keyframes drop {
   0% {
-    transform: translateY(-1.6rem) rotate(-10deg);
+    transform: scale(0.4);
     opacity: 0;
   }
   60% {
-    transform: translateY(0.15rem) rotate(3deg);
+    transform: scale(1.08);
     opacity: 1;
   }
   100% {
-    transform: translateY(0) rotate(0);
+    transform: scale(1);
   }
 }
 h1 {
@@ -96,8 +103,8 @@ h1 {
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.9rem 1.4rem;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid var(--glass-brd);
+  background: var(--tile);
+  border: 1px solid var(--line);
   border-radius: 1.1rem;
   margin-bottom: 1.4rem;
 }
@@ -113,22 +120,16 @@ h1 {
   color: var(--sky-ink);
 }
 .cta {
-  border: 1px solid var(--glass-brd);
-  background: linear-gradient(160deg, #fff, color-mix(in srgb, var(--sky) 60%, #fff));
-  color: var(--ink);
+  border: 0;
+  background: var(--sky-ink);
+  color: var(--bg);
   font-family: inherit;
   font-weight: 800;
   font-size: 1.02rem;
   padding: 0.85rem 1.9rem;
   border-radius: 1.1rem;
-  box-shadow: 0 8px 20px rgba(70, 100, 150, 0.18);
   cursor: pointer;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.2s ease;
-}
-.cta:hover {
-  box-shadow: 0 12px 26px rgba(70, 100, 150, 0.24);
+  transition: transform 0.12s ease;
 }
 .cta:active {
   transform: scale(0.96);
@@ -139,7 +140,7 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .emoji {
+  .mark {
     animation: none;
   }
 }

@@ -10,6 +10,7 @@ const props = defineProps({
   tiles: { type: Array, required: true }, // [{ id, ch }] in ring order
   path: { type: Array, default: () => [] }, // tile ids drawn so far
   interactive: { type: Boolean, default: false },
+  active: { type: Boolean, default: false }, // highlight the disc (docked word)
   shake: { type: Number, default: 0 }, // bump to play the "wrong" shake
 });
 const emit = defineEmits(['begin', 'enter', 'backtrack', 'end', 'shuffle']);
@@ -145,7 +146,7 @@ watch(
   <div
     ref="box"
     class="wheel"
-    :class="{ mini: !interactive, shaking }"
+    :class="{ mini: !interactive, active, shaking }"
     @pointerdown.prevent="onDown"
     @pointermove="onMove"
     @pointerup="onUp"
@@ -156,8 +157,8 @@ watch(
         v-if="path.length > 1"
         :points="linkPoints"
         fill="none"
-        stroke="var(--sky-ink)"
-        stroke-width="2.4"
+        stroke="var(--tint, var(--sky-ink))"
+        stroke-width="3.4"
         stroke-linejoin="round"
         stroke-linecap="round"
       />
@@ -167,10 +168,10 @@ watch(
         :y1="lastCenter.y"
         :x2="pointer.x"
         :y2="pointer.y"
-        stroke="var(--sky-ink)"
-        stroke-width="2.4"
+        stroke="var(--tint, var(--sky-ink))"
+        stroke-width="3.4"
         stroke-linecap="round"
-        opacity="0.55"
+        opacity="0.5"
       />
     </svg>
 
@@ -208,6 +209,18 @@ watch(
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* Solid flat disc backing every wheel. */
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+/* Docked / focused word: the disc rim takes the wheel's accent. */
+.wheel.active {
+  border-color: var(--tint, var(--sky-ink));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint, var(--sky-ink)) 22%, transparent);
 }
 .wheel.shaking {
   animation: shake 0.4s ease-in-out;
@@ -230,32 +243,25 @@ watch(
   place-items: center;
   border-radius: 50%;
   z-index: 2;
-  /* Liquid-glass tile: translucent, blurred, with a soft specular top edge. */
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45));
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    0 4px 12px rgba(60, 80, 120, 0.14);
-  backdrop-filter: blur(6px);
-  color: var(--ink);
-  font-weight: 700;
+  /* Flat dark tile, thick accent outline, accent glyph. */
+  background: var(--tile);
+  border: 2.5px solid var(--tint, var(--sky-ink));
+  color: var(--tint, var(--sky-ink));
+  font-weight: 800;
   text-transform: uppercase;
   transition:
     transform 0.14s ease,
     background 0.14s ease,
-    box-shadow 0.14s ease;
+    color 0.14s ease;
 }
 .node span {
   display: block;
   line-height: 1;
 }
+/* Touched: solid accent fill, dark knocked-out glyph. */
 .node.on {
-  background: linear-gradient(160deg, var(--sky), color-mix(in srgb, var(--sky) 60%, #fff));
-  border-color: #fff;
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    0 0 0 3px color-mix(in srgb, var(--sky-ink) 30%, transparent),
-    0 6px 16px rgba(60, 90, 140, 0.28);
+  background: var(--tint, var(--sky-ink));
+  color: var(--bg);
   transform: translate(-50%, -50%) scale(1.08);
 }
 
@@ -276,20 +282,13 @@ watch(
   border-radius: 50%;
   z-index: 1;
   pointer-events: none;
-  color: color-mix(in srgb, var(--ink) 45%, transparent);
-  background: rgba(255, 255, 255, 0.35);
-  border: 1px dashed rgba(90, 110, 150, 0.3);
+  color: var(--muted);
+  background: transparent;
+  border: 1.5px dashed var(--line);
 }
 .hub svg {
   width: 46%;
   height: 46%;
-}
-
-.mini .node {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.8),
-    0 2px 6px rgba(60, 80, 120, 0.1);
 }
 
 /* A soft damped wobble — enough to read as "no", never jarring. */

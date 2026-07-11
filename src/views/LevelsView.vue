@@ -6,17 +6,9 @@ import { levelProgress } from '../composables/useGameState.js';
 
 const router = useRouter();
 
+/* Level select shows only success/not — no per-level progression. */
 const levels = computed(() =>
-  PUZZLES.map((p, i) => {
-    const prog = levelProgress(i);
-    return {
-      index: i,
-      total: p.words.length,
-      found: prog.found,
-      secretFound: prog.secretFound,
-      completed: prog.completed,
-    };
-  }),
+  PUZZLES.map((p, i) => ({ index: i, completed: levelProgress(i).completed })),
 );
 
 const doneCount = computed(() => levels.value.filter((l) => l.completed).length);
@@ -29,7 +21,7 @@ function play(l) {
 <template>
   <div class="levels">
     <header class="top">
-      <h1 class="brand">Lexic<span class="oo">😎</span>l</h1>
+      <h1 class="brand">Amalgramme</h1>
       <p class="tag">{{ doneCount }} / {{ levels.length }} niveaux terminés</p>
     </header>
 
@@ -38,20 +30,12 @@ function play(l) {
         v-for="l in levels"
         :key="l.index"
         class="lvl glass"
-        :class="{ done: l.completed, started: !l.completed && l.found > 0 }"
+        :class="{ done: l.completed }"
         type="button"
         @click="play(l)"
       >
         <span class="no">{{ l.index + 1 }}</span>
-        <span class="score">
-          <span v-if="l.completed" class="badge">😎 terminé</span>
-          <template v-else>
-            <span class="count">{{ l.found }} / {{ l.total }} mots</span>
-            <span class="secret" :class="{ ok: l.secretFound }">
-              {{ l.secretFound ? '🔑 secret' : '🔒 secret' }}
-            </span>
-          </template>
-        </span>
+        <span v-if="l.completed" class="check" aria-label="terminé">✓</span>
       </button>
     </div>
   </div>
@@ -73,10 +57,6 @@ function play(l) {
   font-weight: 800;
   letter-spacing: -0.01em;
 }
-.oo {
-  font-size: 0.86em;
-  margin: 0 0.02em;
-}
 .tag {
   margin: 0.6rem 0 0;
   font-size: 0.9rem;
@@ -97,22 +77,20 @@ function play(l) {
 
 .lvl {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.9rem 0.95rem 0.85rem;
-  min-height: 6.2rem;
-  text-align: left;
+  display: grid;
+  place-items: center;
+  padding: 0.9rem;
+  min-height: 5.4rem;
   border-radius: 1.2rem;
   cursor: pointer;
   color: var(--ink);
   transition:
     transform 0.14s ease,
-    box-shadow 0.2s ease;
+    border-color 0.2s ease;
 }
 .lvl:hover {
   transform: translateY(-3px);
-  box-shadow: 0 14px 30px rgba(70, 100, 150, 0.18);
+  border-color: var(--muted);
 }
 .lvl:active {
   transform: translateY(0);
@@ -121,44 +99,26 @@ function play(l) {
   outline: 2px solid var(--sky-ink);
   outline-offset: 2px;
 }
-.lvl.started {
-  box-shadow:
-    0 8px 26px rgba(70, 100, 150, 0.12),
-    inset 0 0 0 1.5px color-mix(in srgb, var(--sky-ink) 45%, transparent);
-}
+/* Done: solid accent fill, dark number. */
 .lvl.done {
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--sky) 55%, #fff),
-    color-mix(in srgb, var(--rose) 45%, #fff)
-  );
+  background: var(--sky-ink);
+  border-color: var(--sky-ink);
+  color: var(--bg);
 }
 
 .no {
-  flex: 1;
   font-size: 2.2rem;
   font-weight: 800;
   line-height: 1;
-  color: var(--ink);
 }
 
-.score {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-.count {
-  color: var(--muted);
-}
-.secret {
-  color: var(--muted);
-}
-.secret.ok {
-  color: var(--sky-ink);
-}
-.badge {
-  color: var(--ink);
+/* Success mark, top-right corner. */
+.check {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
 }
 </style>
