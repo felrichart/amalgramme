@@ -5,7 +5,6 @@ import { useGameState } from '../composables/useGameState.js';
 import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
-import SuccessScreen from '../components/SuccessScreen.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -28,25 +27,24 @@ const CORNER_TINTS = ['var(--sky)', 'var(--rose)', 'var(--lemon)', 'var(--mint)'
 /* Slots above the wheel that fill in as the path is drawn. */
 const slots = computed(() => {
   if (!wordActive.value) return [];
-  const len = g.words[g.state.active].length;
+  const w = g.words[g.state.active];
   const cur = g.current.value;
-  return Array.from({ length: len }, (_, i) => cur[i] || '');
+  /* `spaceAfter` renders a gap where the answer had a space (see buildWords). */
+  return w.layout.map((spaceAfter, i) => ({ ch: cur[i] || '', spaceAfter }));
 });
 
-/* Secret boxes: one per letter, filled as the player types the guess. */
+/* Secret boxes: one per letter, filled as the player types; gap where spaced. */
 const secretSlots = computed(() =>
-  Array.from({ length: g.secret.length }, (_, i) => g.secretInput.value[i] || ''),
+  g.secret.layout.map((spaceAfter, i) => ({ ch: g.secretInput.value[i] || '', spaceAfter })),
 );
 
-/*
- * Secret-tray rows, one per wheel: letters follow that wheel's current order
- * while it's unsolved, then lock to the answer's own order once it's solved.
- */
-const trayRows = computed(() =>
-  g.words.map((w, i) =>
-    g.solved[i] ? w.letters.map((t) => t.ch) : g.wheelTiles(i).map((t) => t.ch),
-  ),
-);
+/* Finish time, shown in the dock once the level is completed. */
+const finishTime = computed(() => {
+  const total = Math.round(g.elapsedMs.value / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m > 0 ? `${m} min ${String(s).padStart(2, '0')} s` : `${s} s`;
+});
 
 /* Remount the keyboard on each reveal so its shuffle-in animation replays. */
 const revealTick = ref(0);
@@ -181,7 +179,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :style="{ gridArea: AREAS[i], '--tint': CORNER_TINTS[i] }"
         >
           <div v-if="g.solved[i]" class="slot done">
-            <span class="answer">{{ w.text }}</span>
+            <span class="answer">{{ w.display }}</span>
           </div>
           <button
             v-else
@@ -205,9 +203,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         @click="openSecret"
       >
         <span class="secret-boxes" :class="{ shake: secretShaking }">
-          <span v-for="(ch, i) in secretSlots" :key="i" class="sbox" :class="{ set: ch }">{{
-            ch
-          }}</span>
+          <span
+            v-for="(s, i) in secretSlots"
+            :key="i"
+            class="sbox"
+            :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
+            >{{ s.ch }}</span
+          >
         </span>
       </button>
     </main>
@@ -215,7 +217,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     <div class="dock" :style="wordActive ? { '--tint': CORNER_TINTS[g.state.active] } : undefined">
       <template v-if="wordActive && !g.state.completed">
         <div class="track" :class="{ full: g.current.value.length === slots.length }">
-          <span v-for="(ch, i) in slots" :key="i" class="tick" :class="{ set: ch }">{{ ch }}</span>
+          <span
+            v-for="(s, i) in slots"
+            :key="i"
+            class="tick"
+            :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
+            >{{ s.ch }}</span
+          >
         </div>
 
         <div class="stage">
@@ -237,22 +245,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <LetterKeyboard
         v-else-if="g.secretActive.value && !g.state.completed"
         :key="revealTick"
-        :rows="trayRows"
+        :rows="g.trayRows.value"
         :solved="g.solved"
-        :pool="g.pool"
-        :remaining="g.remaining.value"
+        :spent="g.spentTiles.value"
         @key="g.typeSecret"
         @backspace="g.backspaceSecret"
         @clear="g.clearSecret"
       />
-    </div>
 
-    <SuccessScreen
-      v-if="g.state.completed"
-      :elapsed-ms="g.elapsedMs.value"
-      :secret="g.secret.text"
-      @levels="router.push('/')"
-    />
+      <div v-else-if="g.state.completed" class="finish">
+        <div class="finish-head">
+          <span class="finish-mark" aria-hidden="true">✓</span>
+          <span class="finish-time">{{ finishTime }}</span>
+        </div>
+        <button class="cta" type="button" @click="router.push('/')">Autres niveaux</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -369,6 +377,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-color: var(--secret);
   color: var(--secret);
 }
+/* Secret had a space after this box: widen the gap between the parts. */
+.sbox.gap-after {
+  margin-right: 0.9rem;
+}
 /* Found: the strip locks with a solid fill in the secret's own colour. */
 .secret.found {
   background: var(--secret);
@@ -445,7 +457,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transform: none;
 }
 .answer {
-  padding: 0.5rem 0.9rem;
+  padding: 0.9rem 0.9rem;
   border-radius: 0.8rem;
   background: var(--tint);
   font-weight: 800;
@@ -497,6 +509,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   background: var(--tile);
   border: 1.5px solid var(--line);
 }
+/* Word had a space after this letter: widen the gap so parts read apart. */
+.tick.gap-after {
+  margin-right: 1rem;
+}
 .tick.set {
   color: var(--bg);
   background: var(--tint, var(--sky-ink));
@@ -514,7 +530,61 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   }
 }
 
+/* Completion panel: replaces the input so the solved board stays in view. */
+.finish {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.finish-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.finish-mark {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--bg);
+  background: var(--sky-ink);
+}
+.finish-time {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--sky-ink);
+}
+.cta {
+  border: 0;
+  background: var(--sky-ink);
+  color: var(--bg);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 1.02rem;
+  padding: 0.85rem 1.9rem;
+  border-radius: 1.1rem;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.cta:active {
+  transform: scale(0.96);
+}
+.cta:focus-visible {
+  outline: 2px solid var(--sky-ink);
+  outline-offset: 2px;
+}
+
 .stage {
-  width: min(68vw, 285px);
+  /*
+   * Cap by the height left after the sections above the dock (header + board +
+   * track + dock padding, ~30rem). The reserve is in rem, so it shrinks with the
+   * root-font clamp and the whole column keeps fitting 100dvh without scrolling.
+   */
+  width: min(66vw, 285px, calc(100dvh - 30rem));
 }
 </style>

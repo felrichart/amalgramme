@@ -29,6 +29,15 @@
   box-sizing: border-box;
 }
 
+/*
+ * Root font-size tracks viewport height so the whole rem-based UI scales down
+ * on short screens instead of overflowing into a vertical scroll. Caps at 16px
+ * (unchanged on tall/normal windows); shrinks below ~745px tall.
+ */
+html {
+  font-size: clamp(10px, 2.15vh, 16px);
+}
+
 html,
 body {
   margin: 0;

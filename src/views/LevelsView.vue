@@ -1,20 +1,32 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
-import { levelProgress } from '../composables/useGameState.js';
+import { levelProgress, resetAllProgress } from '../composables/useGameState.js';
 
 const router = useRouter();
 
-/* Level select shows only success/not — no per-level progression. */
-const levels = computed(() =>
-  PUZZLES.map((p, i) => ({ index: i, completed: levelProgress(i).completed })),
-);
+/* Bumped after a reset so the computed re-reads localStorage. */
+const version = ref(0);
+
+const levels = computed(() => {
+  version.value;
+  return PUZZLES.map((p, i) => {
+    const prog = levelProgress(i);
+    return { index: i, completed: prog.completed, partial: prog.partial };
+  });
+});
 
 const doneCount = computed(() => levels.value.filter((l) => l.completed).length);
 
 function play(l) {
   router.push('/play/' + l.index);
+}
+
+function resetAll() {
+  if (!confirm('Réinitialiser toute la progression ?')) return;
+  resetAllProgress();
+  version.value++;
 }
 </script>
 
@@ -30,14 +42,24 @@ function play(l) {
         v-for="l in levels"
         :key="l.index"
         class="lvl glass"
-        :class="{ done: l.completed }"
+        :class="{ done: l.completed, partial: l.partial }"
         type="button"
         @click="play(l)"
       >
         <span class="no">{{ l.index + 1 }}</span>
         <span v-if="l.completed" class="check" aria-label="terminé">✓</span>
+        <span v-else-if="l.partial" class="dot" aria-label="commencé"></span>
       </button>
     </div>
+
+    <button
+      v-if="doneCount || levels.some((l) => l.partial)"
+      class="reset"
+      type="button"
+      @click="resetAll"
+    >
+      Réinitialiser la progression
+    </button>
   </div>
 </template>
 
@@ -105,6 +127,10 @@ function play(l) {
   border-color: var(--sky-ink);
   color: var(--bg);
 }
+/* Started but unfinished: accent outline, no fill. */
+.lvl.partial {
+  border-color: var(--sky-ink);
+}
 
 .no {
   font-size: 2.2rem;
@@ -120,5 +146,33 @@ function play(l) {
   font-size: 1rem;
   font-weight: 900;
   line-height: 1;
+}
+
+/* In-progress dot, top-right corner. */
+.dot {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--sky-ink);
+}
+
+.reset {
+  display: block;
+  margin: 2rem auto 0;
+  padding: 0.6rem 1.1rem;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reset:hover {
+  color: var(--ink);
 }
 </style>

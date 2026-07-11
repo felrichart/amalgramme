@@ -15,13 +15,32 @@ const STORAGE_PREFIX = 'amalgramme:v3:level:';
 export function levelProgress(idx) {
   try {
     const s = JSON.parse(localStorage.getItem(STORAGE_PREFIX + idx));
+    const found = s?.found ?? 0;
+    const secretFound = !!s?.secretFound;
+    const completed = !!s?.completed;
     return {
-      found: s?.found ?? 0,
-      secretFound: !!s?.secretFound,
-      completed: !!s?.completed,
+      found,
+      secretFound,
+      completed,
+      /* Started but not finished: some word solved, secret found, or secret partly typed. */
+      partial: !completed && (found > 0 || secretFound || (s?.secretPicks?.length ?? 0) > 0),
     };
   } catch {
-    return { found: 0, secretFound: false, completed: false };
+    return { found: 0, secretFound: false, completed: false, partial: false };
+  }
+}
+
+/* Wipe every level's saved state. */
+export function resetAllProgress() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(STORAGE_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* storage unavailable: nothing to clear */
   }
 }
 
@@ -73,9 +92,15 @@ export function useGameState(levelIndex) {
     }
     return null;
   };
+  /* Where focus should land after `from`: next open word, else the still-unsolved secret, else nothing. */
+  const focusAfter = (from) => {
+    const w = nextUnsolved(from);
+    if (w !== null) return w;
+    return state.secretFound ? null : 'secret';
+  };
 
   const state = reactive({
-    active: saved?.completed ? null : firstUnsolved(),
+    active: saved?.completed ? null : firstUnsolved() ?? (saved?.secretFound ? null : 'secret'),
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
     startTime: saved?.startTime ?? null,
@@ -84,8 +109,12 @@ export function useGameState(levelIndex) {
 
   /* Tile ids drawn so far for the active word, in order. */
   const path = reactive([]);
-  /* Letters typed toward the secret (normalised, ≤ secret length). */
-  const secretInput = ref(saved?.secretFound ? secret.text : (saved?.secretInput ?? ''));
+  /*
+   * Secret guess as the specific tray tiles spent, in typed order. Each pick is
+   * { r, id, ch } — r is the tray row, id the tile's per-word id — so the exact
+   * tile the player pressed greys out, even when several tiles share a letter.
+   */
+  const secretPicks = reactive(saved?.secretPicks ?? []);
   /* Bumped whenever a full-but-wrong word is committed, so the wheel can shake. */
   const shakeSignal = ref(0);
   /* Bumped on a full-but-wrong secret guess, so the boxes can shake. */
@@ -108,12 +137,36 @@ export function useGameState(levelIndex) {
 
   const secretActive = computed(() => state.active === 'secret');
 
-  /* Tiles left per letter: total pool minus what the current guess already spent. */
-  const remaining = computed(() => {
-    const left = { ...pool };
-    for (const ch of secretInput.value) left[ch] = (left[ch] ?? 0) - 1;
-    return left;
-  });
+  /*
+   * Secret tray rows, one per wheel: letters follow that wheel's current order
+   * while it's unsolved, then lock to the answer's own order once solved. Tiles
+   * keep their id so a spent tile stays identified across re-renders.
+   */
+  const trayRows = computed(() =>
+    words.map((w, i) =>
+      (solved[i] ? w.letters : wheelTiles(i)).map((t) => ({ id: t.id, ch: t.ch })),
+    ),
+  );
+
+  /* The guess so far, as a string, for matching and box display. */
+  const secretInput = computed(() =>
+    state.secretFound ? secret.text : secretPicks.map((p) => p.ch).join(''),
+  );
+
+  /* `${row}-${id}` of every spent tile, so the keyboard can grey the exact tiles. */
+  const spentTiles = computed(() => new Set(secretPicks.map((p) => `${p.r}-${p.id}`)));
+
+  /* First tray tile of `ch` not already spent — used when typing on a physical keyboard. */
+  function firstFreeTile(ch) {
+    const spent = spentTiles.value;
+    const rows = trayRows.value;
+    for (let r = 0; r < rows.length; r++) {
+      for (const t of rows[r]) {
+        if (t.ch === ch && !spent.has(`${r}-${t.id}`)) return { r, id: t.id, ch };
+      }
+    }
+    return null;
+  }
 
   const elapsedMs = computed(() =>
     state.startTime && state.endTime ? state.endTime - state.startTime : 0,
@@ -193,7 +246,7 @@ export function useGameState(levelIndex) {
     if (current.value === words[w].text) {
       solved[w] = true;
       path.length = 0;
-      state.active = nextUnsolved(w);
+      state.active = focusAfter(w);
       maybeFinish();
     } else if (path.length === words[w].length) {
       shakeSignal.value++;
@@ -204,15 +257,24 @@ export function useGameState(levelIndex) {
   }
 
   /*
-   * Spend one pooled tile of `raw` onto the secret guess. Ignored when the tile
-   * is exhausted or the guess is already full; a full guess auto-checks — a match
-   * locks the secret, a mismatch shakes and clears (restoring every tile).
+   * Spend one tray tile onto the secret guess. `arg` is either a tile press
+   * ({ r, id, ch } from the on-screen keyboard) or a raw char (physical keyboard,
+   * resolved to the first free matching tile). Ignored when the tile is already
+   * spent or the guess is full; a full guess auto-checks — a match locks the
+   * secret, a mismatch shakes (letters kept so the player can edit and retry).
    */
-  function typeSecret(raw) {
+  function typeSecret(arg) {
     if (state.secretFound || secretInput.value.length >= secret.length) return;
-    const ch = normalize(raw);
-    if (!/^[a-z]$/.test(ch) || (remaining.value[ch] ?? 0) <= 0) return;
-    secretInput.value += ch;
+    let pick;
+    if (typeof arg === 'string') {
+      const ch = normalize(arg);
+      if (!/^[a-z]$/.test(ch)) return;
+      pick = firstFreeTile(ch);
+    } else if (arg && !spentTiles.value.has(`${arg.r}-${arg.id}`)) {
+      pick = { r: arg.r, id: arg.id, ch: normalize(arg.ch) };
+    }
+    if (!pick) return;
+    secretPicks.push(pick);
     ensureStarted();
     if (secretInput.value.length < secret.length) return;
     if (secretInput.value === secret.text) {
@@ -229,13 +291,13 @@ export function useGameState(levelIndex) {
   /* Take back the last typed letter, returning its tile to the pool. */
   function backspaceSecret() {
     if (state.secretFound) return;
-    secretInput.value = secretInput.value.slice(0, -1);
+    secretPicks.pop();
   }
 
   /* Wipe the whole secret guess, returning every tile to the pool. */
   function clearSecret() {
     if (state.secretFound) return;
-    secretInput.value = '';
+    secretPicks.length = 0;
   }
 
   function finish() {
@@ -245,14 +307,14 @@ export function useGameState(levelIndex) {
   }
 
   watch(
-    () => JSON.stringify({ solved, shuffleSeeds, s: state, si: secretInput.value }),
+    () => JSON.stringify({ solved, shuffleSeeds, s: state, sp: secretPicks }),
     () =>
       save(levelIndex, {
         solved: [...solved],
         shuffleSeeds: [...shuffleSeeds],
         found: foundCount(),
         secretFound: state.secretFound,
-        secretInput: secretInput.value,
+        secretPicks: [...secretPicks],
         completed: state.completed,
         startTime: state.startTime,
         endTime: state.endTime,
@@ -271,7 +333,8 @@ export function useGameState(levelIndex) {
     solved,
     allSolved,
     secretActive,
-    remaining,
+    trayRows,
+    spentTiles,
     secretInput,
     shakeSignal,
     secretShake,

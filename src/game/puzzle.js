@@ -7,34 +7,37 @@ export function puzzleForLevel(idx) {
 }
 
 /*
+ * Split a raw answer into its space-free form plus gap metadata. `text` is what
+ * the player's input is compared against (no spaces); `display` keeps the spaces
+ * for showing the solved answer; `layout[i]` is true where a space followed that
+ * letter, so the UI renders a gap between the parts of a multi-word answer.
+ */
+function parseAnswer(raw) {
+  const text = raw.replace(/ /g, '');
+  const layout = [];
+  raw.split('').forEach((ch) => {
+    if (ch === ' ') layout[layout.length - 1] = true;
+    else layout.push(false);
+  });
+  return { text, display: raw, length: text.length, layout };
+}
+
+/*
  * Each word becomes a set of letter tiles for its wheel. `letters` carries a
  * stable id per tile so the wheel can shuffle positions and the drawn path can
- * reference tiles even when the answer repeats a letter. Spaces are stripped
- * for the wheel and for `text` (the answer the drawn path is compared against),
- * but kept in `layout` so a two-word answer renders a gap between its parts.
+ * reference tiles even when the answer repeats a letter. Spaces are stripped for
+ * the wheel (see parseAnswer for the shared text/display/layout handling).
  */
 export function buildWords(puzzle) {
   return puzzle.words.map((raw) => {
-    const text = raw.replace(/ /g, '');
-    /* Per answer-slot flag: true where the original word had a space after. */
-    const layout = [];
-    raw.split('').forEach((ch) => {
-      if (ch === ' ') layout[layout.length - 1] = true;
-      else layout.push(false);
-    });
-    return {
-      text,
-      length: text.length,
-      layout,
-      letters: text.split('').map((ch, id) => ({ id, ch })),
-    };
+    const a = parseAnswer(raw);
+    return { ...a, letters: a.text.split('').map((ch, id) => ({ id, ch })) };
   });
 }
 
-/* Secret letters (spaces stripped) the player types to guess a level's theme. */
+/* Secret the player types to guess a level's theme; spaces render as a gap. */
 export function buildSecret(puzzle) {
-  const text = puzzle.secret.replace(/ /g, '');
-  return { text, length: text.length };
+  return parseAnswer(puzzle.secret);
 }
 
 /*
