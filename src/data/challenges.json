@@ -116,5 +116,35 @@
     "date": "2026-07-17",
     "secret": "eclair",
     "words": ["orage", "patisserie", "electrique", "creme"]
+  },
+  {
+    "date": "2026-07-18",
+    "secret": "polaire",
+    "words": ["banquise", "ours", "gilet", "froid"]
+  },
+  {
+    "date": "2026-07-19",
+    "secret": "mine",
+    "words": ["metal", "profond", "visage", "corons"]
+  },
+  {
+    "date": "2026-07-20",
+    "secret": "lettre",
+    "words": ["alphabet", "courrier", "lecture", "phrase"]
+  },
+  {
+    "date": "2026-07-21",
+    "secret": "bison",
+    "words": ["herbe", "amerique", "gros", "cornes"]
+  },
+  {
+    "date": "2026-07-22",
+    "secret": "couche",
+    "words": ["rajouter", "changer", "peinture", "culotte"]
+  },
+  {
+    "date": "2026-07-23",
+    "secret": "maison",
+    "words": ["domicile", "jardin", "hantee", "close"]
   }
 ]

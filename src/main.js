@@ -1,20 +1,15 @@
 import { createApp } from 'vue';
 import './style.css';
+import App from './App.vue';
+import router from './router.js';
 import { resolveToday } from './utils/today.js';
+import { migrateSaves } from './composables/useGameState.js';
 
-/* Resolve today's date (API + device timezone) before loading App/router, so
- * challenges.js computes TODAY_DATE from the resolved date. App and router are
- * imported dynamically for that ordering to hold. No device-clock fallback: if
- * the time API fails, abort load and show an error instead of mounting. */
-resolveToday()
-  .then(async () => {
-    const { default: App } = await import('./App.vue');
-    const { default: router } = await import('./router.js');
-    createApp(App).use(router).mount('#app');
-  })
-  .catch((err) => {
-    const el = document.getElementById('app');
-    if (el)
-      el.textContent = 'Impossible de récupérer la date. Vérifiez votre connexion et rechargez.';
-    throw err;
-  });
+/* Resolve today's date (time API, device-clock fallback) before mounting, since
+ * views read it lazily via todayDate() during render. Then bring any legacy
+ * saves up to the current schema before the first level loads. resolveToday
+ * never rejects — the device clock backs the API up, so load always proceeds. */
+resolveToday().then(() => {
+  migrateSaves();
+  createApp(App).use(router).mount('#app');
+});

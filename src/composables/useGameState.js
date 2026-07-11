@@ -12,8 +12,9 @@ function storageKey(date) {
 
 /* One-time migration of the old index-based saves to date keys. Assumes saves
  * predate the tutorial-at-index-0 shift, so index i maps to PUZZLES[i]. Idempotent:
- * numeric keys are removed as converted, and an existing date key is never overwritten. */
-(function migrateIndexKeys() {
+ * numeric keys are removed as converted, and an existing date key is never overwritten.
+ * Call once at startup before mounting, so the first level load reads migrated state. */
+export function migrateSaves() {
   try {
     for (let i = 0; i < PUZZLES.length; i++) {
       const oldKey = STORAGE_PREFIX + i;
@@ -26,13 +27,13 @@ function storageKey(date) {
   } catch {
     /* storage unavailable: nothing to migrate */
   }
-})();
+}
 
-/* Progress summary for a level, read by the level-select screen. */
+/* Progress summary for a level, read by the level-select screens. */
 export function levelProgress(date) {
   try {
-    const s = JSON.parse(localStorage.getItem(storageKey(date)));
-    const found = s?.found ?? 0;
+    const s = load(date);
+    const found = Array.isArray(s?.solved) ? s.solved.filter(Boolean).length : 0;
     const secretFound = !!s?.secretFound;
     const completed = !!s?.completed;
     return {
@@ -114,8 +115,21 @@ export function useGameState(date) {
     }
     return null;
   };
+  /*
+   * Which input the dock shows: 'word' (a corner wheel, `wordIndex`), 'secret'
+   * (the guess keyboard), or 'none' (level done / nothing to type). Replaces the
+   * old overloaded `active` (number | 'secret' | null).
+   */
+  const initialWord = saved?.completed ? null : firstUnsolved();
   const state = reactive({
-    active: saved?.completed ? null : (firstUnsolved() ?? (saved?.secretFound ? null : 'secret')),
+    focus: saved?.completed
+      ? 'none'
+      : initialWord != null
+        ? 'word'
+        : saved?.secretFound
+          ? 'none'
+          : 'secret',
+    wordIndex: initialWord,
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
   });
@@ -141,14 +155,15 @@ export function useGameState(date) {
   }
 
   const current = computed(() => {
-    if (typeof state.active !== 'number') return '';
-    const byId = Object.fromEntries(words[state.active].letters.map((t) => [t.id, t.ch]));
+    if (state.focus !== 'word') return '';
+    const byId = Object.fromEntries(words[state.wordIndex].letters.map((t) => [t.id, t.ch]));
     return path.map((id) => byId[id]).join('');
   });
 
   const allSolved = computed(() => solved.every(Boolean));
 
-  const secretActive = computed(() => state.active === 'secret');
+  const wordActive = computed(() => state.focus === 'word');
+  const secretActive = computed(() => state.focus === 'secret');
 
   /*
    * Secret tray rows, one per wheel: letters follow that wheel's current order
@@ -196,11 +211,27 @@ export function useGameState(date) {
     if (allSolved.value && state.secretFound && !state.completed) finish();
   }
 
+  /* After a word resolves: focus the given next word, else the unsolved secret,
+   * else nothing left to type. `next` is a word index or null (none open). */
+  function focusAfterWord(next) {
+    if (next != null) {
+      state.focus = 'word';
+      state.wordIndex = next;
+    } else if (!state.secretFound) {
+      state.focus = 'secret';
+      state.wordIndex = null;
+    } else {
+      state.focus = 'none';
+      state.wordIndex = null;
+    }
+  }
+
   /* Promote a word to the big wheel; tapping a solved word is a no-op. */
   function activate(w) {
     if (state.completed || solved[w]) return;
-    if (state.active !== w) {
-      state.active = w;
+    if (state.focus !== 'word' || state.wordIndex !== w) {
+      state.focus = 'word';
+      state.wordIndex = w;
       path.length = 0;
     }
   }
@@ -208,18 +239,19 @@ export function useGameState(date) {
   /* Swap the dock to the secret keyboard; a no-op once the secret is found. */
   function activateSecret() {
     if (state.completed || state.secretFound) return;
-    state.active = 'secret';
+    state.focus = 'secret';
     path.length = 0;
   }
 
   function shuffleWheel() {
-    if (state.active == null) return;
-    shuffleSeeds[state.active] = (shuffleSeeds[state.active] * 2 + 7) % 100000 || 1;
+    if (state.focus !== 'word') return;
+    const w = state.wordIndex;
+    shuffleSeeds[w] = (shuffleSeeds[w] * 2 + 7) % 100000 || 1;
   }
 
   /* Extend the draw onto a tile; repeats and re-entry are ignored. */
   function appendTile(id) {
-    if (typeof state.active !== 'number' || path.includes(id)) return;
+    if (state.focus !== 'word' || path.includes(id)) return;
     path.push(id);
   }
 
@@ -230,13 +262,14 @@ export function useGameState(date) {
 
   /* Keyboard entry: consume the next unused tile matching the typed letter. */
   function typeLetter(raw) {
-    if (typeof state.active !== 'number') return;
+    if (state.focus !== 'word') return;
+    const w = state.wordIndex;
     const ch = normalize(raw);
     if (ch.length !== 1) return;
-    const t = words[state.active].letters.find((t) => t.ch === ch && !path.includes(t.id));
+    const t = words[w].letters.find((t) => t.ch === ch && !path.includes(t.id));
     if (!t) return;
     appendTile(t.id);
-    if (path.length === words[state.active].length) commit();
+    if (path.length === words[w].length) commit();
   }
 
   function backspace() {
@@ -248,13 +281,13 @@ export function useGameState(date) {
    * the next open one; full but wrong → shake; anything shorter → drop.
    */
   function commit() {
-    const w = state.active;
-    if (typeof w !== 'number') return;
+    if (state.focus !== 'word') return;
+    const w = state.wordIndex;
     if (current.value === words[w].text) {
       solved[w] = true;
       path.length = 0;
       /* Focus the next open word; when none remain, the unsolved secret, else nothing. */
-      state.active = nextUnsolved(w) ?? (state.secretFound ? null : 'secret');
+      focusAfterWord(nextUnsolved(w));
       maybeFinish();
     } else if (path.length === words[w].length) {
       shakeSignal.value++;
@@ -288,7 +321,7 @@ export function useGameState(date) {
       state.secretFound = true;
       maybeFinish();
       /* Level not done yet → drop back onto a word wheel instead of a locked keyboard. */
-      if (!state.completed) state.active = firstUnsolved();
+      if (!state.completed) focusAfterWord(firstUnsolved());
     } else {
       /* Wrong: shake but keep the letters so the player can edit and retry. */
       secretShake.value++;
@@ -309,20 +342,23 @@ export function useGameState(date) {
 
   function finish() {
     state.completed = true;
-    state.active = null;
+    state.focus = 'none';
+    state.wordIndex = null;
   }
 
+  /* Persist on any change to saved state. Deep-watches the reactive collections
+   * directly rather than diffing a JSON snapshot. */
   watch(
-    () => JSON.stringify({ solved, shuffleSeeds, s: state, sp: secretPicks }),
+    [solved, shuffleSeeds, secretPicks, () => state.secretFound, () => state.completed],
     () =>
       save(date, {
         solved: [...solved],
         shuffleSeeds: [...shuffleSeeds],
-        found: solved.filter(Boolean).length,
         secretFound: state.secretFound,
         secretPicks: [...secretPicks],
         completed: state.completed,
       }),
+    { deep: true },
   );
 
   return {
@@ -334,6 +370,7 @@ export function useGameState(date) {
     current,
     solved,
     allSolved,
+    wordActive,
     secretActive,
     trayRows,
     spentTiles,

@@ -7,7 +7,7 @@
  * after normalisation.
  *
  * `date` (ISO) identifies each puzzle and makes it one day's challenge: they run
- * one per day so the most recent non-future one is today's daily (see TODAY_DATE).
+ * one per day so the most recent non-future one is today's daily (see todayDate).
  * The date is the puzzle's stable id everywhere — routes, saved progress, links.
  * Keep the array sorted by ascending date; append new puzzles at the end.
  */
@@ -26,13 +26,18 @@ export const TUTORIAL_PUZZLE = {
 };
 
 /* Date of today's challenge: the most recent puzzle not dated in the future.
- * ISO dates compare lexicographically. getToday() must be resolved first. */
-export const TODAY_DATE = (() => {
+ * ISO dates compare lexicographically. Computed lazily (not at import time) so
+ * this module stays importable before `resolveToday` has run — the first caller
+ * after startup resolves it, then the result is memoised. */
+let _today = null;
+export function todayDate() {
+  if (_today) return _today;
   const today = getToday();
   let date = PUZZLES[0].date;
   for (const p of PUZZLES) if (p.date <= today) date = p.date;
-  return date;
-})();
+  _today = date;
+  return _today;
+}
 
 /* Puzzle for a date ("tutoriel" → the tutorial), or null if unknown. */
 export function puzzleForDate(date) {
@@ -42,17 +47,18 @@ export function puzzleForDate(date) {
 
 /* Route slug → puzzle date: "daily" aliases today; any other slug is the date. */
 export function dateForSlug(slug) {
-  return slug === 'daily' ? TODAY_DATE : slug;
+  return slug === 'daily' ? todayDate() : slug;
 }
 
 /* Puzzle date → route slug: "daily" for today, else the date itself. */
 export function slugForDate(date) {
-  return date === TODAY_DATE ? 'daily' : date;
+  return date === todayDate() ? 'daily' : date;
 }
 
 /* Past challenges (before today, tutorial excluded), newest first. */
 export function pastChallenges() {
-  return PUZZLES.filter((p) => p.date < TODAY_DATE).reverse();
+  const today = todayDate();
+  return PUZZLES.filter((p) => p.date < today).reverse();
 }
 
 /* The challenge one day older than `date`, or null at the oldest / for unknowns. */

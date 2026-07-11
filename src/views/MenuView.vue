@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { TODAY_DATE } from '../data/challenges.js';
+import { todayDate } from '../data/challenges.js';
 import { levelProgress } from '../composables/useGameState.js';
 import { TILE_TINTS } from '../palette.js';
 
@@ -15,7 +15,7 @@ const brandTiles = BRAND.split('').map((ch, i) => ({
 const router = useRouter();
 
 /* Fresh read: the view remounts on every navigation (App keys on route). */
-const daily = computed(() => levelProgress(TODAY_DATE));
+const daily = computed(() => levelProgress(todayDate()));
 </script>
 
 <template>

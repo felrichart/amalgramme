@@ -3,7 +3,7 @@ import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from
 import { useRoute, useRouter } from 'vue-router';
 import { useGameState, resetLevel } from '../composables/useGameState.js';
 import {
-  TODAY_DATE,
+  todayDate,
   TUTORIAL_DATE,
   puzzleForDate,
   dateForSlug,
@@ -22,15 +22,15 @@ const router = useRouter();
 /* Resolve the route slug to a puzzle date. Unknown slug → menu; a future
  * (not-yet-released) puzzle → today's daily. Either way fall back to today so
  * this (about-to-be-replaced) render stays valid. */
+const today = todayDate();
 const requested = dateForSlug(route.params.slug);
-const playable =
-  !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || requested <= TODAY_DATE);
+const playable = !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || requested <= today);
 if (!puzzleForDate(requested)) router.replace('/');
 else if (!playable) router.replace('/play/daily');
-const date = playable ? requested : TODAY_DATE;
+const date = playable ? requested : today;
 
 const isTutorial = date === TUTORIAL_DATE;
-const isDaily = date === TODAY_DATE;
+const isDaily = date === today;
 /* The tutorial always starts fresh — wipe its saved state before state loads. */
 if (isTutorial) resetLevel(date);
 const title = isTutorial ? 'Tutoriel' : isDaily ? 'Défi quotidien' : formatChallengeDate(date);
@@ -49,14 +49,18 @@ const tutorialSteps = [
     holes: WHEELS,
     html: 'Il y a 4 <span style="color:var(--gold);font-weight:900">indices</span>, dont les lettres sont mélangées.',
   },
-  { selector: '.dock', shape: 'rect', text: 'Glisse d’une lettre à l’autre pour écrire le mot.' },
+  {
+    selector: '[data-tut="dock"]',
+    shape: 'rect',
+    text: 'Glisse d’une lettre à l’autre pour écrire le mot.',
+  },
   {
     selector: '[data-cell="0"]',
     manual: true,
     html: 'Bravo, plus que 3 <span style="color:var(--gold);font-weight:900">indices</span> à trouver !',
   },
   {
-    selector: '.secret-cell',
+    selector: '[data-tut="secret"]',
     shape: 'rect',
     manual: true,
     cta: 'Compris',
@@ -88,8 +92,8 @@ if (isTutorial) {
   );
 }
 
-/* A word wheel is docked when the active target is a word index (not the secret). */
-const wordActive = computed(() => typeof g.state.active === 'number');
+/* A word wheel is docked when the active target is a word (not the secret). */
+const wordActive = g.wordActive;
 
 /* Cross layout: words fill the four corners, the secret sits between them. */
 const AREAS = ['w0', 'w1', 'w2', 'w3'];
@@ -97,7 +101,7 @@ const AREAS = ['w0', 'w1', 'w2', 'w3'];
 /* Slots above the wheel that fill in as the path is drawn. */
 const slots = computed(() => {
   if (!wordActive.value) return [];
-  const w = g.words[g.state.active];
+  const w = g.words[g.state.wordIndex];
   const cur = g.current.value;
   /* `spaceAfter` renders a gap where the answer had a space (see buildWords). */
   return w.layout.map((spaceAfter, i) => ({ ch: cur[i] || '', spaceAfter }));
@@ -117,13 +121,16 @@ function openSecret() {
 
 /* Flash a shake on the secret boxes when a full guess is wrong. */
 const secretShaking = ref(false);
+let secretShakeTimer = null;
 watch(
   () => g.secretShake.value,
   () => {
     secretShaking.value = true;
-    setTimeout(() => (secretShaking.value = false), 400);
+    clearTimeout(secretShakeTimer);
+    secretShakeTimer = setTimeout(() => (secretShaking.value = false), 400);
   },
 );
+onUnmounted(() => clearTimeout(secretShakeTimer));
 
 /* Connector lines drawn from the secret to each of the 4 corner wheels. */
 const svgEl = ref(null);
@@ -173,7 +180,7 @@ watch(
 );
 /* Re-measure on selection changes too, so the links stay pinned to each disc. */
 watch(
-  () => [wordActive.value, g.secretActive.value, g.state.active],
+  () => [wordActive.value, g.secretActive.value, g.state.wordIndex],
   () => nextTick(measureLinks),
 );
 
@@ -261,19 +268,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <button
             v-else
             class="slot"
-            :class="{ active: g.state.active === i }"
+            :class="{ active: g.state.wordIndex === i }"
             type="button"
             @click="g.activate(i)"
             @focus="g.activate(i)"
           >
-            <LetterWheel :tiles="g.wheelTiles(i)" :active="g.state.active === i" />
+            <LetterWheel :tiles="g.wheelTiles(i)" :active="g.state.wordIndex === i" />
           </button>
         </div>
       </template>
 
       <!-- Wrapper stays put; the button inside translates on press so the
            connector lines (anchored here) don't shift when it's selected. -->
-      <div ref="secretEl" class="secret-cell" style="grid-area: secret">
+      <div ref="secretEl" class="secret-cell" data-tut="secret" style="grid-area: secret">
         <button
           class="secret"
           type="button"
@@ -295,7 +302,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </div>
     </main>
 
-    <div class="dock" :style="wordActive ? { '--tint': WHEEL_TINTS[g.state.active] } : undefined">
+    <div
+      class="dock"
+      data-tut="dock"
+      :style="wordActive ? { '--tint': WHEEL_TINTS[g.state.wordIndex] } : undefined"
+    >
       <template v-if="wordActive && !g.state.completed">
         <div class="track" :class="{ full: g.current.value.length === slots.length }">
           <span
@@ -311,7 +322,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <LetterWheel
             interactive
             active
-            :tiles="g.wheelTiles(g.state.active)"
+            :tiles="g.wheelTiles(g.state.wordIndex)"
             :path="g.path"
             :shake="g.shakeSignal.value"
             @begin="g.clearPath"
