@@ -45,12 +45,15 @@
 }
 
 /*
- * Root font-size tracks viewport height so the whole rem-based UI scales down
- * on short screens instead of overflowing into a vertical scroll. Caps at 16px
- * (unchanged on tall/normal windows); shrinks below ~745px tall.
+ * Root font-size tracks the dynamic viewport height so the whole rem-based UI
+ * scales down on short screens instead of overflowing into a vertical scroll.
+ * Caps at 16px (unchanged on tall/normal windows); shrinks below ~745px tall.
+ * Must be dvh, not vh: the layout is bounded by 100dvh, and on mobile Safari vh
+ * is the (taller) large viewport, so a vh-keyed scale wouldn't shrink when the
+ * toolbars reduce the visible area — the UI would overflow and clip.
  */
 html {
-  font-size: clamp(10px, 2.15vh, 16px);
+  font-size: clamp(10px, 2.15dvh, 16px);
 }
 
 html,
