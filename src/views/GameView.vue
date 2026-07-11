@@ -209,6 +209,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             :class="{ active: g.state.active === i }"
             type="button"
             @click="g.activate(i)"
+            @focus="g.activate(i)"
           >
             <LetterWheel :tiles="g.wheelTiles(i)" :active="g.state.active === i" />
           </button>
@@ -224,6 +225,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :class="{ found: g.state.secretFound, active: g.secretActive.value }"
           :disabled="g.state.secretFound"
           @click="openSecret"
+          @focus="openSecret"
         >
           <span class="secret-boxes" :class="{ shake: secretShaking, wrong: g.secretWrong.value }">
             <span
@@ -383,9 +385,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     box-shadow 0.1s ease,
     background 0.2s ease;
 }
+/* Focus (keyboard): show the coin selected rather than ringed. */
 .secret:focus-visible {
-  outline: 3px solid var(--outline);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 var(--outline);
+  transform: translate(5px, 7px);
 }
 /* Press: the coin drops into its offset shadow, like a keyboard key. */
 .secret:active {
@@ -531,10 +535,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .slot.active .wheel {
   transform: translate(5px, 7px);
 }
+/* Focus (keyboard): show the wheel selected (pressed into its shadow), not ringed. */
 .slot:focus-visible {
-  outline: 2px solid var(--tint);
-  outline-offset: 2px;
-  border-radius: 1rem;
+  outline: none;
+}
+.slot:focus-visible .wheel {
+  transform: translate(5px, 7px);
+  box-shadow: 0 0 0 var(--outline);
 }
 .slot .wheel {
   max-width: 6.4rem;
@@ -693,9 +700,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transform: translate(4px, 5px);
   box-shadow: 0 0 0 var(--outline);
 }
+/* Focus (keyboard): show the button pressed rather than ringed. */
 .cta:focus-visible {
-  outline: 3px solid var(--outline);
-  outline-offset: 2px;
+  outline: none;
+  transform: translate(4px, 5px);
+  box-shadow: 0 0 0 var(--outline);
 }
 
 .stage {

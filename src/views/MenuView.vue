@@ -31,6 +31,7 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
           >{{ t.ch }}</span
         >
       </h1>
+      <p class="credit">par Cara+</p>
     </header>
 
     <nav class="actions">
@@ -49,6 +50,7 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
         Défis passés
       </button>
     </nav>
+
   </div>
 </template>
 
@@ -63,6 +65,10 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
   max-width: 560px;
   margin: 0 auto;
   padding: 2.2rem 1.2rem 3rem;
+}
+/* Fit to the title so the credit can sit at its right edge. */
+.top {
+  width: fit-content;
 }
 /* Title as a row of keyboard tiles (see LetterKeyboard .key). */
 .brand {
@@ -116,9 +122,11 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
   transform: translate(4px, 5px);
   box-shadow: 0 0 0 var(--outline);
 }
+/* Focus (keyboard): show the button pressed rather than ringed. */
 .action:focus-visible {
-  outline: 3px solid var(--outline);
-  outline-offset: 2px;
+  outline: none;
+  transform: translate(4px, 5px);
+  box-shadow: 0 0 0 var(--outline);
 }
 /* Daily: always solid accent; state shown only by the corner marker. */
 .daily {
@@ -128,6 +136,16 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
 .ghost {
   background: var(--panel);
   color: var(--ink);
+}
+
+/* Attribution, under the title. */
+.credit {
+  margin: 0.3rem 0 0;
+  text-align: right;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  opacity: 0.35;
 }
 
 /* Success mark, top-right corner. */

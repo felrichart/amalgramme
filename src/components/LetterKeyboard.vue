@@ -34,6 +34,7 @@ function rowStyle(r) {
         :key="`${cell.r}-${cell.id}`"
         class="key"
         type="button"
+        tabindex="-1"
         :class="{ spent: cell.spent, filled: solved[r] }"
         :disabled="cell.spent"
         @click="emit('key', { r: cell.r, id: cell.id, ch: cell.ch })"
@@ -42,10 +43,22 @@ function rowStyle(r) {
       </button>
     </div>
     <div class="trow bar">
-      <button class="key wide" type="button" @click="emit('backspace')" aria-label="reculer">
+      <button
+        class="key wide"
+        type="button"
+        tabindex="-1"
+        @click="emit('backspace')"
+        aria-label="reculer"
+      >
         ⌫
       </button>
-      <button class="key wide" type="button" @click="emit('clear')" aria-label="tout effacer">
+      <button
+        class="key wide"
+        type="button"
+        tabindex="-1"
+        @click="emit('clear')"
+        aria-label="tout effacer"
+      >
         ✕
       </button>
     </div>
@@ -107,10 +120,6 @@ function rowStyle(r) {
   box-shadow: 0 0 0 var(--outline);
   background: var(--tint);
   color: #fff;
-}
-.key:focus-visible {
-  outline: 2.5px solid var(--outline);
-  outline-offset: 2px;
 }
 /* Solved word: its row locks filled solid in the accent with white glyphs. */
 .key.filled {

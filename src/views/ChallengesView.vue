@@ -135,9 +135,11 @@ const items = computed(() =>
   transform: translate(3px, 4px);
   box-shadow: 0 0 0 var(--outline);
 }
+/* Focus (keyboard): show the row pressed rather than ringed. */
 .row:focus-visible {
-  outline: 3px solid var(--outline);
-  outline-offset: 2px;
+  outline: none;
+  transform: translate(3px, 4px);
+  box-shadow: 0 0 0 var(--outline);
 }
 /* Done: solid accent with a tick. In progress stays washed (a strong dot marks it). */
 .row.done {
