@@ -21,7 +21,8 @@ const grid = computed(() =>
 );
 
 function rowStyle(r) {
-  return { '--tint': WHEEL_TINTS[r] ?? WHEEL_TINTS[0] };
+  /* --n drives per-key font shrink so a row always stays on one line. */
+  return { '--tint': WHEEL_TINTS[r] ?? WHEEL_TINTS[0], '--n': grid.value[r].length };
 }
 </script>
 
@@ -62,10 +63,12 @@ function rowStyle(r) {
 .trow {
   display: flex;
   justify-content: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   padding: 0.28rem 0.4rem;
   border-radius: 0.9rem;
+  width: 100%;
+  container-type: inline-size;
 }
 .trow.bar {
   gap: 0.5rem;
@@ -74,14 +77,18 @@ function rowStyle(r) {
 }
 .key {
   position: relative;
-  min-width: 2.2rem;
+  /* Keys share the row evenly and may shrink below content so the row never wraps. */
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 2.8rem;
   height: 2.8rem;
-  padding: 0 0.4rem;
+  padding: 0 0.3rem;
   display: grid;
   place-items: center;
   border-radius: 0.6rem;
   font-weight: 900;
-  font-size: 1.15rem;
+  /* ~half a key's width (each key ≈ 100cqi/n), clamped for readability. */
+  font-size: clamp(0.55rem, calc(48 / var(--n, 7) * 1cqi), 1.15rem);
   text-transform: uppercase;
   color: var(--ink);
   cursor: pointer;
@@ -118,7 +125,9 @@ function rowStyle(r) {
   box-shadow: 0 0 0 var(--outline);
 }
 .key.wide {
+  flex: 0 0 auto;
   min-width: 4.4rem;
+  max-width: none;
   padding: 0 0.9rem;
   font-size: 1.3rem;
   color: var(--ink);

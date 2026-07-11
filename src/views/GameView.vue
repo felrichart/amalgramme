@@ -1,8 +1,14 @@
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useGameState } from '../composables/useGameState.js';
-import { PUZZLES_NEW as PUZZLES } from '../data/challenges.js';
+import { useGameState, levelProgress } from '../composables/useGameState.js';
+import {
+  PUZZLES_NEW as PUZZLES,
+  DAILY_INDEX,
+  formatChallengeDate,
+  indexForSlug,
+  slugForIndex,
+} from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import { WHEEL_TINTS } from '../palette.js';
@@ -10,12 +16,29 @@ import { WHEEL_TINTS } from '../palette.js';
 const route = useRoute();
 const router = useRouter();
 
-const levelIndex = Number(route.params.level);
-if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= PUZZLES.length) {
-  router.replace('/');
-}
+/* Unknown slug → menu; future puzzles aren't playable yet → daily. Either way
+ * fall back to the daily index so this (about-to-be-replaced) render is valid. */
+const resolved = indexForSlug(route.params.slug);
+if (resolved < 0) router.replace('/');
+else if (resolved > DAILY_INDEX) router.replace('/play/daily');
+const levelIndex = resolved >= 0 && resolved <= DAILY_INDEX ? resolved : DAILY_INDEX;
 
-const hasNextLevel = levelIndex + 1 < PUZZLES.length;
+const isDaily = levelIndex === DAILY_INDEX;
+const dateLabel = formatChallengeDate(PUZZLES[levelIndex].date);
+/* Back lands where the player likely came from: menu for the daily, list otherwise. */
+const backTo = isDaily ? '/' : '/challenges';
+
+/* Next uncompleted past challenge, chronological, wrapping to the first; the
+ * list if every past challenge is done. Daily lives on the menu, skipped here. */
+function goNextChallenge() {
+  const total = PUZZLES.length;
+  for (let step = 1; step <= total; step++) {
+    const i = (levelIndex + step) % total;
+    if (i === DAILY_INDEX) continue;
+    if (!levelProgress(i).completed) return router.push(`/play/${slugForIndex(i)}`);
+  }
+  router.push('/challenges');
+}
 
 const g = useGameState(levelIndex);
 
@@ -142,10 +165,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 <template>
   <div class="game">
     <header class="top">
-      <button class="icon-btn" type="button" @click="router.push('/')" aria-label="niveaux">
+      <button class="icon-btn" type="button" @click="router.push(backTo)" aria-label="retour">
         ←
       </button>
-      <h1 class="title">Niveau {{ levelIndex + 1 }}</h1>
+      <h1 class="title">{{ isDaily ? 'Défi quotidien' : dateLabel }}</h1>
       <div class="spacer" />
     </header>
 
@@ -260,17 +283,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <span class="finish-bravo">Bravo</span>
         </div>
         <div class="finish-actions">
-          <button
-            v-if="hasNextLevel"
-            class="cta"
-            type="button"
-            @click="router.push(`/play/${levelIndex + 1}`)"
-          >
-            Niveau suivant
-          </button>
-          <button class="cta cta-ghost" type="button" @click="router.push('/')">
-            Autres niveaux
-          </button>
+          <template v-if="isDaily">
+            <button class="cta cta-wash" type="button" @click="router.push('/challenges')">
+              Défis passés
+            </button>
+            <button class="cta cta-ghost" type="button" @click="router.push('/')">
+              Retour au menu
+            </button>
+          </template>
+          <template v-else>
+            <button class="cta" type="button" @click="goNextChallenge">
+              Prochain défi
+            </button>
+            <button class="cta cta-ghost" type="button" @click="router.push('/challenges')">
+              Liste des défis
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -652,6 +680,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease;
+}
+.cta-wash {
+  background: var(--accent-wash);
+  color: var(--ink);
 }
 .cta-ghost {
   background: var(--panel);

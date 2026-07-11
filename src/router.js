@@ -1,10 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import LevelsView from './views/LevelsView.vue';
+import MenuView from './views/MenuView.vue';
+import ChallengesView from './views/ChallengesView.vue';
 import GameView from './views/GameView.vue';
 
 const routes = [
-  { path: '/', component: LevelsView },
-  { path: '/play/:level', component: GameView },
+  { path: '/', component: MenuView },
+  { path: '/challenges', component: ChallengesView },
+  { path: '/play/:slug', component: GameView },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 
