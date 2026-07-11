@@ -30,6 +30,15 @@ export function levelProgress(idx) {
   }
 }
 
+/* Wipe one level's saved state (e.g. so the tutorial always starts fresh). */
+export function resetLevel(idx) {
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + idx);
+  } catch {
+    /* storage unavailable: nothing to clear */
+  }
+}
+
 /* Wipe every level's saved state. */
 export function resetAllProgress() {
   try {

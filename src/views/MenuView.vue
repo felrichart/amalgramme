@@ -46,11 +46,14 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
         <span v-else-if="daily.partial" class="dot" aria-label="en cours"></span>
       </button>
 
-      <button class="action ghost" type="button" @click="router.push('/challenges')">
+      <button class="action past" type="button" @click="router.push('/challenges')">
         Défis passés
       </button>
-    </nav>
 
+      <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
+        Tutoriel
+      </button>
+    </nav>
   </div>
 </template>
 
@@ -133,7 +136,11 @@ const daily = computed(() => levelProgress(DAILY_INDEX));
   background: var(--accent);
   color: #fff;
 }
-.ghost {
+.past {
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+.tuto {
   background: var(--panel);
   color: var(--ink);
 }

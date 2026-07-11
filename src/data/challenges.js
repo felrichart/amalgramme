@@ -15,6 +15,9 @@ import { getToday } from '../utils/today.js';
 
 export const PUZZLES_NEW = puzzles;
 
+/* Slug/date of the guided tutorial puzzle (not a dated daily challenge). */
+export const TUTORIAL_SLUG = 'tutoriel';
+
 /* Today's challenge: the most recent puzzle not dated in the future. ISO dates
  * compare lexicographically, so a string compare orders them correctly.
  * `getToday()` must be resolved (see resolveToday) before this module loads. */

@@ -1,17 +1,18 @@
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useGameState } from '../composables/useGameState.js';
+import { useGameState, resetLevel } from '../composables/useGameState.js';
 import {
   PUZZLES_NEW as PUZZLES,
   DAILY_INDEX,
+  TUTORIAL_SLUG,
   formatChallengeDate,
   indexForSlug,
   slugForIndex,
 } from '../data/challenges.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
-import HowToPlay from '../components/HowToPlay.vue';
+import TutorialCoach from '../components/TutorialCoach.vue';
 import { WHEEL_TINTS } from '../palette.js';
 
 const route = useRoute();
@@ -25,9 +26,47 @@ else if (resolved > DAILY_INDEX) router.replace('/play/daily');
 const levelIndex = resolved >= 0 && resolved <= DAILY_INDEX ? resolved : DAILY_INDEX;
 
 const isDaily = levelIndex === DAILY_INDEX;
-const dateLabel = formatChallengeDate(PUZZLES[levelIndex].date);
-/* Back lands where the player likely came from: menu for the daily, list otherwise. */
-const backTo = isDaily ? '/' : '/challenges';
+const isTutorial = PUZZLES[levelIndex].date === TUTORIAL_SLUG;
+/* The tutorial always starts fresh — wipe its saved state before state loads. */
+if (isTutorial) resetLevel(levelIndex);
+const title = isTutorial
+  ? 'Tutoriel'
+  : isDaily
+    ? 'Défi quotidien'
+    : formatChallengeDate(PUZZLES[levelIndex].date);
+/* Back lands where the player likely came from: menu for daily/tutorial, list otherwise. */
+const backTo = isDaily || isTutorial ? '/' : '/challenges';
+
+/* Coach popups over the board. Steps alternate between "action" (advances when
+ * the parent sees the taught gesture) and "manual" (a Suivant button). It can't
+ * be skipped — it ends only once the player reaches the last step's gesture. */
+const coachOpen = ref(isTutorial);
+const coachStep = ref(0);
+const WHEELS = [0, 1, 2, 3].map((i) => `[data-cell="${i}"] .wheel`);
+
+const tutorialSteps = [
+  {
+    holes: WHEELS,
+    html: 'Il y a 4 <span style="color:var(--gold);font-weight:900">indices</span>, dont les lettres sont mélangées.',
+  },
+  { selector: '.dock', shape: 'rect', text: 'Glisse d’une lettre à l’autre pour écrire le mot.' },
+  {
+    selector: '[data-cell="0"]',
+    manual: true,
+    html: 'Bravo, plus que 3 <span style="color:var(--gold);font-weight:900">indices</span> à trouver !',
+  },
+  {
+    selector: '.secret-cell',
+    shape: 'rect',
+    manual: true,
+    cta: 'Compris',
+    html: 'Devine le <strong>mot énigme</strong> au centre grâce aux 4 indices.',
+  },
+];
+function coachNext() {
+  if (coachStep.value >= tutorialSteps.length - 1) coachOpen.value = false;
+  else coachStep.value++;
+}
 
 /* The challenge one day older, mirroring the newest-first list; null at the
  * oldest, where the "next" button is hidden. Past levels sit below the daily,
@@ -37,9 +76,18 @@ function goOlderChallenge() {
   if (olderIndex !== null) router.push(`/play/${slugForIndex(olderIndex)}`);
 }
 
-const helpOpen = ref(false);
-
 const g = useGameState(levelIndex);
+
+/* Tutorial: the intro's one action step (writing the first word) advances when
+ * a word is solved; the rest advance via Suivant/Compris. */
+if (isTutorial) {
+  watch(
+    () => g.solved.filter(Boolean).length,
+    (n, o) => {
+      if (coachOpen.value && coachStep.value === 1 && n > o) coachStep.value = 2;
+    },
+  );
+}
 
 /* A word wheel is docked when the active target is a word index (not the secret). */
 const wordActive = computed(() => typeof g.state.active === 'number');
@@ -164,16 +212,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 <template>
   <div class="game">
     <header class="top">
-      <button class="icon-btn" type="button" @click="router.push(backTo)" aria-label="retour">
+      <button
+        class="icon-btn"
+        :class="{ 'over-coach': coachOpen }"
+        type="button"
+        @click="router.push(backTo)"
+        aria-label="retour"
+      >
         ←
       </button>
-      <h1 class="title">{{ isDaily ? 'Défi quotidien' : dateLabel }}</h1>
-      <button class="icon-btn" type="button" @click="helpOpen = true" aria-label="comment jouer">
-        ?
-      </button>
+      <h1 class="title">{{ title }}</h1>
+      <span class="icon-btn spacer" aria-hidden="true"></span>
     </header>
 
-    <HowToPlay v-if="helpOpen" @close="helpOpen = false" />
+    <TutorialCoach v-if="coachOpen" :steps="tutorialSteps" :step="coachStep" @next="coachNext" />
 
     <main class="board">
       <svg
@@ -201,6 +253,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <div
           class="cell"
           :ref="(el) => setCell(el, i)"
+          :data-cell="i"
           :style="{ gridArea: AREAS[i], '--tint': WHEEL_TINTS[i] }"
         >
           <div v-if="g.solved[i]" class="slot done">
@@ -288,7 +341,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <span class="finish-bravo">Bravo</span>
         </div>
         <div class="finish-actions">
-          <template v-if="isDaily">
+          <template v-if="isTutorial">
+            <button class="cta cta-ghost" type="button" @click="router.push('/')">
+              Retour au menu
+            </button>
+          </template>
+          <template v-else-if="isDaily">
             <button class="cta cta-wash" type="button" @click="router.push('/challenges')">
               Défis passés
             </button>
@@ -350,6 +408,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .icon-btn:focus-visible {
   outline: 2px solid var(--outline);
   outline-offset: 2px;
+}
+/* Balances the back button so the title stays centred. */
+.icon-btn.spacer {
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow: none;
+}
+/* During the tutorial the coach overlay (z 60) covers everything; keep the
+   back button above it so leaving is always one tap away. */
+.icon-btn.over-coach {
+  position: relative;
+  z-index: 61;
 }
 .title {
   flex: 1;
