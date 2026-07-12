@@ -18,10 +18,11 @@ import {
   COMMUNITY_PREFIX,
 } from '../data/community.js';
 import { dailyRecord } from '../data/dailies.js';
-import { recordAttempt, recordSolve } from '../services/community.js';
+import { recordAttempt, recordSolve, loadCommunityLevels } from '../services/community.js';
 import {
   recordAttempt as recordDailyAttempt,
   recordSolve as recordDailySolve,
+  loadDailies,
 } from '../services/dailies.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
@@ -141,26 +142,40 @@ function goCommunityNext() {
 
 const g = useGameState(date);
 
-/* Cached play stats for the finish screen — community levels and dailies both
- * carry attempts/successes; null for the tutorial. Floored to 1 since reaching
- * the finish panel means this player attempted and solved it, whether or not
- * the cache (fetched before this solve was reported) reflects them yet. */
+/* Play stats for the finish screen — community levels and dailies both carry
+ * attempts/successes; null for the tutorial. The cached seed is floored to 1
+ * (reaching the finish panel proves this player attempted and solved) so it
+ * never flashes "0 sur 0"; refreshFinishStats then replaces it with the exact
+ * server count once this solve has been recorded. */
 const statRecord = isCommunity ? community : isTutorial ? null : dailyRecord(date);
-const finishStats = statRecord && {
-  attempts: Math.max(statRecord.attempts ?? 0, 1),
-  successes: Math.max(statRecord.successes ?? 0, 1),
-};
+const finishStats = ref(
+  statRecord && {
+    attempts: Math.max(statRecord.attempts ?? 0, 1),
+    successes: Math.max(statRecord.successes ?? 0, 1),
+  },
+);
+
+/* Refetch this level's stats and show the exact counts. Called after the solve
+ * post settles, so the server has counted this player (a solve inserts a stat
+ * row even without a prior attempt, so both numbers include them). */
+async function refreshFinishStats() {
+  if (isTutorial) return;
+  if (isCommunity) await loadCommunityLevels(0);
+  else await loadDailies(0);
+  const rec = isCommunity ? communityRecord(date) : dailyRecord(date);
+  if (rec) finishStats.value = { attempts: rec.attempts ?? 0, successes: rec.successes ?? 0 };
+}
 
 /* Community play stats: count this player's attempt on open (no sign-in needed)
  * and their success on completion. Both are deduped per device, so a revisit or
  * an already-finished level costs at most one no-op call. */
 if (isCommunity && community) {
   recordAttempt(community.id);
-  if (g.state.completed) recordSolve(community.id);
+  if (g.state.completed) recordSolve(community.id).then(refreshFinishStats);
   else
     watch(
       () => g.state.completed,
-      (done) => done && recordSolve(community.id),
+      (done) => done && recordSolve(community.id).then(refreshFinishStats),
     );
 }
 
@@ -168,11 +183,11 @@ if (isCommunity && community) {
  * count as community, keyed by the puzzle date. Excludes the tutorial. */
 if (!isCommunity && !isTutorial) {
   recordDailyAttempt(date);
-  if (g.state.completed) recordDailySolve(date);
+  if (g.state.completed) recordDailySolve(date).then(refreshFinishStats);
   else
     watch(
       () => g.state.completed,
-      (done) => done && recordDailySolve(date),
+      (done) => done && recordDailySolve(date).then(refreshFinishStats),
     );
 }
 

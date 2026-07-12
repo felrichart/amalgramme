@@ -132,15 +132,16 @@ export async function updateCommunityLevel(id, payload) {
 
 /*
  * Report a play stat for a bare level id. `kind` is 'attempt' (opened) or
- * 'solve' (completed). Fire-and-forget and fail-soft — stats never block or
- * surface to the player. Reported at most once per kind per level for this
- * client (the backend also dedupes by client id), so revisits cost nothing.
+ * 'solve' (completed). Fail-soft — stats never surface to the player. Reported
+ * at most once per kind per level for this client (the backend also dedupes by
+ * client id), so revisits cost nothing. Returns a promise that resolves once the
+ * post settles (or immediately when skipped), so callers can refetch afterwards.
  */
 function reportStat(id, kind) {
-  if (!COMMUNITY_API || hasReported(id, kind)) return;
+  if (!COMMUNITY_API || hasReported(id, kind)) return Promise.resolve();
   const client = clientId();
-  if (!client) return;
-  fetch(`${COMMUNITY_API}/levels/${id}/${kind}`, {
+  if (!client) return Promise.resolve();
+  return fetch(`${COMMUNITY_API}/levels/${id}/${kind}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ client }),
@@ -157,12 +158,12 @@ function reportStat(id, kind) {
 
 /* Record that this client opened a community level (bare id). */
 export function recordAttempt(id) {
-  reportStat(id, 'attempt');
+  return reportStat(id, 'attempt');
 }
 
 /* Record that this client completed a community level (bare id). */
 export function recordSolve(id) {
-  reportStat(id, 'solve');
+  return reportStat(id, 'solve');
 }
 
 /*

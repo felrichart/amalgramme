@@ -127,10 +127,10 @@ export async function deleteDaily(date, auth) {
  * stat client (the backend also dedupes), so revisits cost nothing.
  */
 function reportStat(date, kind) {
-  if (!COMMUNITY_API || hasReported(date, kind)) return;
+  if (!COMMUNITY_API || hasReported(date, kind)) return Promise.resolve();
   const client = clientId();
-  if (!client) return;
-  fetch(`${COMMUNITY_API}/dailies/${date}/${kind}`, {
+  if (!client) return Promise.resolve();
+  return fetch(`${COMMUNITY_API}/dailies/${date}/${kind}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ client }),
@@ -144,14 +144,14 @@ function reportStat(date, kind) {
     });
 }
 
-/* Record that this client opened a daily. */
+/* Record that this client opened a daily. Resolves once the post settles. */
 export function recordAttempt(date) {
-  reportStat(date, 'attempt');
+  return reportStat(date, 'attempt');
 }
 
-/* Record that this client completed a daily. */
+/* Record that this client completed a daily. Resolves once the post settles. */
 export function recordSolve(date) {
-  reportStat(date, 'solve');
+  return reportStat(date, 'solve');
 }
 
 /*
