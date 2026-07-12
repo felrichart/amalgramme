@@ -146,5 +146,10 @@
     "date": "2026-07-23",
     "secret": "maison",
     "words": ["domicile", "jardin", "hantee", "close"]
+  },
+  {
+    "date": "2026-07-24",
+    "secret": "peche",
+    "words": ["peau", "nectarine", "princesse", "hamecon"]
   }
 ]
