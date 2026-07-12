@@ -137,7 +137,6 @@ onMounted(async () => {
   border-radius: 1rem;
   font-weight: 900;
   font-size: 1.1rem;
-  text-transform: capitalize;
   cursor: pointer;
   /* Default (todo): faint accent wash. */
   color: var(--ink);
@@ -166,6 +165,7 @@ onMounted(async () => {
 
 .date {
   letter-spacing: 0.01em;
+  text-transform: capitalize;
 }
 /* Trailing group: play stats plus the completion mark, pushed to the row's end. */
 .meta {
