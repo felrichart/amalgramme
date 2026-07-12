@@ -61,9 +61,7 @@ onMounted(() => {
 });
 
 const taken = computed(() => !isEdit && getDailies().some((d) => d.date === date.value));
-const dateValid = computed(
-  () => !!date.value && date.value >= today && (isEdit || !taken.value),
-);
+const dateValid = computed(() => !!date.value && date.value >= today && (isEdit || !taken.value));
 const dateHint = computed(() => {
   if (!date.value) return 'Choisis une date.';
   if (date.value < today) return 'Seuls aujourd’hui et les jours suivants sont modifiables.';

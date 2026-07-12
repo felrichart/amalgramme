@@ -109,8 +109,10 @@ export async function createCommunityLevel(payload) {
 }
 
 /*
- * Edit a challenge in place. `payload` is { author, pin, secret, words }. Returns
- * { ok: true, level } (and updates the cache) or { ok: false, error }.
+ * Edit a challenge. `payload` is { author, pin, secret, words }. The backend
+ * mints a fresh id (see PUT /levels/:id), so this drops the old id from the
+ * cache and prepends the new record. Returns { ok: true, level } or
+ * { ok: false, error }.
  */
 export async function updateCommunityLevel(id, payload) {
   if (!COMMUNITY_API) return { ok: false, error: 'Serveur non configuré.' };
@@ -123,7 +125,7 @@ export async function updateCommunityLevel(id, payload) {
     });
     if (!res.ok) return { ok: false, error: await reason(res, 'Modification refusée.') };
     const level = await res.json();
-    setCache([level, ...getCache().filter((l) => l.id !== level.id)], Date.now());
+    setCache([level, ...getCache().filter((l) => l.id !== id && l.id !== level.id)], Date.now());
     return { ok: true, level };
   } catch {
     return { ok: false, error: 'Connexion impossible, réessaie plus tard.' };

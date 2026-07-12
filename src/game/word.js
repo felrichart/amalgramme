@@ -4,7 +4,8 @@
  *
  * A word is 4–11 letters with optional separators — space, hyphen, apostrophe —
  * that behave like gaps on the wheel (see puzzle.js parseAnswer). At most 2 of
- * each separator; any other punctuation or digit is rejected. The énigme must be
+ * each separator; any other punctuation or digit is rejected. The four indices
+ * must all be distinct. The énigme must be
  * spellable from the pooled letters of the four indices (the real game rule: the
  * secret is typed by spending tiles drawn from the four wheels — see
  * useGameState.trayRows/typeSecret).
@@ -92,6 +93,13 @@ export function validateChallenge({ author, words, secret }) {
   const nWords = (words ?? []).map(normalizeWord);
   const nSecret = normalizeWord(secret ?? '');
   const wordErrs = nWords.map(wordError);
+  /* Flag any index word that repeats an earlier one (ignoring blanks). */
+  const seen = new Map();
+  nWords.forEach((w, i) => {
+    if (!w || wordErrs[i]) return;
+    if (seen.has(w)) wordErrs[i] = 'dup';
+    else seen.set(w, i);
+  });
   const secretErr = wordError(nSecret);
   const authorErr = author && author.trim() ? null : 'empty';
   const wordsValid = wordErrs.every((e) => !e) && nWords.length === 4;

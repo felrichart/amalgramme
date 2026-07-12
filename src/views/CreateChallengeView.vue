@@ -56,7 +56,12 @@ async function submit(normalized) {
 <template>
   <div class="create">
     <header class="top">
-      <button class="icon-btn" type="button" @click="router.push('/community')" aria-label="communauté">
+      <button
+        class="icon-btn"
+        type="button"
+        @click="router.push('/community')"
+        aria-label="communauté"
+      >
         ←
       </button>
       <h1 class="title">{{ isEdit ? 'Modifier le défi' : 'Créer un défi' }}</h1>
@@ -79,7 +84,11 @@ async function submit(normalized) {
       @submit="submit"
     />
 
-    <UsernamePrompt :open="nameOpen" @close="nameOpen = false" @logout="router.replace('/community')" />
+    <UsernamePrompt
+      :open="nameOpen"
+      @close="nameOpen = false"
+      @logout="router.replace('/community')"
+    />
   </div>
 </template>
 

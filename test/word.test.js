@@ -76,6 +76,15 @@ describe('validateChallenge', () => {
     expect(v.ok).toBe(false);
     expect(v.buildable).toBe(false);
   });
+  it('flags a repeated index as dup', () => {
+    const v = validateChallenge({
+      author,
+      words: ['carotte', 'salade', 'carotte', 'poireau'],
+      secret: 'cornaline',
+    });
+    expect(v.ok).toBe(false);
+    expect(v.words).toEqual([null, null, 'dup', null]);
+  });
   it('fails on an empty author', () => {
     const v = validateChallenge({
       author: '',

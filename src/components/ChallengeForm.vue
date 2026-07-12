@@ -48,6 +48,7 @@ const ERRORS = {
   short: `${MIN_LETTERS} lettres minimum`,
   long: `${MAX_LETTERS} lettres maximum`,
   sep: '2 espaces / traits / apostrophes maximum',
+  dup: 'Indice déjà utilisé',
 };
 /* A hint for a word field: skip 'empty' (blank is not an error to flag yet). */
 function wordHint(err) {
@@ -139,7 +140,12 @@ function confirm() {
       <!-- Cross recap: the 4 indices in the corners, the énigme at the centre,
            mirroring the game board. -->
       <div class="cross">
-        <svg class="cross-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <svg
+          class="cross-links"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
           <line
             v-for="(pt, i) in CROSS_PTS"
             :key="i"
@@ -165,7 +171,12 @@ function confirm() {
       </div>
       <p v-if="error" class="err">{{ error }}</p>
       <div class="modal-actions">
-        <button class="cta cta-ghost" type="button" :disabled="submitting" @click="confirmOpen = false">
+        <button
+          class="cta cta-ghost"
+          type="button"
+          :disabled="submitting"
+          @click="confirmOpen = false"
+        >
           Modifier
         </button>
         <button class="cta" type="button" :disabled="submitting" @click="confirm">

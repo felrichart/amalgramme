@@ -4,7 +4,8 @@
  *   GET    /levels        list every level, newest first (never returns PINs)
  *   POST   /levels        create one (claims/verifies the author via name+PIN,
  *                         globally rate-limited, validated)
- *   PUT    /levels/:id     edit one (author must match and PIN verify)
+ *   PUT    /levels/:id     edit one (author+PIN); mints a fresh id, dropping the
+ *                         old row so in-progress solvers aren't left mismatched
  *   DELETE /levels/:id     remove one (author+PIN)
  *   POST   /levels/:id/attempt  record a play by an anonymous client (no sign-in)
  *   POST   /levels/:id/solve    record a completion by an anonymous client
@@ -112,6 +113,7 @@ function parseChallenge(body) {
   const valid =
     words.length === 4 &&
     !words.some((w) => wordError(w)) &&
+    new Set(words).size === words.length &&
     !wordError(secret) &&
     canBuild(secret, words);
   return valid ? { words, secret } : null;
@@ -288,28 +290,53 @@ export default {
       } catch {
         return json({ error: 'bad_json' }, 400);
       }
-      const level = await env.DB.prepare('SELECT author FROM levels WHERE id = ?')
+      const level = await env.DB.prepare(
+        'SELECT author, secret, words, created_at FROM levels WHERE id = ?',
+      )
         .bind(match[1])
         .first();
       if (!level) return json({ error: 'not_found' }, 404);
       const author = String(body.author ?? '').trim();
       const auth = await authAuthor(env, author, String(body.pin ?? ''), false);
-      /* Own level, or the admin editing anyone's. The author column is left
-       * untouched by the UPDATE, so an admin edit keeps the original author. */
+      /* Own level, or the admin editing anyone's. The author is preserved so an
+       * admin editing someone else's level keeps the original byline. */
       if (auth !== 'ok' || (author !== ADMIN_NAME && author !== level.author))
         return json({ error: 'forbidden' }, 403);
 
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
-      await env.DB.prepare('UPDATE levels SET secret = ?, words = ? WHERE id = ?')
-        .bind(challenge.secret, JSON.stringify(challenge.words), match[1])
-        .run();
-      const row = await env.DB.prepare(
-        'SELECT id, author, secret, words, created_at FROM levels WHERE id = ?',
-      )
-        .bind(match[1])
-        .first();
-      return json({ ...row, words: JSON.parse(row.words) });
+
+      const words = JSON.stringify(challenge.words);
+      /* No actual change (both sides normalised): keep the row as-is so a re-save
+       * doesn't needlessly break links or reset stats. */
+      if (challenge.secret === level.secret && words === level.words)
+        return json({
+          id: match[1],
+          author: level.author,
+          secret: level.secret,
+          words: JSON.parse(level.words),
+          created_at: level.created_at,
+        });
+
+      /* Content changed → mint a fresh id. Solvers key their progress by level
+       * id, so reusing it would leave anyone mid-solve with a board that no
+       * longer matches. Dropping the old row (its stats included) lets the level
+       * reappear as fresh, unsolved content. */
+      const newId = crypto.randomUUID();
+      const created_at = Date.now();
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(match[1]),
+        env.DB.prepare(
+          'INSERT INTO levels (id, author, secret, words, created_at) VALUES (?, ?, ?, ?, ?)',
+        ).bind(newId, level.author, challenge.secret, words, created_at),
+      ]);
+      return json({
+        id: newId,
+        author: level.author,
+        secret: challenge.secret,
+        words: challenge.words,
+        created_at,
+      });
     }
 
     if (match && request.method === 'DELETE') {
@@ -365,15 +392,26 @@ export default {
       if (date < serverToday()) return json({ error: 'past_date' }, 422);
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
-      const exists = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      const exists = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?')
+        .bind(date)
+        .first();
       if (exists) return json({ error: 'date_taken' }, 409);
 
       const updated_at = Date.now();
-      await env.DB.prepare('INSERT INTO dailies (date, secret, words, updated_at) VALUES (?, ?, ?, ?)')
+      await env.DB.prepare(
+        'INSERT INTO dailies (date, secret, words, updated_at) VALUES (?, ?, ?, ?)',
+      )
         .bind(date, challenge.secret, JSON.stringify(challenge.words), updated_at)
         .run();
       return json(
-        { date, secret: challenge.secret, words: challenge.words, updated_at, attempts: 0, successes: 0 },
+        {
+          date,
+          secret: challenge.secret,
+          words: challenge.words,
+          updated_at,
+          attempts: 0,
+          successes: 0,
+        },
         201,
       );
     }
@@ -413,7 +451,9 @@ export default {
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
       const updated_at = Date.now();
-      await env.DB.prepare('UPDATE dailies SET secret = ?, words = ?, updated_at = ? WHERE date = ?')
+      await env.DB.prepare(
+        'UPDATE dailies SET secret = ?, words = ?, updated_at = ? WHERE date = ?',
+      )
         .bind(challenge.secret, JSON.stringify(challenge.words), updated_at, date)
         .run();
       return json({ date, secret: challenge.secret, words: challenge.words, updated_at });
