@@ -11,7 +11,12 @@ import {
   olderDate,
   formatChallengeDate,
 } from '../data/challenges.js';
-import { isCommunityId, communityRecord, challengesByAuthor } from '../data/community.js';
+import {
+  isCommunityId,
+  communityRecord,
+  challengesByAuthor,
+  COMMUNITY_PREFIX,
+} from '../data/community.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
@@ -114,6 +119,18 @@ const secretCoachSteps = [
 const older = olderDate(date);
 function goOlderChallenge() {
   if (older) router.push(`/play/${slugForDate(older)}`);
+}
+
+/* The next community challenge by the same author, in reverse order (the one
+ * below in their newest-first list); null when this is their oldest. */
+const communityNext = (() => {
+  if (!isCommunity || !community) return null;
+  const list = challengesByAuthor(community.author);
+  const i = list.findIndex((c) => c.id === community.id);
+  return i >= 0 && i < list.length - 1 ? list[i + 1] : null;
+})();
+function goCommunityNext() {
+  if (communityNext) router.push(`/play/${COMMUNITY_PREFIX}${communityNext.id}`);
 }
 
 const g = useGameState(date);
@@ -418,9 +435,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </button>
           </template>
           <template v-else-if="isCommunity">
-            <button class="cta" type="button" @click="router.push(backTo)">Liste des défis</button>
-            <button class="cta cta-ghost" type="button" @click="router.push('/community')">
-              Communauté
+            <button
+              v-if="communityNext"
+              class="cta cta-community"
+              type="button"
+              @click="goCommunityNext"
+            >
+              Prochain défi
+            </button>
+            <button class="cta cta-ghost" type="button" @click="router.push(backTo)">
+              Liste
             </button>
           </template>
           <template v-else>
@@ -833,6 +857,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .cta-ghost {
   background: var(--panel);
   color: var(--ink);
+}
+.cta-community {
+  background: var(--violet);
 }
 .cta:active {
   transform: translate(4px, 5px);

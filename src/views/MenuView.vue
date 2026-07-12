@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { todayDate } from '../data/challenges.js';
+import { hasNewCommunityLevels } from '../data/community.js';
 import { levelProgress } from '../composables/useGameState.js';
 import { TILE_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
@@ -17,6 +18,7 @@ const router = useRouter();
 
 /* Fresh read: the view remounts on every navigation (App keys on route). */
 const daily = computed(() => levelProgress(todayDate()));
+const communityNew = computed(() => hasNewCommunityLevels());
 </script>
 
 <template>
@@ -56,6 +58,7 @@ const daily = computed(() => levelProgress(todayDate()));
 
       <button class="action community" type="button" @click="router.push('/community')">
         Défis de la communauté
+        <span v-if="communityNew" class="new-dot" aria-label="nouveaux défis"></span>
       </button>
 
       <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
@@ -193,6 +196,17 @@ const daily = computed(() => levelProgress(todayDate()));
   height: 0.6rem;
   border-radius: 50%;
   background: #fff;
+  border: 1.5px solid var(--outline);
+}
+/* New-content badge, top-right corner (violet on the community wash). */
+.new-dot {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--violet);
   border: 1.5px solid var(--outline);
 }
 </style>

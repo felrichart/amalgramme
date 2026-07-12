@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "server/**"
+      # Local wrangler/miniflare dev state isn't deployed — ignore it.
+      - "!server/.wrangler/**"
       - ".github/workflows/deploy-server.yml"
   workflow_dispatch:
 

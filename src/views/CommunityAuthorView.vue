@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { challengesByAuthor, COMMUNITY_PREFIX } from '../data/community.js';
+import { challengesByAuthor, markAuthorSeen, COMMUNITY_PREFIX } from '../data/community.js';
 import { loadCommunityLevels, deleteCommunityLevel } from '../services/community.js';
 import { levelProgress } from '../composables/useGameState.js';
 import { username, pin, isAdmin } from '../composables/useUsername.js';
@@ -23,12 +23,14 @@ function build() {
 
 const items = ref(build());
 
-/* Refresh if arriving cold (e.g. a direct link with an empty cache). */
+/* Refresh if arriving cold (e.g. a direct link with an empty cache), then clear
+ * this author's "new" badge now that the player has opened their list. */
 onMounted(async () => {
   if (!items.value.length) {
     await loadCommunityLevels();
     items.value = build();
   }
+  markAuthorSeen(author);
 });
 
 /* Delete flow: confirm, then call the backend and drop the row. */

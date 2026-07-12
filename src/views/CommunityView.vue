@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { authors } from '../data/community.js';
+import { authors, isAuthorNew, initCommunitySeen } from '../data/community.js';
 import { loadCommunityLevels } from '../services/community.js';
 import { username, pin, pinValid } from '../composables/useUsername.js';
 import UserBadge from '../components/UserBadge.vue';
@@ -11,10 +11,18 @@ const router = useRouter();
 
 const names = ref(authors());
 const loading = ref(true);
+/* Authors with a level newer than the user last saw for them; each dot clears
+ * only when its author page is opened, not by viewing this list. */
+const newByAuthor = ref({});
 
 onMounted(async () => {
   await loadCommunityLevels();
   names.value = authors();
+  const flags = {};
+  for (const name of names.value) flags[name] = isAuthorNew(name);
+  newByAuthor.value = flags;
+  /* First-ever visit sets the baseline (no dots); later visits are a no-op. */
+  initCommunitySeen();
   loading.value = false;
 });
 
@@ -38,6 +46,7 @@ function onCreate() {
       <li v-for="name in names" :key="name">
         <button class="row" type="button" @click="router.push(`/community/${name}`)">
           Défis de {{ name }}
+          <span v-if="newByAuthor[name]" class="new-dot" aria-label="nouveaux défis"></span>
         </button>
       </li>
       <li v-if="!loading && !names.length" class="empty">
@@ -143,6 +152,16 @@ function onCreate() {
   outline: none;
   transform: translate(3px, 4px);
   box-shadow: 0 0 0 var(--outline);
+}
+/* New-content badge, pushed to the row's trailing edge. */
+.new-dot {
+  margin-left: auto;
+  flex: none;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--violet);
+  border: 1.5px solid var(--outline);
 }
 .empty {
   text-align: center;
