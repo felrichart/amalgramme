@@ -18,3 +18,14 @@ CREATE TABLE IF NOT EXISTS users (
   pin TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+-- Per-level play stats: one row per (level, anonymous client). solved flips 0→1
+-- on completion. attempts = row count, successes = SUM(solved) per level.
+CREATE TABLE IF NOT EXISTS level_stats (
+  level_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  solved INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (level_id, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_level_stats_level ON level_stats (level_id);

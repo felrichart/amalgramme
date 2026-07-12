@@ -6,7 +6,14 @@
  * round trip (see COMMUNITY_CACHE_MS).
  */
 import { COMMUNITY_API, COMMUNITY_CACHE_MS } from '../config.js';
-import { getCache, setCache, cacheFetchedAt } from '../data/community.js';
+import {
+  getCache,
+  setCache,
+  cacheFetchedAt,
+  clientId,
+  hasReported,
+  markReported,
+} from '../data/community.js';
 
 /*
  * Return the community list, refreshing from the backend only when the cache is
@@ -121,6 +128,41 @@ export async function updateCommunityLevel(id, payload) {
   } catch {
     return { ok: false, error: 'Connexion impossible, réessaie plus tard.' };
   }
+}
+
+/*
+ * Report a play stat for a bare level id. `kind` is 'attempt' (opened) or
+ * 'solve' (completed). Fire-and-forget and fail-soft — stats never block or
+ * surface to the player. Reported at most once per kind per level for this
+ * client (the backend also dedupes by client id), so revisits cost nothing.
+ */
+function reportStat(id, kind) {
+  if (!COMMUNITY_API || hasReported(id, kind)) return;
+  const client = clientId();
+  if (!client) return;
+  fetch(`${COMMUNITY_API}/levels/${id}/${kind}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ client }),
+    signal: AbortSignal.timeout(5000),
+  })
+    .then((res) => {
+      /* Mark reported only on success, so a failed post retries on the next open. */
+      if (res.ok) markReported(id, kind);
+    })
+    .catch(() => {
+      /* offline / server down: leave unmarked so we try again next time */
+    });
+}
+
+/* Record that this client opened a community level (bare id). */
+export function recordAttempt(id) {
+  reportStat(id, 'attempt');
+}
+
+/* Record that this client completed a community level (bare id). */
+export function recordSolve(id) {
+  reportStat(id, 'solve');
 }
 
 /*

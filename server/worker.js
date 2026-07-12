@@ -6,6 +6,8 @@
  *                         globally rate-limited, validated)
  *   PUT    /levels/:id     edit one (author must match and PIN verify)
  *   DELETE /levels/:id     remove one (author+PIN)
+ *   POST   /levels/:id/attempt  record a play by an anonymous client (no sign-in)
+ *   POST   /levels/:id/solve    record a completion by an anonymous client
  *
  * Identity: a username is claimed by a PIN on first use and stored in `users`
  * (plaintext, by design — a casual ownership check, not a password). Reusing a
@@ -168,10 +170,47 @@ export default {
     }
 
     if (pathname === '/levels' && request.method === 'GET') {
+      /* attempts = distinct clients who opened it, successes = those who solved it. */
       const { results } = await env.DB.prepare(
-        'SELECT id, author, secret, words, created_at FROM levels ORDER BY created_at DESC',
+        `SELECT l.id, l.author, l.secret, l.words, l.created_at,
+                COALESCE(s.attempts, 0) AS attempts,
+                COALESCE(s.successes, 0) AS successes
+         FROM levels l
+         LEFT JOIN (
+           SELECT level_id, COUNT(*) AS attempts, SUM(solved) AS successes
+           FROM level_stats GROUP BY level_id
+         ) s ON s.level_id = l.id
+         ORDER BY l.created_at DESC`,
       ).all();
       return json(results.map((r) => ({ ...r, words: JSON.parse(r.words) })));
+    }
+
+    /* Record a play (attempt) or a completion (solve) for a level, keyed by the
+     * caller's anonymous client id — no sign-in required. Deduped by the
+     * (level, client) primary key: attempt inserts once; solve upserts to 1. */
+    const stat = pathname.match(/^\/levels\/([^/]+)\/(attempt|solve)$/);
+    if (stat && request.method === 'POST') {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {
+        /* no body → rejected below */
+      }
+      const client = String(body.client ?? '').slice(0, 64);
+      if (!client) return json({ error: 'no_client' }, 400);
+      const [, id, kind] = stat;
+      const level = await env.DB.prepare('SELECT 1 FROM levels WHERE id = ?').bind(id).first();
+      if (!level) return json({ error: 'not_found' }, 404);
+      const solved = kind === 'solve' ? 1 : 0;
+      await env.DB.prepare(
+        `INSERT INTO level_stats (level_id, client_id, solved, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(level_id, client_id)
+         DO UPDATE SET solved = MAX(solved, excluded.solved), updated_at = excluded.updated_at`,
+      )
+        .bind(id, client, solved, Date.now())
+        .run();
+      return json({ ok: true });
     }
 
     if (pathname === '/levels' && request.method === 'POST') {

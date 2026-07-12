@@ -11,6 +11,12 @@
 const CACHE_KEY = 'amalgramme:v3:community';
 /* Per-author map of the newest level the user has seen (see readSeen). */
 const SEEN_KEY = 'amalgramme:v3:communitySeen';
+/* Stable anonymous id for this device, so play stats count a player without a
+ * sign-in and dedupe repeat opens. */
+const CLIENT_KEY = 'amalgramme:v3:client';
+/* Which levels this client has already reported ({ <id>: { attempt, solve } }),
+ * so we hit the network at most once per kind per level. */
+const REPORTED_KEY = 'amalgramme:v3:communityReported';
 export const COMMUNITY_PREFIX = 'com-';
 
 /* True for a puzzle date/slug that names a community level. */
@@ -49,6 +55,47 @@ export function setCache(levels, fetchedAt) {
 
 function bareId(idOrDate) {
   return isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+}
+
+/* This device's anonymous id, minted (and persisted) on first use. Null only
+ * when both crypto and localStorage are unavailable, disabling stat reporting. */
+export function clientId() {
+  try {
+    let id = localStorage.getItem(CLIENT_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(CLIENT_KEY, id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+function readReported() {
+  try {
+    const val = JSON.parse(localStorage.getItem(REPORTED_KEY));
+    if (val && typeof val === 'object' && !Array.isArray(val)) return val;
+  } catch {
+    /* absent or corrupt: nothing reported yet */
+  }
+  return {};
+}
+
+/* Whether this client already reported `kind` ('attempt'|'solve') for a level. */
+export function hasReported(idOrDate, kind) {
+  return !!readReported()[bareId(idOrDate)]?.[kind];
+}
+
+/* Remember that this client reported `kind` for a level, so we don't re-post. */
+export function markReported(idOrDate, kind) {
+  const map = readReported();
+  (map[bareId(idOrDate)] ??= {})[kind] = true;
+  try {
+    localStorage.setItem(REPORTED_KEY, JSON.stringify(map));
+  } catch {
+    /* storage unavailable: we may re-post, but the backend dedupes by client */
+  }
 }
 
 /* Cached record for a slug/date ("com-<id>" or bare "<id>"), or null. */

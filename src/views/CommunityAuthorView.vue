@@ -17,7 +17,14 @@ const mine = computed(() => username.value === author || isAdmin.value);
 function build() {
   return challengesByAuthor(author).map((c) => {
     const prog = levelProgress(COMMUNITY_PREFIX + c.id);
-    return { id: c.id, number: c.number, completed: prog.completed, partial: prog.partial };
+    return {
+      id: c.id,
+      number: c.number,
+      completed: prog.completed,
+      partial: prog.partial,
+      attempts: c.attempts ?? 0,
+      successes: c.successes ?? 0,
+    };
   });
 }
 
@@ -79,8 +86,18 @@ async function confirmDelete() {
           @click="router.push(`/play/${COMMUNITY_PREFIX}${c.id}`)"
         >
           <span class="num">#{{ c.number }}</span>
-          <span v-if="c.completed" class="check" aria-label="terminé">✓</span>
-          <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
+          <span class="meta">
+            <span class="stats">
+              <span class="stat" :aria-label="`${c.attempts} joueurs`"
+                >Essayé par {{ c.attempts }} joueur{{ c.attempts > 1 ? 's' : '' }}</span
+              >
+              <span class="stat" :aria-label="`${c.successes} réussites`"
+                >Réussi par {{ c.successes }} joueur{{ c.successes > 1 ? 's' : '' }}</span
+              >
+            </span>
+            <span v-if="c.completed" class="check" aria-label="terminé">✓</span>
+            <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
+          </span>
         </button>
         <template v-if="mine">
           <button
@@ -221,14 +238,31 @@ async function confirmDelete() {
 .num {
   letter-spacing: 0.02em;
 }
-.check {
+/* Trailing group: play stats plus the completion mark, pushed to the row's end. */
+.meta {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* optional: right-align text */
+  gap: 0.15rem;
+}
+.stat {
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.check {
   font-size: 1rem;
   font-weight: 900;
   line-height: 1;
 }
 .dot {
-  margin-left: auto;
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;

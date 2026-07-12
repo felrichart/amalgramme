@@ -17,6 +17,7 @@ import {
   challengesByAuthor,
   COMMUNITY_PREFIX,
 } from '../data/community.js';
+import { recordAttempt, recordSolve } from '../services/community.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
@@ -134,6 +135,19 @@ function goCommunityNext() {
 }
 
 const g = useGameState(date);
+
+/* Community play stats: count this player's attempt on open (no sign-in needed)
+ * and their success on completion. Both are deduped per device, so a revisit or
+ * an already-finished level costs at most one no-op call. */
+if (isCommunity && community) {
+  recordAttempt(community.id);
+  if (g.state.completed) recordSolve(community.id);
+  else
+    watch(
+      () => g.state.completed,
+      (done) => done && recordSolve(community.id),
+    );
+}
 
 /* Tutorial: the intro's one action step (writing the first word) advances when
  * a word is solved; the rest advance via Suivant/Compris. */
@@ -443,9 +457,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             >
               Prochain défi
             </button>
-            <button class="cta cta-ghost" type="button" @click="router.push(backTo)">
-              Liste
-            </button>
+            <button class="cta cta-ghost" type="button" @click="router.push(backTo)">Liste</button>
           </template>
           <template v-else>
             <button v-if="older" class="cta" type="button" @click="goOlderChallenge">

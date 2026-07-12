@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "server/**"
+      - 'server/**'
       # Local wrangler/miniflare dev state isn't deployed — ignore it.
-      - "!server/.wrangler/**"
-      - ".github/workflows/deploy-server.yml"
+      - '!server/.wrangler/**'
+      - '.github/workflows/deploy-server.yml'
   workflow_dispatch:
 
 # One worker deploy at a time; don't cancel an in-progress run.
