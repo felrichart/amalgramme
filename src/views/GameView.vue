@@ -72,6 +72,21 @@ function coachNext() {
   else coachStep.value++;
 }
 
+/* A lone popup, split from the main walkthrough: it fires the first time the
+ * player opens the secret keyboard, once the main coach is done. Single step,
+ * so no advancement dots. */
+const secretCoachOpen = ref(false);
+let secretCoachSeen = false;
+const secretCoachSteps = [
+  {
+    selector: '[data-tut="dock"]',
+    shape: 'rect',
+    manual: true,
+    cta: 'Compris',
+    html: 'Appuie sur les lettres pour taper le <strong>mot énigme</strong>.',
+  },
+];
+
 /* The challenge one day older, mirroring the newest-first list; null at the
  * oldest, where the "next" button is hidden. */
 const older = olderDate(date);
@@ -88,6 +103,16 @@ if (isTutorial) {
     () => g.solved.filter(Boolean).length,
     (n, o) => {
       if (coachOpen.value && coachStep.value === 1 && n > o) coachStep.value = 2;
+    },
+  );
+  /* Reveal the keyboard popup on the first secret focus after the walkthrough. */
+  watch(
+    () => g.secretActive.value,
+    (active) => {
+      if (active && !secretCoachSeen && !coachOpen.value) {
+        secretCoachSeen = true;
+        nextTick(() => (secretCoachOpen.value = true));
+      }
     },
   );
 }
@@ -232,6 +257,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     </header>
 
     <TutorialCoach v-if="coachOpen" :steps="tutorialSteps" :step="coachStep" @next="coachNext" />
+    <TutorialCoach
+      v-if="secretCoachOpen"
+      :steps="secretCoachSteps"
+      :step="0"
+      @next="secretCoachOpen = false"
+    />
 
     <main class="board">
       <svg

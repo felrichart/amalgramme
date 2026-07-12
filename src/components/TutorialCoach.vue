@@ -171,7 +171,7 @@ onUnmounted(() => window.removeEventListener('resize', measure));
         <p v-if="current.html" class="text" v-html="current.html"></p>
         <p v-else class="text">{{ current.text }}</p>
         <div class="foot">
-          <span class="dots" aria-hidden="true">
+          <span v-if="steps.length > 1" class="dots" aria-hidden="true">
             <span v-for="(s, k) in steps" :key="k" class="dot" :class="{ on: k === step }"></span>
           </span>
           <button
