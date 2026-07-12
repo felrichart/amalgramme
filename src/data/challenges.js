@@ -13,6 +13,7 @@
  */
 import puzzles from './challenges.json';
 import { getToday } from '../utils/today.js';
+import { isCommunityId, communityPuzzle } from './community.js';
 
 export const PUZZLES = puzzles;
 
@@ -39,9 +40,11 @@ export function todayDate() {
   return _today;
 }
 
-/* Puzzle for a date ("tutoriel" → the tutorial), or null if unknown. */
+/* Puzzle for a date ("tutoriel" → the tutorial, "com-…" → a cached community
+ * level), or null if unknown. */
 export function puzzleForDate(date) {
   if (date === TUTORIAL_DATE) return TUTORIAL_PUZZLE;
+  if (isCommunityId(date)) return communityPuzzle(date);
   return PUZZLES.find((p) => p.date === date) ?? null;
 }
 

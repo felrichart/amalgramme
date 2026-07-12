@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { todayDate } from '../data/challenges.js';
 import { levelProgress } from '../composables/useGameState.js';
 import { TILE_TINTS } from '../palette.js';
+import UserBadge from '../components/UserBadge.vue';
 
 /* Title rendered as keyboard tiles: each letter cycles the five tints. */
 const BRAND = 'Amalgramme';
@@ -20,6 +21,9 @@ const daily = computed(() => levelProgress(todayDate()));
 
 <template>
   <div class="menu">
+    <div class="badge-corner">
+      <UserBadge />
+    </div>
     <header class="top">
       <h1 class="brand" aria-label="Amalgramme">
         <span
@@ -50,6 +54,10 @@ const daily = computed(() => levelProgress(todayDate()));
         Défis passés
       </button>
 
+      <button class="action community" type="button" @click="router.push('/community')">
+        Défis de la communauté
+      </button>
+
       <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
         Tutoriel
       </button>
@@ -59,6 +67,7 @@ const daily = computed(() => levelProgress(todayDate()));
 
 <style scoped>
 .menu {
+  position: relative;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -68,6 +77,12 @@ const daily = computed(() => levelProgress(todayDate()));
   max-width: 560px;
   margin: 0 auto;
   padding: 2.2rem 1.2rem 3rem;
+}
+/* Permanent user icon, pinned top-right. */
+.badge-corner {
+  position: absolute;
+  top: calc(0.9rem + env(safe-area-inset-top));
+  right: 1rem;
 }
 /* Fit to the title so the credit can sit at its right edge. */
 .top {
@@ -138,6 +153,11 @@ const daily = computed(() => levelProgress(todayDate()));
 }
 .past {
   background: var(--accent-wash);
+  color: var(--ink);
+}
+.community {
+  --tint: var(--violet);
+  background: var(--tint-wash);
   color: var(--ink);
 }
 .tuto {

@@ -1,14 +1,19 @@
+/* Separators inside an answer — space, hyphen, apostrophe — all render as a gap
+ * and are dropped from the letter wheel (see parseAnswer). */
+const SEPARATOR = /[ \-']/;
+
 /*
- * Split a raw answer into its space-free form plus gap metadata. `text` is what
- * the player's input is compared against (no spaces); `display` keeps the spaces
- * for showing the solved answer; `layout[i]` is true where a space followed that
- * letter, so the UI renders a gap between the parts of a multi-word answer.
+ * Split a raw answer into its separator-free form plus gap metadata. `text` is
+ * what the player's input is compared against (no separators); `display` keeps
+ * them for showing the solved answer; `layout[i]` is true where a separator
+ * followed that letter, so the UI renders a gap between the parts of a
+ * multi-part answer. Separators are space, hyphen and apostrophe.
  */
 function parseAnswer(raw) {
-  const text = raw.replace(/ /g, '');
+  const text = raw.replace(/[ \-']/g, '');
   const layout = [];
   raw.split('').forEach((ch) => {
-    if (ch === ' ') layout[layout.length - 1] = true;
+    if (SEPARATOR.test(ch)) layout[layout.length - 1] = true;
     else layout.push(false);
   });
   return { text, display: raw, length: text.length, layout };

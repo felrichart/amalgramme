@@ -12,6 +12,15 @@ describe('buildWords', () => {
     expect(w.layout.filter(Boolean)).toHaveLength(1);
   });
 
+  it('treats hyphen and apostrophe as gaps like a space', () => {
+    const [w] = buildWords({ words: ["aujourd'hui"], secret: 'x' });
+    expect(w.text).toBe('aujourdhui');
+    expect(w.display).toBe("aujourd'hui");
+    // gap sits after the 7th letter (index 6)
+    expect(w.layout[6]).toBe(true);
+    expect(w.layout.filter(Boolean)).toHaveLength(1);
+  });
+
   it('gives every tile a stable id, even for repeated letters', () => {
     const [w] = buildWords({ words: ['ciel'], secret: 'x' });
     expect(w.letters).toEqual([

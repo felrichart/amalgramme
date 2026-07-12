@@ -45,4 +45,7 @@ test/                          vitest: puzzle, gamestate, migration
   bank reordering. `migrateSaves()` upgrades legacy index-based saves at startup.
 - Shuffles use seeded deterministic Fisher-Yates (no `Math.random`).
 - Prettier-formatted; run `npm run format` before committing.
+
+```
+
 ```

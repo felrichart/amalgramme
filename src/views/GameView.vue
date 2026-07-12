@@ -11,6 +11,7 @@ import {
   olderDate,
   formatChallengeDate,
 } from '../data/challenges.js';
+import { isCommunityId, communityRecord, challengesByAuthor } from '../data/community.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
@@ -24,18 +25,39 @@ const router = useRouter();
  * this (about-to-be-replaced) render stays valid. */
 const today = todayDate();
 const requested = dateForSlug(route.params.slug);
-const playable = !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || requested <= today);
-if (!puzzleForDate(requested)) router.replace('/');
+const isCommunity = isCommunityId(requested);
+const playable =
+  !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || isCommunity || requested <= today);
+if (!puzzleForDate(requested)) router.replace(isCommunity ? '/community' : '/');
 else if (!playable) router.replace('/play/daily');
 const date = playable ? requested : today;
 
 const isTutorial = date === TUTORIAL_DATE;
-const isDaily = date === today;
+const isDaily = !isCommunity && date === today;
 /* The tutorial always starts fresh — wipe its saved state before state loads. */
 if (isTutorial) resetLevel(date);
-const title = isTutorial ? 'Tutoriel' : isDaily ? 'Défi quotidien' : formatChallengeDate(date);
-/* Back lands where the player likely came from: menu for daily/tutorial, list otherwise. */
-const backTo = isDaily || isTutorial ? '/' : '/challenges';
+
+/* Community level: resolve its author + display number for the title/back link. */
+const community = isCommunity ? communityRecord(date) : null;
+const communityNumber = community
+  ? (challengesByAuthor(community.author).find((c) => c.id === community.id)?.number ?? null)
+  : null;
+
+const title = isTutorial
+  ? 'Tutoriel'
+  : isDaily
+    ? 'Défi quotidien'
+    : isCommunity
+      ? `Défi de ${community?.author ?? ''}${communityNumber ? ` #${communityNumber}` : ''}`
+      : formatChallengeDate(date);
+/* Back lands where the player likely came from: menu for daily/tutorial, the
+ * author's list for community, the challenge list otherwise. */
+const backTo =
+  isDaily || isTutorial
+    ? '/'
+    : isCommunity
+      ? `/community/${community?.author ?? ''}`
+      : '/challenges';
 
 /* Coach popups over the board. Steps alternate between "action" (advances when
  * the parent sees the taught gesture) and "manual" (a Suivant button). It can't
@@ -393,6 +415,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </button>
             <button class="cta cta-ghost" type="button" @click="router.push('/')">
               Retour au menu
+            </button>
+          </template>
+          <template v-else-if="isCommunity">
+            <button class="cta" type="button" @click="router.push(backTo)">Liste des défis</button>
+            <button class="cta cta-ghost" type="button" @click="router.push('/community')">
+              Communauté
             </button>
           </template>
           <template v-else>
