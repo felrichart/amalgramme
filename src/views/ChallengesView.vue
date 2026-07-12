@@ -1,23 +1,35 @@
 <script setup>
-import { computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { pastChallenges, formatChallengeDate } from '../data/challenges.js';
+import { loadDailies } from '../services/dailies.js';
 import { levelProgress } from '../composables/useGameState.js';
 
 const router = useRouter();
 
 /* Past challenges only (today's daily lives on the menu), newest first. */
-const items = computed(() =>
-  pastChallenges().map((p) => {
+function build() {
+  return pastChallenges().map((p) => {
     const prog = levelProgress(p.date);
     return {
       date: p.date,
       label: formatChallengeDate(p.date),
       completed: prog.completed,
       partial: prog.partial,
+      attempts: p.attempts ?? 0,
+      successes: p.successes ?? 0,
     };
-  }),
-);
+  });
+}
+
+const items = ref(build());
+
+/* Force a fresh fetch on every open so play counts reflect the visit that just
+ * happened (e.g. an attempt recorded on the daily the player came back from). */
+onMounted(async () => {
+  await loadDailies(0);
+  items.value = build();
+});
 </script>
 
 <template>
@@ -37,8 +49,16 @@ const items = computed(() =>
           @click="router.push(`/play/${c.date}`)"
         >
           <span class="date">{{ c.label }}</span>
-          <span v-if="c.completed" class="check" aria-label="terminé">✓</span>
-          <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
+          <span class="meta">
+            <span class="stats">
+              <span class="stat" :aria-label="`${c.successes} réussites sur ${c.attempts}`"
+                >Réussi par {{ c.successes }} joueur{{ c.successes > 1 ? 's' : '' }} sur
+                {{ c.attempts }}</span
+              >
+            </span>
+            <span v-if="c.completed" class="check" aria-label="terminé">✓</span>
+            <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
+          </span>
         </button>
       </li>
     </ul>
@@ -147,15 +167,32 @@ const items = computed(() =>
 .date {
   letter-spacing: 0.01em;
 }
-.check {
+/* Trailing group: play stats plus the completion mark, pushed to the row's end. */
+.meta {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+.stat {
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.check {
   font-size: 1rem;
   font-weight: 900;
   line-height: 1;
 }
 /* Strong accent circle: reads against the washed in-progress row. */
 .dot {
-  margin-left: auto;
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;

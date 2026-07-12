@@ -17,7 +17,12 @@ import {
   challengesByAuthor,
   COMMUNITY_PREFIX,
 } from '../data/community.js';
+import { dailyRecord } from '../data/dailies.js';
 import { recordAttempt, recordSolve } from '../services/community.js';
+import {
+  recordAttempt as recordDailyAttempt,
+  recordSolve as recordDailySolve,
+} from '../services/dailies.js';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
@@ -136,6 +141,16 @@ function goCommunityNext() {
 
 const g = useGameState(date);
 
+/* Cached play stats for the finish screen — community levels and dailies both
+ * carry attempts/successes; null for the tutorial. Floored to 1 since reaching
+ * the finish panel means this player attempted and solved it, whether or not
+ * the cache (fetched before this solve was reported) reflects them yet. */
+const statRecord = isCommunity ? community : isTutorial ? null : dailyRecord(date);
+const finishStats = statRecord && {
+  attempts: Math.max(statRecord.attempts ?? 0, 1),
+  successes: Math.max(statRecord.successes ?? 0, 1),
+};
+
 /* Community play stats: count this player's attempt on open (no sign-in needed)
  * and their success on completion. Both are deduped per device, so a revisit or
  * an already-finished level costs at most one no-op call. */
@@ -146,6 +161,18 @@ if (isCommunity && community) {
     watch(
       () => g.state.completed,
       (done) => done && recordSolve(community.id),
+    );
+}
+
+/* Daily play stats (today's daily or a past one): same anonymous per-device
+ * count as community, keyed by the puzzle date. Excludes the tutorial. */
+if (!isCommunity && !isTutorial) {
+  recordDailyAttempt(date);
+  if (g.state.completed) recordDailySolve(date);
+  else
+    watch(
+      () => g.state.completed,
+      (done) => done && recordDailySolve(date),
     );
 }
 
@@ -434,6 +461,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <span class="finish-mark" aria-hidden="true">✓</span>
           <span class="finish-bravo">Bravo</span>
         </div>
+        <p v-if="finishStats" class="finish-stats">
+          Réussi par {{ finishStats.successes }} joueur{{
+            finishStats.successes > 1 ? 's' : ''
+          }}
+          sur {{ finishStats.attempts }}
+        </p>
         <div class="finish-actions">
           <template v-if="isTutorial">
             <button class="cta cta-ghost" type="button" @click="router.push('/')">
@@ -827,6 +860,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.9rem;
   font-weight: 900;
   color: var(--ink);
+}
+.finish-stats {
+  margin: -0.4rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--muted);
+  text-align: center;
 }
 .finish-mark {
   width: 2.4rem;

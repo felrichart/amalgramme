@@ -1,6 +1,6 @@
 import { reactive, computed, watch, ref } from 'vue';
 import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
-import { PUZZLES, puzzleForDate } from '../data/challenges.js';
+import { listDailies, puzzleForDate } from '../data/challenges.js';
 
 const STORAGE_PREFIX = 'amalgramme:v3:level:';
 
@@ -11,16 +11,18 @@ function storageKey(date) {
 }
 
 /* One-time migration of the old index-based saves to date keys. Assumes saves
- * predate the tutorial-at-index-0 shift, so index i maps to PUZZLES[i]. Idempotent:
- * numeric keys are removed as converted, and an existing date key is never overwritten.
- * Call once at startup before mounting, so the first level load reads migrated state. */
+ * predate the tutorial-at-index-0 shift, so index i maps to the i-th daily.
+ * Idempotent: numeric keys are removed as converted, and an existing date key is
+ * never overwritten. No-op when the bank is empty (cold client). Call once at
+ * startup after the daily warm-up, so the first level load reads migrated state. */
 export function migrateSaves() {
   try {
-    for (let i = 0; i < PUZZLES.length; i++) {
+    const dailies = listDailies();
+    for (let i = 0; i < dailies.length; i++) {
       const oldKey = STORAGE_PREFIX + i;
       const raw = localStorage.getItem(oldKey);
       if (raw === null) continue;
-      const newKey = storageKey(PUZZLES[i].date);
+      const newKey = storageKey(dailies[i].date);
       if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, raw);
       localStorage.removeItem(oldKey);
     }
@@ -46,6 +48,25 @@ export function levelProgress(date) {
   } catch {
     return { found: 0, secretFound: false, completed: false, partial: false };
   }
+}
+
+/* Every persisted level's date and whether it was completed, for the startup
+ * backfill that reports pre-existing local saves to the stats backend (players
+ * who progressed before stat reporting existed). Only started/finished levels. */
+export function savedProgress() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(STORAGE_PREFIX)) continue;
+      const date = k.slice(STORAGE_PREFIX.length);
+      const prog = levelProgress(date);
+      if (prog.completed || prog.partial) out.push({ date, completed: prog.completed });
+    }
+  } catch {
+    /* storage unavailable: nothing to back up */
+  }
+  return out;
 }
 
 /* Wipe one level's saved state (e.g. so the tutorial always starts fresh). */

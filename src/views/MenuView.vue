@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { todayDate } from '../data/challenges.js';
 import { hasNewCommunityLevels } from '../data/community.js';
+import { isAdmin } from '../composables/useUsername.js';
 import { levelProgress } from '../composables/useGameState.js';
 import { TILE_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
@@ -63,6 +64,10 @@ const communityNew = computed(() => hasNewCommunityLevels());
 
       <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
         Tutoriel
+      </button>
+
+      <button v-if="isAdmin" class="action admin" type="button" @click="router.push('/admin')">
+        Admin
       </button>
     </nav>
   </div>
@@ -166,6 +171,12 @@ const communityNew = computed(() => hasNewCommunityLevels());
 .tuto {
   background: var(--panel);
   color: var(--ink);
+}
+/* Admin: only rendered for the cara+ account; a quiet dashed panel. */
+.admin {
+  background: var(--panel);
+  color: var(--ink);
+  border-style: dashed;
 }
 
 /* Attribution, under the title. */

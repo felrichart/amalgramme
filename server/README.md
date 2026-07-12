@@ -74,6 +74,25 @@ exercise the API locally; leave it empty to run the app offline from cache.
 | POST   | `/levels`     | `{author, pin, secret, words[4]}` | claims/verifies the name via PIN; rate-limited; 429 over the cap           |
 | PUT    | `/levels/:id` | `{author, pin, secret, words[4]}` | author must match + PIN verify (or the `cara+` account)                    |
 | DELETE | `/levels/:id` | `{author, pin}`                   | owner PIN (or the `cara+` account)                                         |
+| GET    | `/dailies`    | —                                 | all dailies (with play stats), oldest first                                |
+| POST   | `/dailies`    | `{author, pin, date, secret, words[4]}` | admin (`cara+`) only; `date` must be today or later                  |
+| PUT    | `/dailies/:date` | `{author, pin, secret, words[4]}` | admin only; `date` must be today or later                               |
+| DELETE | `/dailies/:date` | `{author, pin}`                 | admin only; `date` must be today or later                                  |
+| POST   | `/admin/export` | `{author, pin}`                 | admin only; full DB dump (JSON) for a manual backup                        |
+
+## Daily challenges
+
+Dailies live in the `dailies` table (keyed by ISO date), seeded from the original
+`src/data/challenges.json` by migration `0005_seed_dailies.sql`. The admin (`cara+`)
+edits them from the in-app dashboard at `/admin`; the Worker only accepts a create,
+edit or delete for **today or a future date** (Europe/Paris), so past challenges stay
+frozen. Play stats reuse `level_stats` (the date is the `level_id`).
+
+## Backup
+
+There's no automatic backup. From the dashboard, "Télécharger la sauvegarde" calls
+`POST /admin/export` (admin PIN) and downloads the whole DB as JSON. From the CLI you
+can also `wrangler d1 export amalgramme --remote --output backup.sql`.
 
 ## Moderation
 

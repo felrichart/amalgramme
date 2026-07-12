@@ -1,0 +1,40 @@
+-- Seed the dailies table from the original bundled challenges.json (37
+-- rows). Generated; re-runnable via INSERT OR IGNORE so applying twice is a no-op.
+-- updated_at is a literal 0 (these predate the admin dashboard).
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-18', 'suite', '["appartement","sequence","apres","logique"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-19', 'couteau', '["coquillage","tranchant","aiguiser","blanche"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-20', 'console', '["meuble","jeu video","terminal","joystick"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-21', 'grue', '["chantier","heron","engin","hauteur"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-22', 'mule', '["pantoufle","obstine","jument","transport"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-23', 'langue', '["bouche","dialecte","anglais","papille"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-24', 'batterie', '["recharge","cuisine","tambour","voiture"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-25', 'franc', '["monnaie","sincere","france","peuple"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-26', 'carbone', '["charbon","respirer","diamant","quatorze"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-27', 'course', '["athlete","supermarche","poursuite","vitesse"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-28', 'metal', '["aimant","musique","alliage","cuivre"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-29', 'fantome', '["spectre","defunt","opera","cimetiere"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-06-30', 'corail', '["ocean","barriere","polype","couleur"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-01', 'cirque', '["chapiteau","equestre","acrobate","spectacle"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-02', 'planche', '["charpente","theatre","skateboard","rectangle"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-03', 'voler', '["aviation","papillon","derober","planer"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-04', 'melon', '["orange","spherique","aliment","chapeau"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-05', 'creche', '["garderie","couche","roi mage","nativite"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-06', 'pigeon', '["plumage","urbain","voyageur","arnaque"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-07', 'verre', '["vitre","gobelet","lunette","fragile"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-08', 'baguette', '["baton","magique","tradition","chinoise"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-09', 'castor', '["barrage","queue","rongeur","contes"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-10', 'defense', '["securite","elephant","fortifier","interdit"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-11', 'agent', '["policier","secret","espionnage","immobilier"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-12', 'mars', '["planete","printemps","guerre","olympe"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-13', 'salsa', '["danser","sauce","porto rico","latino"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-14', 'baleine', '["cachalot","bleue","plancton","mammifere"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-15', 'moule', '["gateau","frite","coquille","mariniere"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-16', 'avocat', '["tribunal","noyau","victime","california"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-17', 'eclair', '["orage","patisserie","electrique","creme"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-18', 'polaire', '["banquise","ours","gilet","froid"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-19', 'mine', '["metal","profond","visage","corons"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-20', 'lettre', '["alphabet","courrier","lecture","phrase"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-21', 'ballon', '["gonfler","baudruche","sport","plastique"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-22', 'couche', '["rajouter","changer","peinture","culotte"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-23', 'maison', '["domicile","jardin","hantee","close"]', 0);
+INSERT OR IGNORE INTO dailies (date, secret, words, updated_at) VALUES ('2026-07-24', 'peche', '["peau","nectarine","princesse","hamecon"]', 0);

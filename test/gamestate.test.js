@@ -5,7 +5,17 @@ import { useGameState } from '../src/composables/useGameState.js';
 const KEY = 'amalgramme:v3:level:';
 const DATE = '2026-07-07'; // secret "verre", word 0 = "vitre"
 
-beforeEach(() => localStorage.clear());
+/* useGameState resolves the puzzle via the daily cache; seed it. */
+beforeEach(() => {
+  localStorage.clear();
+  localStorage.setItem(
+    'amalgramme:v3:dailies',
+    JSON.stringify({
+      levels: [{ date: DATE, secret: 'verre', words: ['vitre', 'gobelet', 'lunette', 'fragile'] }],
+      fetchedAt: 1,
+    }),
+  );
+});
 
 async function typeWord(g, word) {
   for (const ch of word) g.typeLetter(ch);

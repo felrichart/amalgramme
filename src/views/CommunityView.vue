@@ -1,8 +1,15 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { authors, isAuthorNew, initCommunitySeen } from '../data/community.js';
+import {
+  authors,
+  isAuthorNew,
+  initCommunitySeen,
+  challengesByAuthor,
+  COMMUNITY_PREFIX,
+} from '../data/community.js';
 import { loadCommunityLevels } from '../services/community.js';
+import { levelProgress } from '../composables/useGameState.js';
 import { username, pin, pinValid } from '../composables/useUsername.js';
 import UserBadge from '../components/UserBadge.vue';
 import UsernamePrompt from '../components/UsernamePrompt.vue';
@@ -14,13 +21,27 @@ const loading = ref(true);
 /* Authors with a level newer than the user last saw for them; each dot clears
  * only when its author page is opened, not by viewing this list. */
 const newByAuthor = ref({});
+/* Per-author { done, total }: how many of their challenges this device finished. */
+const progressByAuthor = ref({});
 
-onMounted(async () => {
-  await loadCommunityLevels();
+function refresh() {
   names.value = authors();
   const flags = {};
-  for (const name of names.value) flags[name] = isAuthorNew(name);
+  const progress = {};
+  for (const name of names.value) {
+    flags[name] = isAuthorNew(name);
+    const list = challengesByAuthor(name);
+    const done = list.filter((c) => levelProgress(COMMUNITY_PREFIX + c.id).completed).length;
+    progress[name] = { done, total: list.length };
+  }
   newByAuthor.value = flags;
+  progressByAuthor.value = progress;
+}
+
+/* Force a fresh fetch on every open so play counts stay current. */
+onMounted(async () => {
+  await loadCommunityLevels(0);
+  refresh();
   /* First-ever visit sets the baseline (no dots); later visits are a no-op. */
   initCommunitySeen();
   loading.value = false;
@@ -47,6 +68,12 @@ function onCreate() {
         <button class="row" type="button" @click="router.push(`/community/${name}`)">
           Défis de {{ name }}
           <span v-if="newByAuthor[name]" class="notif">NOUVEAU !</span>
+          <span
+            v-if="progressByAuthor[name]"
+            class="count"
+            :aria-label="`${progressByAuthor[name].done} sur ${progressByAuthor[name].total} terminés`"
+            >{{ progressByAuthor[name].done }}/{{ progressByAuthor[name].total }}</span
+          >
         </button>
       </li>
       <li v-if="!loading && !names.length" class="empty">
@@ -161,6 +188,23 @@ function onCreate() {
   color: var(--violet);
   font-size: 0.75rem;
   font-weight: 900;
+}
+/* Completed-count "N/Q", pinned to the trailing edge (after the badge if any). */
+.count {
+  margin-left: auto;
+  flex: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.7rem;
+  background: var(--tint);
+  color: #fff;
+  border: 1.5px solid var(--outline);
+  font-size: 0.85rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+/* When the "new" badge is present, it takes the auto margin; the count follows. */
+.notif + .count {
+  margin-left: 0.4rem;
 }
 .empty {
   text-align: center;

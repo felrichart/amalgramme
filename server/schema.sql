@@ -19,8 +19,17 @@ CREATE TABLE IF NOT EXISTS users (
   created_at INTEGER NOT NULL
 );
 
--- Per-level play stats: one row per (level, anonymous client). solved flips 0→1
--- on completion. attempts = row count, successes = SUM(solved) per level.
+-- Daily challenges, keyed by ISO date (edited at runtime via the admin dashboard).
+CREATE TABLE IF NOT EXISTS dailies (
+  date TEXT PRIMARY KEY,
+  secret TEXT NOT NULL,
+  words TEXT NOT NULL,       -- JSON array of 4 index words
+  updated_at INTEGER NOT NULL
+);
+
+-- Per-puzzle play stats: one row per (puzzle, anonymous client). solved flips 0→1
+-- on completion. attempts = row count, successes = SUM(solved) per puzzle. level_id
+-- is a community UUID or a daily's ISO date (the two id spaces never collide).
 CREATE TABLE IF NOT EXISTS level_stats (
   level_id TEXT NOT NULL,
   client_id TEXT NOT NULL,

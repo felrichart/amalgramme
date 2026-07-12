@@ -4,6 +4,8 @@ import ChallengesView from './views/ChallengesView.vue';
 import CommunityView from './views/CommunityView.vue';
 import CommunityAuthorView from './views/CommunityAuthorView.vue';
 import CreateChallengeView from './views/CreateChallengeView.vue';
+import AdminView from './views/AdminView.vue';
+import AdminDailyEditView from './views/AdminDailyEditView.vue';
 import GameView from './views/GameView.vue';
 
 const routes = [
@@ -13,6 +15,9 @@ const routes = [
   { path: '/community/create', component: CreateChallengeView },
   { path: '/community/edit/:id', component: CreateChallengeView },
   { path: '/community/:author', component: CommunityAuthorView },
+  { path: '/admin', component: AdminView },
+  { path: '/admin/new', component: AdminDailyEditView },
+  { path: '/admin/edit/:date', component: AdminDailyEditView },
   { path: '/play/:slug', component: GameView },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];

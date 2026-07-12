@@ -23,8 +23,7 @@ import {
  */
 export async function loadCommunityLevels(maxAgeMs = COMMUNITY_CACHE_MS) {
   if (!COMMUNITY_API) return getCache();
-  // Temporarly disable cache, to properly update stats
-  if (false && maxAgeMs > 0 && Date.now() - cacheFetchedAt() < maxAgeMs) return getCache();
+  if (maxAgeMs > 0 && Date.now() - cacheFetchedAt() < maxAgeMs) return getCache();
   try {
     const res = await fetch(`${COMMUNITY_API}/levels`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`levels API: HTTP ${res.status}`);

@@ -8,6 +8,12 @@
  *   DELETE /levels/:id     remove one (author+PIN)
  *   POST   /levels/:id/attempt  record a play by an anonymous client (no sign-in)
  *   POST   /levels/:id/solve    record a completion by an anonymous client
+ *   GET    /dailies         list every daily (with play stats), oldest first
+ *   POST   /dailies         create one (admin only, date must be today or later)
+ *   PUT    /dailies/:date    edit one (admin only, today or later)
+ *   DELETE /dailies/:date    remove one (admin only, today or later)
+ *   POST   /dailies/:date/attempt|solve  record an anonymous play, like /levels
+ *   POST   /admin/export    full DB dump for the admin's manual backup
  *
  * Identity: a username is claimed by a PIN on first use and stored in `users`
  * (plaintext, by design — a casual ownership check, not a password). Reusing a
@@ -128,6 +134,38 @@ async function authAuthor(env, name, pin, create) {
   return 'ok';
 }
 
+/* Server-authoritative "today" (YYYY-MM-DD) in Europe/Paris — the boundary for
+ * the daily today-and-future edit guard. `en-CA` formats a Date as ISO. */
+function serverToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+}
+
+/* Authorise the admin (cara+) for a privileged daily/backup action. Returns an
+ * error code ('no_pin' | 'forbidden') or null when the caller is the admin with
+ * a valid PIN. */
+async function requireAdmin(env, body) {
+  const author = String(body.author ?? '').trim();
+  const auth = await authAuthor(env, author, String(body.pin ?? ''), false);
+  if (auth === 'no_pin') return 'no_pin';
+  if (auth !== 'ok' || author !== ADMIN_NAME) return 'forbidden';
+  return null;
+}
+
+/* Upsert one anonymous play into level_stats. `id` is a community UUID or a
+ * daily's ISO date; `kind` is 'attempt' (solved stays/inserts 0) or 'solve'
+ * (upserts to 1). Deduped by the (level, client) primary key. */
+async function recordPlay(env, id, kind, client) {
+  const solved = kind === 'solve' ? 1 : 0;
+  await env.DB.prepare(
+    `INSERT INTO level_stats (level_id, client_id, solved, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(level_id, client_id)
+     DO UPDATE SET solved = MAX(solved, excluded.solved), updated_at = excluded.updated_at`,
+  )
+    .bind(id, client, solved, Date.now())
+    .run();
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
@@ -201,15 +239,7 @@ export default {
       const [, id, kind] = stat;
       const level = await env.DB.prepare('SELECT 1 FROM levels WHERE id = ?').bind(id).first();
       if (!level) return json({ error: 'not_found' }, 404);
-      const solved = kind === 'solve' ? 1 : 0;
-      await env.DB.prepare(
-        `INSERT INTO level_stats (level_id, client_id, solved, updated_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(level_id, client_id)
-         DO UPDATE SET solved = MAX(solved, excluded.solved), updated_at = excluded.updated_at`,
-      )
-        .bind(id, client, solved, Date.now())
-        .run();
+      await recordPlay(env, id, kind, client);
       return json({ ok: true });
     }
 
@@ -300,6 +330,136 @@ export default {
         return json({ error: 'forbidden' }, 403);
       await env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(match[1]).run();
       return json({ ok: true });
+    }
+
+    /* --- Daily challenges: like /levels, but keyed by ISO date and editable
+     * only by the admin, only for today and future dates. --- */
+
+    if (pathname === '/dailies' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT d.date, d.secret, d.words, d.updated_at,
+                COALESCE(s.attempts, 0) AS attempts,
+                COALESCE(s.successes, 0) AS successes
+         FROM dailies d
+         LEFT JOIN (
+           SELECT level_id, COUNT(*) AS attempts, SUM(solved) AS successes
+           FROM level_stats GROUP BY level_id
+         ) s ON s.level_id = d.date
+         ORDER BY d.date`,
+      ).all();
+      return json(results.map((r) => ({ ...r, words: JSON.parse(r.words) })));
+    }
+
+    if (pathname === '/dailies' && request.method === 'POST') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'bad_json' }, 400);
+      }
+      const adminErr = await requireAdmin(env, body);
+      if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
+
+      const date = String(body.date ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: 'bad_date' }, 422);
+      if (date < serverToday()) return json({ error: 'past_date' }, 422);
+      const challenge = parseChallenge(body);
+      if (!challenge) return json({ error: 'invalid' }, 422);
+      const exists = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      if (exists) return json({ error: 'date_taken' }, 409);
+
+      const updated_at = Date.now();
+      await env.DB.prepare('INSERT INTO dailies (date, secret, words, updated_at) VALUES (?, ?, ?, ?)')
+        .bind(date, challenge.secret, JSON.stringify(challenge.words), updated_at)
+        .run();
+      return json(
+        { date, secret: challenge.secret, words: challenge.words, updated_at, attempts: 0, successes: 0 },
+        201,
+      );
+    }
+
+    const dailyStat = pathname.match(/^\/dailies\/([^/]+)\/(attempt|solve)$/);
+    if (dailyStat && request.method === 'POST') {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {
+        /* no body → rejected below */
+      }
+      const client = String(body.client ?? '').slice(0, 64);
+      if (!client) return json({ error: 'no_client' }, 400);
+      const [, date, kind] = dailyStat;
+      const row = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      if (!row) return json({ error: 'not_found' }, 404);
+      await recordPlay(env, date, kind, client);
+      return json({ ok: true });
+    }
+
+    const dailyMatch = pathname.match(/^\/dailies\/([^/]+)$/);
+
+    if (dailyMatch && request.method === 'PUT') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'bad_json' }, 400);
+      }
+      const adminErr = await requireAdmin(env, body);
+      if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
+      const date = dailyMatch[1];
+      const row = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      if (!row) return json({ error: 'not_found' }, 404);
+      if (date < serverToday()) return json({ error: 'past_date' }, 422);
+      const challenge = parseChallenge(body);
+      if (!challenge) return json({ error: 'invalid' }, 422);
+      const updated_at = Date.now();
+      await env.DB.prepare('UPDATE dailies SET secret = ?, words = ?, updated_at = ? WHERE date = ?')
+        .bind(challenge.secret, JSON.stringify(challenge.words), updated_at, date)
+        .run();
+      return json({ date, secret: challenge.secret, words: challenge.words, updated_at });
+    }
+
+    if (dailyMatch && request.method === 'DELETE') {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {
+        /* no body → not authorised below */
+      }
+      const adminErr = await requireAdmin(env, body);
+      if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
+      const date = dailyMatch[1];
+      const row = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      if (!row) return json({ error: 'not_found' }, 404);
+      if (date < serverToday()) return json({ error: 'past_date' }, 422);
+      await env.DB.prepare('DELETE FROM dailies WHERE date = ?').bind(date).run();
+      return json({ ok: true });
+    }
+
+    /* Full DB dump for the admin's manual backup (contains plaintext PINs, by
+     * the same casual-auth design as the rest — admin-only). */
+    if (pathname === '/admin/export' && request.method === 'POST') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'bad_json' }, 400);
+      }
+      const adminErr = await requireAdmin(env, body);
+      if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
+      const [dailies, levels, users, stats] = await Promise.all([
+        env.DB.prepare('SELECT * FROM dailies ORDER BY date').all(),
+        env.DB.prepare('SELECT * FROM levels ORDER BY created_at').all(),
+        env.DB.prepare('SELECT * FROM users ORDER BY created_at').all(),
+        env.DB.prepare('SELECT * FROM level_stats').all(),
+      ]);
+      return json({
+        exported_at: Date.now(),
+        dailies: dailies.results,
+        levels: levels.results,
+        users: users.results,
+        level_stats: stats.results,
+      });
     }
 
     return json({ error: 'not_found' }, 404);

@@ -1,15 +1,29 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { migrateSaves, levelProgress } from '../src/composables/useGameState.js';
-import { PUZZLES } from '../src/data/challenges.js';
+import { listDailies } from '../src/data/challenges.js';
 
 const V3 = 'amalgramme:v3:level:';
 const read = (k) => JSON.parse(localStorage.getItem(k));
 
-beforeEach(() => localStorage.clear());
+/* migrateSaves maps a legacy index i onto the i-th daily, so seed the daily
+ * cache (the bank now lives in D1 + this localStorage cache, not challenges.json). */
+beforeEach(() => {
+  localStorage.clear();
+  localStorage.setItem(
+    'amalgramme:v3:dailies',
+    JSON.stringify({
+      levels: [
+        { date: '2026-06-18', secret: 'suite', words: ['a', 'b', 'c', 'd'] },
+        { date: '2026-06-19', secret: 'couteau', words: ['a', 'b', 'c', 'd'] },
+      ],
+      fetchedAt: 1,
+    }),
+  );
+});
 
 describe('migrateSaves: legacy index keys → date keys', () => {
   it('moves an index save to its puzzle date key and preserves progress', () => {
-    const date = PUZZLES[0].date;
+    const date = listDailies()[0].date;
     localStorage.setItem(
       V3 + '0',
       JSON.stringify({
@@ -29,7 +43,7 @@ describe('migrateSaves: legacy index keys → date keys', () => {
   });
 
   it('never overwrites an existing date key', () => {
-    const date = PUZZLES[0].date;
+    const date = listDailies()[0].date;
     localStorage.setItem(V3 + date, JSON.stringify({ solved: [true, true, true, true] }));
     localStorage.setItem(V3 + '0', JSON.stringify({ solved: [false, false, false, false] }));
 
@@ -40,7 +54,7 @@ describe('migrateSaves: legacy index keys → date keys', () => {
   });
 
   it('is a no-op when there are no legacy keys', () => {
-    const date = PUZZLES[0].date;
+    const date = listDailies()[0].date;
     localStorage.setItem(V3 + date, JSON.stringify({ solved: [true, false, false, false] }));
 
     migrateSaves();

@@ -4,6 +4,8 @@
  * so `npm run dev` never talks to prod. Empty → no backend: the community section
  * is read-only from the local cache and creation is disabled. Trailing slash stripped.
  */
+/* The daily bank (services/dailies.js) and the admin dashboard share this same
+ * Worker — the name is historical (it began as community-only). */
 export const COMMUNITY_API = (import.meta.env.VITE_COMMUNITY_API ?? '').replace(/\/$/, '');
 
 /* Reuse the cached community list for this long before hitting the network again.
