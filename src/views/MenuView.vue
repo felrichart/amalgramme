@@ -58,7 +58,7 @@ const communityNew = computed(() => hasNewCommunityLevels());
 
       <button class="action community" type="button" @click="router.push('/community')">
         Défis de la communauté
-        <span v-if="communityNew" class="new-dot" aria-label="nouveaux défis"></span>
+        <span v-if="communityNew" class="notif" aria-label="nouveaux défis">!</span>
       </button>
 
       <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
@@ -199,14 +199,13 @@ const communityNew = computed(() => hasNewCommunityLevels());
   border: 1.5px solid var(--outline);
 }
 /* New-content badge, top-right corner (violet on the community wash). */
-.new-dot {
+.notif {
   position: absolute;
-  top: 0.7rem;
+  top: 0.55rem;
   right: 0.7rem;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  background: var(--violet);
-  border: 1.5px solid var(--outline);
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--violet);
 }
 </style>

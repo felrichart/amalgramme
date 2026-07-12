@@ -46,7 +46,7 @@ function onCreate() {
       <li v-for="name in names" :key="name">
         <button class="row" type="button" @click="router.push(`/community/${name}`)">
           Défis de {{ name }}
-          <span v-if="newByAuthor[name]" class="new-dot" aria-label="nouveaux défis"></span>
+          <span v-if="newByAuthor[name]" class="notif">NOUVEAU !</span>
         </button>
       </li>
       <li v-if="!loading && !names.length" class="empty">
@@ -154,14 +154,13 @@ function onCreate() {
   box-shadow: 0 0 0 var(--outline);
 }
 /* New-content badge, pushed to the row's trailing edge. */
-.new-dot {
+.notif {
   margin-left: auto;
   flex: none;
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--violet);
-  border: 1.5px solid var(--outline);
+  padding: 0.2rem 0.5rem;
+  color: var(--violet);
+  font-size: 0.75rem;
+  font-weight: 900;
 }
 .empty {
   text-align: center;
