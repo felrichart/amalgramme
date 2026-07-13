@@ -697,6 +697,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .secret.found {
   background: var(--accent);
   box-shadow: var(--pop-lg);
+  /* Solved: lock the coin raised — no press/select movement, not interactive. */
+  transform: none;
+  cursor: default;
+  pointer-events: none;
 }
 .secret.found .sbox {
   background: rgba(255, 255, 255, 0.22);
