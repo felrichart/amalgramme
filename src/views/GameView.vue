@@ -673,7 +673,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 /* Wrong full guess: fade the tiles and strike each with a diagonal bar. */
 .secret-boxes.wrong .sbox {
   position: relative;
-  opacity: 0.45;
+  opacity: 0.75;
 }
 .secret-boxes.wrong .sbox::after {
   content: '';
