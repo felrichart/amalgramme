@@ -9,6 +9,7 @@ const open = ref(false);
 <template>
   <button
     class="badge"
+    :class="{ unset: !username }"
     type="button"
     :aria-label="username ? `Joueur : ${username}` : 'Choisir un nom de joueur'"
     :title="username || 'Nom de joueur'"
@@ -24,7 +25,6 @@ const open = ref(false);
         stroke-linecap="round"
       />
     </svg>
-    <span v-if="!username" class="unset" aria-hidden="true"></span>
   </button>
   <UsernamePrompt :open="open" @close="open = false" />
 </template>
@@ -38,14 +38,18 @@ const open = ref(false);
   display: grid;
   place-items: center;
   border-radius: 0.9rem;
-  color: var(--ink);
+  color: #fff;
   cursor: pointer;
-  background: var(--panel);
+  background: var(--accent);
   border: var(--outline-w) solid var(--outline);
   box-shadow: var(--pop-sm);
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease;
+}
+.badge.unset {
+  background: var(--panel);
+  color: var(--ink);
 }
 .badge:active {
   transform: translate(3px, 4px);
@@ -54,16 +58,5 @@ const open = ref(false);
 .badge:focus-visible {
   outline: 2px solid var(--outline);
   outline-offset: 2px;
-}
-/* Dot marking that no name is set yet. */
-.unset {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--pink);
-  border: 1.5px solid var(--outline);
 }
 </style>
