@@ -30,8 +30,6 @@ jobs:
       - run: npm install --no-audit --no-fund
       # Project sites are served under /<repo>/, so build with that base.
       - run: npm run build
-        env:
-          VITE_BASE: /${{ github.event.repository.name }}/
       # SPA fallback: Pages serves 404.html for unknown paths, so deep links
       # and refreshes on client-side routes load the app instead of a 404.
       - run: cp dist/index.html dist/404.html
