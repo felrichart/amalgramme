@@ -394,12 +394,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <button
             v-else
             class="slot"
-            :class="{ active: g.state.wordIndex === i }"
+            :class="{ active: wordActive && g.state.wordIndex === i }"
             type="button"
             @click="g.activate(i)"
             @focus="g.activate(i)"
           >
-            <LetterWheel :tiles="g.wheelTiles(i)" :active="g.state.wordIndex === i" />
+            <LetterWheel :tiles="g.wheelTiles(i)" :active="wordActive && g.state.wordIndex === i" />
           </button>
         </div>
       </template>
