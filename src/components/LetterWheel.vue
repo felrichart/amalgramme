@@ -15,7 +15,6 @@ const props = defineProps({
 });
 const emit = defineEmits(['begin', 'enter', 'backtrack', 'end', 'shuffle']);
 
-const HIT = 13; // tile hit radius
 const CENTER = 15; // centre (shuffle) hit radius
 const GAP = 0.86; // neighbour clearance factor
 const OUTER = 46.5; // where a tile's outer edge sits, as % from centre
@@ -66,6 +65,8 @@ const nodeSize = computed(() => {
   const fit = 2 * ring.value * Math.sin(Math.PI / props.tiles.length) * GAP;
   return Math.min(MAX_NODE, fit);
 });
+// Slightly smaller that the selection ring (because scaled up by 1.12)
+const hitRadius = computed(() => nodeSize.value / 2);
 /*
  * Glyphs track the tile size, but small tiles (many letters) get a
  * proportionally larger glyph so letters stay legible near the rim.
@@ -88,7 +89,7 @@ function toLocal(e) {
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function hitTile(p) {
   let best = null;
-  let bd = HIT;
+  let bd = hitRadius.value;
   centers.value.forEach((c, k) => {
     const d = dist(p, c);
     if (d <= bd) {
