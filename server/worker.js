@@ -102,6 +102,13 @@ function canBuild(secret, words) {
 
 const PIN_RE = /^\d{4}$/;
 
+/* A community level id: the first 8 chars of a UUID. Short enough to keep routes
+ * and localStorage save keys compact; collision risk is negligible at this scale
+ * (must stay in sync with COMMUNITY_ID_LENGTH in src/data/community.js). */
+function newLevelId() {
+  return crypto.randomUUID().slice(0, 8);
+}
+
 /* A well-formed challenge payload → normalised {words, secret}, or null. */
 function parseChallenge(body) {
   const words = Array.isArray(body.words) ? body.words.map(normalizeWord) : [];
@@ -149,7 +156,7 @@ async function requireAdmin(env, body) {
   return null;
 }
 
-/* Upsert one anonymous play into level_stats. `id` is a community UUID or a
+/* Upsert one anonymous play into level_stats. `id` is a community level id or a
  * daily's ISO date; `kind` is 'attempt' (solved stays/inserts 0) or 'solve'
  * (upserts to 1). Deduped by the (level, client) primary key. */
 async function recordPlay(env, id, kind, client) {
@@ -264,7 +271,7 @@ export default {
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
 
-      const id = crypto.randomUUID();
+      const id = newLevelId();
       const created_at = Date.now();
       await env.DB.prepare(
         'INSERT INTO levels (id, author, secret, words, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -318,7 +325,7 @@ export default {
        * id, so reusing it would leave anyone mid-solve with a board that no
        * longer matches. Dropping the old row (its stats included) lets the level
        * reappear as fresh, unsolved content. */
-      const newId = crypto.randomUUID();
+      const newId = newLevelId();
       const created_at = Date.now();
       await env.DB.batch([
         env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(match[1]),

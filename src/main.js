@@ -13,7 +13,7 @@ import {
   recordAttempt as recordDailyAttempt,
   recordSolve as recordDailySolve,
 } from './services/dailies.js';
-import { migrateSaves, savedProgress } from './composables/useGameState.js';
+import { migrateSaves, migrateCommunitySaves, savedProgress } from './composables/useGameState.js';
 import { isCommunityId, COMMUNITY_PREFIX } from './data/community.js';
 import { TUTORIAL_DATE } from './data/challenges.js';
 
@@ -42,6 +42,7 @@ function backfillStats() {
  * saves up to the current schema (needs the daily bank, hence after the warm-up). */
 Promise.all([resolveToday(), loadDailies(0), loadCommunityLevels(0)]).then(() => {
   migrateSaves();
+  migrateCommunitySaves();
   backfillStats();
   createApp(App).use(router).mount('#app');
 });

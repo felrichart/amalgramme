@@ -4,8 +4,9 @@
  * localStorage so a reload or a direct /play/com-<id> link resolves synchronously
  * (puzzleForDate reads this cache) before any fresh fetch completes.
  *
- * A cached record is { id, author, secret, words[4], created_at }. Its id, prefixed
- * with "com-", is the puzzle date used in routes and save keys, keeping community
+ * A cached record is { id, author, secret, words[4], created_at }. The id is the
+ * first 8 chars of the server's UUID (see COMMUNITY_ID_LENGTH); prefixed with
+ * "com-" it is the puzzle date used in routes and save keys, keeping community
  * progress namespaced away from the ISO-dated dailies.
  */
 const CACHE_KEY = 'amalgramme:v3:community';
@@ -18,6 +19,15 @@ const CLIENT_KEY = 'amalgramme:v3:client';
  * so we hit the network at most once per kind per level. */
 const REPORTED_KEY = 'amalgramme:v3:communityReported';
 export const COMMUNITY_PREFIX = 'com-';
+/* Community ids are the first 8 chars of a server-minted UUID — short enough to
+ * keep routes and localStorage save keys compact. Legacy full-UUID ids are
+ * collapsed onto this length everywhere below, so old links and saves keep
+ * resolving to the same record and progress. */
+export const COMMUNITY_ID_LENGTH = 8;
+
+function trimId(id) {
+  return String(id).slice(0, COMMUNITY_ID_LENGTH);
+}
 
 /* True for a puzzle date/slug that names a community level. */
 export function isCommunityId(id) {
@@ -34,9 +44,10 @@ function readCache() {
   return { levels: [], fetchedAt: 0 };
 }
 
-/* The cached level list (newest first). */
+/* The cached level list (newest first), each id trimmed to its canonical length
+ * so a cache written before ids were shortened still yields the short id. */
 export function getCache() {
-  return readCache().levels;
+  return readCache().levels.map((l) => ({ ...l, id: trimId(l.id) }));
 }
 
 /* Epoch ms of the last successful fetch, 0 if never fetched. */
@@ -53,8 +64,24 @@ export function setCache(levels, fetchedAt) {
   }
 }
 
+/* Bare, canonical-length community id from a "com-<id>" date or a bare id; trims
+ * a legacy full UUID to its short form. Community-space callers only. */
 function bareId(idOrDate) {
-  return isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+  const bare = isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+  return trimId(bare);
+}
+
+/* First-8 canonical bare id from a bare or "com-"-prefixed id (accepts a legacy
+ * full UUID). Used where a raw id, not a date, is needed (e.g. edit routes). */
+export function shortCommunityId(idOrDate) {
+  return bareId(idOrDate);
+}
+
+/* Canonical "com-<id>" date for a community slug/date, collapsing a legacy
+ * full-UUID id onto its short form so old /play/com-<uuid> links resolve to the
+ * same puzzle and saved progress as the short id. */
+export function shortCommunityDate(idOrDate) {
+  return COMMUNITY_PREFIX + bareId(idOrDate);
 }
 
 /* This device's anonymous id, minted (and persisted) on first use. Null only

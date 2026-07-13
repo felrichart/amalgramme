@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { migrateSaves, levelProgress } from '../src/composables/useGameState.js';
+import {
+  migrateSaves,
+  migrateCommunitySaves,
+  levelProgress,
+} from '../src/composables/useGameState.js';
 import { listDailies } from '../src/data/challenges.js';
 
 const V3 = 'amalgramme:v3:level:';
@@ -60,5 +64,57 @@ describe('migrateSaves: legacy index keys → date keys', () => {
     migrateSaves();
 
     expect(read(V3 + date).solved).toEqual([true, false, false, false]);
+  });
+});
+
+describe('migrateCommunitySaves: full-UUID keys → 8-char id keys', () => {
+  const full = '550e8400-e29b-41d4-a716-446655440000';
+  const COM = V3 + 'com-';
+
+  it('re-keys a community save to its short id and preserves progress', () => {
+    localStorage.setItem(
+      COM + full,
+      JSON.stringify({
+        solved: [true, true, true, true],
+        shuffleSeeds: [1, 2, 3, 4],
+        secretFound: true,
+        secretPicks: [],
+        completed: true,
+      }),
+    );
+
+    migrateCommunitySaves();
+
+    expect(localStorage.getItem(COM + full)).toBeNull();
+    expect(read(COM + '550e8400').completed).toBe(true);
+    expect(levelProgress('com-550e8400')).toMatchObject({ completed: true, found: 4 });
+  });
+
+  it('leaves an already-short community key untouched', () => {
+    localStorage.setItem(COM + '550e8400', JSON.stringify({ solved: [true, false, false, false] }));
+
+    migrateCommunitySaves();
+
+    expect(read(COM + '550e8400').solved).toEqual([true, false, false, false]);
+  });
+
+  it('never overwrites an existing short key', () => {
+    localStorage.setItem(COM + '550e8400', JSON.stringify({ completed: true }));
+    localStorage.setItem(COM + full, JSON.stringify({ completed: false }));
+
+    migrateCommunitySaves();
+
+    expect(read(COM + '550e8400').completed).toBe(true);
+    expect(localStorage.getItem(COM + full)).toBeNull();
+  });
+
+  it('does not touch daily or tutorial keys', () => {
+    localStorage.setItem(V3 + '2026-06-18', JSON.stringify({ completed: true }));
+    localStorage.setItem(V3 + 'tutoriel', JSON.stringify({ completed: true }));
+
+    migrateCommunitySaves();
+
+    expect(read(V3 + '2026-06-18').completed).toBe(true);
+    expect(read(V3 + 'tutoriel').completed).toBe(true);
   });
 });

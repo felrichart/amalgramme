@@ -15,7 +15,7 @@
  * no longer imported at runtime).
  */
 import { getToday } from '../utils/today.js';
-import { isCommunityId, communityPuzzle } from './community.js';
+import { isCommunityId, communityPuzzle, shortCommunityDate } from './community.js';
 import { getDailies, dailyPuzzle } from './dailies.js';
 
 /* The daily bank (records with date/secret/words/attempts/successes), oldest first. */
@@ -57,9 +57,12 @@ export function puzzleForDate(date) {
   return dailyPuzzle(date);
 }
 
-/* Route slug → puzzle date: "daily" aliases today; any other slug is the date. */
+/* Route slug → puzzle date: "daily" aliases today; a community slug is trimmed to
+ * its canonical short id (so legacy full-UUID links resolve to the same progress);
+ * any other slug is the date. */
 export function dateForSlug(slug) {
-  return slug === 'daily' ? todayDate() : slug;
+  if (slug === 'daily') return todayDate();
+  return isCommunityId(slug) ? shortCommunityDate(slug) : slug;
 }
 
 /* Puzzle date → route slug: "daily" for today, else the date itself. */

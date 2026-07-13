@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS dailies (
 
 -- Per-puzzle play stats: one row per (puzzle, anonymous client). solved flips 0→1
 -- on completion. attempts = row count, successes = SUM(solved) per puzzle. level_id
--- is a community UUID or a daily's ISO date (the two id spaces never collide).
+-- is a community level id or a daily's ISO date (the two id spaces never collide).
 CREATE TABLE IF NOT EXISTS level_stats (
   level_id TEXT NOT NULL,
   client_id TEXT NOT NULL,

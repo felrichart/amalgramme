@@ -1,6 +1,7 @@
 import { reactive, computed, watch, ref } from 'vue';
 import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
 import { listDailies, puzzleForDate } from '../data/challenges.js';
+import { COMMUNITY_PREFIX, COMMUNITY_ID_LENGTH } from '../data/community.js';
 
 const STORAGE_PREFIX = 'amalgramme:v3:level:';
 
@@ -23,6 +24,31 @@ export function migrateSaves() {
       const raw = localStorage.getItem(oldKey);
       if (raw === null) continue;
       const newKey = storageKey(dailies[i].date);
+      if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, raw);
+      localStorage.removeItem(oldKey);
+    }
+  } catch {
+    /* storage unavailable: nothing to migrate */
+  }
+}
+
+/* One-time re-key of community saves from the old full-UUID id to the short
+ * (8-char) id now used by the backend, cache, routes, and keys. Idempotent:
+ * already-short keys are skipped, and an existing short key is never overwritten
+ * (mirrors migrateSaves). Daily and tutorial keys are left untouched. */
+export function migrateCommunitySaves() {
+  try {
+    const prefix = STORAGE_PREFIX + COMMUNITY_PREFIX;
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(prefix)) keys.push(k);
+    }
+    for (const oldKey of keys) {
+      const id = oldKey.slice(prefix.length);
+      if (id.length <= COMMUNITY_ID_LENGTH) continue;
+      const newKey = prefix + id.slice(0, COMMUNITY_ID_LENGTH);
+      const raw = localStorage.getItem(oldKey);
       if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, raw);
       localStorage.removeItem(oldKey);
     }

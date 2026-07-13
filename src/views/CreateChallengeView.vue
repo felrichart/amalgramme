@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { createCommunityLevel, updateCommunityLevel } from '../services/community.js';
-import { communityRecord } from '../data/community.js';
+import { communityRecord, shortCommunityId } from '../data/community.js';
 import { username, pin, pinValid, isAdmin } from '../composables/useUsername.js';
 import ChallengeForm from '../components/ChallengeForm.vue';
 import UsernamePrompt from '../components/UsernamePrompt.vue';
@@ -10,7 +10,9 @@ import UsernamePrompt from '../components/UsernamePrompt.vue';
 const route = useRoute();
 const router = useRouter();
 
-const editId = route.params.id ?? null;
+/* Trim to the canonical short id so a legacy full-UUID edit link still targets
+ * the right cached record and backend row. */
+const editId = route.params.id ? shortCommunityId(route.params.id) : null;
 const isEdit = !!editId;
 
 const initialWords = reactive(['', '', '', '']);
