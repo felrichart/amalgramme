@@ -25,18 +25,18 @@ describe('wordError', () => {
     expect(wordError('mot1')).toBe('char');
     expect(wordError('mot.')).toBe('char');
   });
-  it('rejects over 11 letters', () => {
-    expect(wordError('abcdefghijkl')).toBe('long'); // 12 letters
-    expect(wordError('abcdefghijk')).toBeNull(); // 11 letters
+  it('rejects over 12 letters', () => {
+    expect(wordError('abcdefghijklm')).toBe('long'); // 13 letters
+    expect(wordError('abcdefghijkl')).toBeNull(); // 12 letters ok
   });
-  it('rejects more than 2 of a separator', () => {
-    expect(wordError('a-b-c-d')).toBe('sep'); // 3 hyphens, 4 letters
-    expect(wordError('a b cd')).toBeNull(); // 2 spaces, 4 letters ok
+  it('rejects more than 4 separators', () => {
+    expect(wordError('a-b-c-d-e-f')).toBe('sep'); // 5 hyphens, 6 letters
+    expect(wordError('a-b-c-d-e')).toBeNull(); // 4 hyphens, 5 letters ok
   });
-  it('rejects fewer than 4 letters (but not empty)', () => {
-    expect(wordError('mot')).toBe('short'); // 3 letters
-    expect(wordError('jeu')).toBe('short');
-    expect(wordError('jeux')).toBeNull(); // 4 letters ok
+  it('rejects fewer than 3 letters (but not empty)', () => {
+    expect(wordError('mo')).toBe('short'); // 2 letters
+    expect(wordError('ab')).toBe('short');
+    expect(wordError('mot')).toBeNull(); // 3 letters ok
   });
   it('rejects empty', () => {
     expect(wordError('')).toBe('empty');

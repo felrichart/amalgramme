@@ -2,9 +2,9 @@
  * Rules for a community-challenge word: normalisation and validation, shared by
  * the create form and re-implemented server-side in the Worker (keep in sync).
  *
- * A word is 4–11 letters with optional separators — space, hyphen, apostrophe —
- * that behave like gaps on the wheel (see puzzle.js parseAnswer). At most 2 of
- * each separator; any other punctuation or digit is rejected. The four indices
+ * A word is 3–12 letters with optional separators — space, hyphen, apostrophe —
+ * that behave like gaps on the wheel (see puzzle.js parseAnswer). At most 4
+ * separators total; any other punctuation or digit is rejected. The four indices
  * must all be distinct. The énigme must be
  * spellable from the pooled letters of the four indices (the real game rule: the
  * secret is typed by spending tiles drawn from the four wheels — see
