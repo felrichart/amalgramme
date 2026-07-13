@@ -41,9 +41,9 @@ function json(data, status = 200) {
 }
 
 /* --- word rules (kept in sync with src/game/word.js) --- */
-const MAX_LETTERS = 11;
-const MIN_LETTERS = 4;
-const MAX_SEP = 2;
+const MAX_LETTERS = 12;
+const MIN_LETTERS = 3;
+const MAX_SEP = 4;
 
 function isSep(ch) {
   return ch === ' ' || ch === '-' || ch === "'";
@@ -68,22 +68,18 @@ function normalizeWord(raw) {
 function wordError(w) {
   if (!w) return 'empty';
   let letters = 0;
-  let sp = 0;
-  let hy = 0;
-  let ap = 0;
+  let sep = 0;
   let other = 0;
   for (const ch of w) {
     if (ch >= 'a' && ch <= 'z') letters++;
-    else if (ch === ' ') sp++;
-    else if (ch === '-') hy++;
-    else if (ch === "'") ap++;
+    else if (isSep(ch)) sep++;
     else other++;
   }
   if (other > 0) return 'char';
   if (letters < 1) return 'empty';
   if (letters < MIN_LETTERS) return 'short';
   if (letters > MAX_LETTERS) return 'long';
-  if (sp > MAX_SEP || hy > MAX_SEP || ap > MAX_SEP) return 'sep';
+  if (sep > MAX_SEP) return 'sep';
   return null;
 }
 

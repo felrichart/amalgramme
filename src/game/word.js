@@ -12,9 +12,9 @@
  */
 import { normalize } from './puzzle.js';
 
-export const MAX_LETTERS = 11;
-export const MIN_LETTERS = 4;
-const MAX_SEPARATOR = 2;
+export const MAX_LETTERS = 12;
+export const MIN_LETTERS = 3;
+const MAX_SEPARATOR = 4;
 
 function isSeparator(ch) {
   return ch === ' ' || ch === '-' || ch === "'";
@@ -27,6 +27,7 @@ function isSeparator(ch) {
  */
 export function normalizeWord(raw) {
   const chars = String(raw ?? '')
+    .trim()
     .replace(/’/g, "'")
     .split('')
     .map((ch) => (isSeparator(ch) ? ch : normalize(ch)));
@@ -45,22 +46,18 @@ export function normalizeWord(raw) {
 export function wordError(word) {
   if (!word) return 'empty';
   let letters = 0;
-  let space = 0;
-  let hyphen = 0;
-  let apos = 0;
+  let separator = 0;
   let other = 0;
   for (const ch of word) {
     if (ch >= 'a' && ch <= 'z') letters++;
-    else if (ch === ' ') space++;
-    else if (ch === '-') hyphen++;
-    else if (ch === "'") apos++;
+    else if (isSeparator(ch)) separator++;
     else other++;
   }
   if (other > 0) return 'char';
   if (letters < 1) return 'empty';
   if (letters < MIN_LETTERS) return 'short';
   if (letters > MAX_LETTERS) return 'long';
-  if (space > MAX_SEPARATOR || hyphen > MAX_SEPARATOR || apos > MAX_SEPARATOR) return 'sep';
+  if (separator > MAX_SEPARATOR) return 'sep';
   return null;
 }
 
