@@ -592,6 +592,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 /* Secret: a button at the centre of the cross; tapping it docks the keyboard. */
 .secret {
+  max-width: 100%;
+  min-width: 0;
   position: relative;
   display: flex;
   align-items: center;
@@ -628,6 +630,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .secret-boxes {
   display: flex;
   gap: 0.4rem;
+  max-width: 100%;
+  min-width: 0;
 }
 .secret-boxes.shake {
   animation: shake 0.4s ease;
@@ -646,7 +650,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   }
 }
 .sbox {
-  width: 1.95rem;
+  flex: 1 1 1.95rem;
+  width: 1.95rem; /* remove the fixed width */
+  min-width: 0;
   height: 2.5rem;
   display: grid;
   place-items: center;
@@ -815,12 +821,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   display: flex;
   gap: 0.35rem;
   min-height: 2.4rem;
+  max-width: 100%;
+  min-width: 0;
 }
 .track.full {
   animation: nudge 0.3s ease;
 }
 .tick {
+  flex: 1 1 1.9rem;
   width: 1.9rem;
+  min-width: 0;
   height: 2.4rem;
   display: grid;
   place-items: center;
