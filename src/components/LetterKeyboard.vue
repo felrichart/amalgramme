@@ -37,7 +37,7 @@ function rowStyle(r) {
         tabindex="-1"
         :class="{ spent: cell.spent, filled: solved[r] }"
         :disabled="cell.spent"
-        @click="emit('key', { r: cell.r, id: cell.id, ch: cell.ch })"
+        @pointerdown="emit('key', { r: cell.r, id: cell.id, ch: cell.ch })"
       >
         {{ cell.ch }}
       </button>

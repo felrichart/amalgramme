@@ -430,7 +430,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             class="slot"
             :class="{ active: wordActive && g.state.wordIndex === i }"
             type="button"
-            @click="g.activate(i)"
+            @pointerdown="g.activate(i)"
             @focus="g.activate(i)"
           >
             <LetterWheel :tiles="g.wheelTiles(i)" :active="wordActive && g.state.wordIndex === i" />
@@ -446,7 +446,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           type="button"
           :class="{ found: g.state.secretFound, active: g.secretActive.value }"
           :disabled="g.state.secretFound"
-          @click="openSecret"
+          @pointerdown="openSecret"
           @focus="openSecret"
         >
           <span class="secret-boxes" :class="{ shake: secretShaking, wrong: g.secretWrong.value }">
