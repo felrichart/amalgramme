@@ -11,9 +11,10 @@ const props = defineProps({
   solved: { type: Array, default: () => [] },
   /* The puzzle carries an extra hint → show the lightbulb (hidden on old levels). */
   hasHint: { type: Boolean, default: false },
-  /* The extra hint is already unlocked → the bulb becomes the revealed word chip. */
+  /* The extra hint is already unlocked → the bulb reads as "used" (solid lime)
+     and shows the hint word beside its icon. */
   hintRevealed: { type: Boolean, default: false },
-  /* The extra hint's display text, shown in the chip once revealed. */
+  /* The extra hint's display text, shown (cropped) in the bulb once revealed. */
   hint: { type: String, default: '' },
 });
 
@@ -48,25 +49,13 @@ function rowStyle(r) {
         {{ cell.ch }}
       </button>
     </div>
-    <div class="trow bar">
-      <!-- Revealed: the bulb becomes a lime chip showing the hint word, right where
-           the secret is built. Unrevealed: the tappable lightbulb opens the Aide popup. -->
-      <div v-if="hasHint && hintRevealed" class="hint-chip">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span>{{ hint }}</span>
-      </div>
+    <div class="trow bar" :class="{ 'has-bulb': hasHint }">
+      <!-- Lightbulb opens the Aide popup (which shows the hint once unlocked).
+           Solid lime once used, a light wash before. Hidden on old levels. -->
       <button
-        v-else-if="hasHint"
+        v-if="hasHint"
         class="key bulb"
+        :class="{ used: hintRevealed }"
         type="button"
         tabindex="-1"
         @click="emit('hint')"
@@ -82,25 +71,28 @@ function rowStyle(r) {
             stroke-linejoin="round"
           />
         </svg>
+        <span v-if="hintRevealed" class="bulb-word">{{ hint }}</span>
       </button>
-      <button
-        class="key wide"
-        type="button"
-        tabindex="-1"
-        @click="emit('backspace')"
-        aria-label="reculer"
-      >
-        ⌫
-      </button>
-      <button
-        class="key wide"
-        type="button"
-        tabindex="-1"
-        @click="emit('clear')"
-        aria-label="tout effacer"
-      >
-        ✕
-      </button>
+      <div class="controls">
+        <button
+          class="key wide"
+          type="button"
+          tabindex="-1"
+          @click="emit('backspace')"
+          aria-label="reculer"
+        >
+          ⌫
+        </button>
+        <button
+          class="key wide"
+          type="button"
+          tabindex="-1"
+          @click="emit('clear')"
+          aria-label="tout effacer"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -125,9 +117,17 @@ function rowStyle(r) {
 }
 .trow.bar {
   gap: 0.5rem;
-  /* Inset the hint/backspace/clear group ~10% each side so they don't hug the edges. */
-  padding: 0 10%;
   margin-top: 0.15rem;
+  /* No bulb: the controls stay centred, inset from the edges. */
+  padding: 0 8%;
+}
+/* With the bulb, split the row: bulb to the left edge, controls to the right. */
+.trow.bar.has-bulb {
+  justify-content: space-between;
+}
+.controls {
+  display: flex;
+  gap: 0.5rem;
 }
 .key {
   position: relative;
@@ -187,44 +187,39 @@ function rowStyle(r) {
   background: var(--ink);
   color: var(--panel);
 }
-/* Lightbulb: sits on the left of the bar row; margin-right:auto pushes the
-   backspace/clear controls apart to the right, so the bulb reads as separate. */
+/* Lightbulb: opens the Aide popup. Light lime wash before use; once the hint is
+   unlocked (.used) it goes solid lime and shows the hint word beside the icon,
+   shrinking and cropping so the controls keep their room. */
 .key.bulb {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 3.4rem;
   max-width: none;
-  margin-right: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0 0.7rem;
+  overflow: hidden;
   color: #000;
   background: color-mix(in srgb, var(--lime) 20%, #fff);
 }
-.key.bulb:not(:disabled):active {
-  background: var(--lime);
-  color: #fff;
+.key.bulb svg {
+  flex: 0 0 auto;
 }
-/* Revealed hint chip: replaces the bulb in place, showing the word in the lime
-   tint. margin-right:auto keeps the backspace/clear controls pushed apart. */
-.hint-chip {
-  flex: 0 1 auto;
+.bulb-word {
   min-width: 0;
-  margin-right: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  height: 2.8rem;
-  padding: 0 0.7rem;
-  border-radius: 0.6rem;
-  font-weight: 900;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: #fff;
-  background: var(--lime);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-}
-.hint-chip span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+.key.bulb.used {
+  color: #fff;
+  background: var(--lime);
+}
+.key.bulb:active {
+  background: var(--lime);
+  color: #fff;
 }
 </style>

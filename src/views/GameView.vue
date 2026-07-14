@@ -274,12 +274,12 @@ function openSecret() {
   g.activateSecret();
 }
 
-/* "Aide" popup, opened from the keyboard's lightbulb; revealing unlocks the
- * extra hint (persisted in game state) and closes the popup. */
+/* "Aide" popup, opened from the keyboard's lightbulb. Revealing unlocks the
+ * extra hint (persisted in game state) but keeps the popup open so it shows the
+ * hint in place; the player closes it themselves. Re-opening shows it again. */
 const aideOpen = ref(false);
 function revealHint() {
   g.revealHint();
-  aideOpen.value = false;
 }
 
 /* Flash a shake on the secret boxes when a full guess is wrong. */
@@ -574,7 +574,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </div>
     </div>
 
-    <AidePopup :open="aideOpen" @reveal="revealHint" @close="aideOpen = false" />
+    <AidePopup
+      :open="aideOpen"
+      :revealed="g.state.hintRevealed"
+      :hint="g.hint?.display ?? ''"
+      @reveal="revealHint"
+      @close="aideOpen = false"
+    />
   </div>
 </template>
 

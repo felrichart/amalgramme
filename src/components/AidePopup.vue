@@ -1,8 +1,13 @@
 <script setup>
-/* The "Aide" popup, opened from the secret keyboard's lightbulb. Offers to
- * unlock the extra hint or dismiss. The parent owns the reveal (emits `reveal`)
- * and the open flag; this is purely presentational, like the confirm dialogs. */
-defineProps({ open: { type: Boolean, default: false } });
+/* The "Aide" popup, opened from the secret keyboard's lightbulb. Before the hint
+ * is unlocked it offers to reveal it; once `revealed`, it shows the hint word in
+ * place (revealing doesn't close the popup). The parent owns the reveal (emits
+ * `reveal`), the unlocked flag, and the open flag; this is purely presentational. */
+defineProps({
+  open: { type: Boolean, default: false },
+  revealed: { type: Boolean, default: false },
+  hint: { type: String, default: '' },
+});
 const emit = defineEmits(['reveal', 'close']);
 </script>
 
@@ -21,16 +26,25 @@ const emit = defineEmits(['reveal', 'close']);
           />
         </svg>
       </div>
-      <h2 class="title">Besoin d’aide ?</h2>
-      <p class="sub">Débloque un indice supplémentaire pour t’aider à deviner l’énigme.</p>
-      <div class="actions">
-        <button class="cta cta-hint" type="button" @click="emit('reveal')">
-          Obtenir un indice supplémentaire
-        </button>
-        <button class="cta cta-ghost" type="button" @click="emit('close')">
-          Je ne veux pas d’aide
-        </button>
-      </div>
+      <template v-if="!revealed">
+        <h2 class="title">Besoin d’aide ?</h2>
+        <p class="sub">Débloque un indice supplémentaire pour t’aider à deviner l’énigme.</p>
+        <div class="actions">
+          <button class="cta cta-hint" type="button" @click="emit('reveal')">
+            Obtenir un indice supplémentaire
+          </button>
+          <button class="cta cta-ghost" type="button" @click="emit('close')">
+            Je ne veux pas d’aide
+          </button>
+        </div>
+      </template>
+      <template v-else>
+        <h2 class="title">Indice supplémentaire</h2>
+        <p class="hint-word">{{ hint }}</p>
+        <div class="actions">
+          <button class="cta cta-hint" type="button" @click="emit('close')">Continuer</button>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -82,6 +96,15 @@ const emit = defineEmits(['reveal', 'close']);
   font-weight: 700;
   color: var(--muted);
   line-height: 1.35;
+}
+.hint-word {
+  margin: 0.2rem 0;
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--lime);
 }
 .actions {
   display: flex;
