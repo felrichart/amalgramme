@@ -109,15 +109,22 @@ function readReported() {
   return {};
 }
 
+/* Dedup key for a reported play. A community level keys on its bare id; a daily
+ * keys on its full ISO date — trimming (bareId) would collapse every daily in a
+ * month onto one key and silently drop later reports (e.g. a win not counted). */
+function reportKey(idOrDate) {
+  return isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+}
+
 /* Whether this client already reported `kind` ('attempt'|'solve') for a level. */
 export function hasReported(idOrDate, kind) {
-  return !!readReported()[bareId(idOrDate)]?.[kind];
+  return !!readReported()[reportKey(idOrDate)]?.[kind];
 }
 
 /* Remember that this client reported `kind` for a level, so we don't re-post. */
 export function markReported(idOrDate, kind) {
   const map = readReported();
-  (map[bareId(idOrDate)] ??= {})[kind] = true;
+  (map[reportKey(idOrDate)] ??= {})[kind] = true;
   try {
     localStorage.setItem(REPORTED_KEY, JSON.stringify(map));
   } catch {
