@@ -1,10 +1,9 @@
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useGameState, resetLevel } from '../composables/useGameState.js';
+import { useGameState, tutorialState, saveTutorialState } from '../composables/useGameState.js';
 import {
   todayDate,
-  TUTORIAL_DATE,
   puzzleForDate,
   dateForSlug,
   slugForDate,
@@ -38,16 +37,12 @@ const router = useRouter();
 const today = todayDate();
 const requested = dateForSlug(route.params.slug);
 const isCommunity = isCommunityId(requested);
-const playable =
-  !!puzzleForDate(requested) && (requested === TUTORIAL_DATE || isCommunity || requested <= today);
+const playable = !!puzzleForDate(requested) && (isCommunity || requested <= today);
 if (!puzzleForDate(requested)) router.replace(isCommunity ? '/community' : '/');
 else if (!playable) router.replace('/play/daily');
 const date = playable ? requested : today;
 
-const isTutorial = date === TUTORIAL_DATE;
 const isDaily = !isCommunity && date === today;
-/* The tutorial always starts fresh — wipe its saved state before state loads. */
-if (isTutorial) resetLevel(date);
 
 /* Community level: resolve its author + display number for the title/back link. */
 const community = isCommunity ? communityRecord(date) : null;
@@ -55,30 +50,30 @@ const communityNumber = community
   ? (challengesByAuthor(community.author).find((c) => c.id === community.id)?.number ?? null)
   : null;
 
-const title = isTutorial
-  ? 'Tutoriel'
-  : isDaily
-    ? 'Défi quotidien'
-    : isCommunity
-      ? `Défi de ${community?.author ?? ''}${communityNumber ? ` #${communityNumber}` : ''}`
-      : formatChallengeDate(date);
-/* Back lands where the player likely came from: menu for daily/tutorial, the
- * author's list for community, the challenge list otherwise. */
-const backTo =
-  isDaily || isTutorial
-    ? '/'
-    : isCommunity
-      ? `/community/${community?.author ?? ''}`
-      : '/challenges';
+const title = isDaily
+  ? 'Défi quotidien'
+  : isCommunity
+    ? `Défi de ${community?.author ?? ''}${communityNumber ? ` #${communityNumber}` : ''}`
+    : formatChallengeDate(date);
+/* Back lands where the player likely came from: menu for the daily, the author's
+ * list for community, the challenge list otherwise. */
+const backTo = isDaily
+  ? '/'
+  : isCommunity
+    ? `/community/${community?.author ?? ''}`
+    : '/challenges';
 
-/* Coach popups over the board. Steps alternate between "action" (advances when
- * the parent sees the taught gesture) and "manual" (a Suivant button). It can't
- * be skipped — it ends only once the player reaches the last step's gesture. */
-const coachOpen = ref(isTutorial);
-const coachStep = ref(0);
+/* Coach popups over the board, shown once on a player's first play (progress is
+ * tracked per device, not per level). Steps alternate between "action" (advances
+ * when the parent sees the taught gesture) and "manual" (a Suivant button). It
+ * can't be skipped — it ends only once the player reaches the last step. */
+const tut = tutorialState();
 const WHEELS = [0, 1, 2, 3].map((i) => `[data-cell="${i}"] .wheel`);
 
-const tutorialSteps = [
+/* Index of the word the player just solved, so the "Bravo" step spotlights it
+ * rather than a fixed corner. */
+const foundCell = ref(0);
+const tutorialSteps = computed(() => [
   {
     holes: WHEELS,
     html: 'Il y a 4 <span style="color:var(--gold);font-weight:900">indices</span>, dont les lettres sont mélangées.',
@@ -89,7 +84,7 @@ const tutorialSteps = [
     text: 'Glisse d’une lettre à l’autre pour écrire le mot.',
   },
   {
-    selector: '[data-cell="0"]',
+    selector: `[data-cell="${foundCell.value}"]`,
     manual: true,
     html: 'Bravo, plus que 3 <span style="color:var(--gold);font-weight:900">indices</span> à trouver !',
   },
@@ -100,23 +95,15 @@ const tutorialSteps = [
     cta: 'Compris',
     html: 'Devine le <strong>mot énigme</strong> au centre grâce aux 4 indices.',
   },
-];
-function coachNext() {
-  if (coachStep.value >= tutorialSteps.length - 1) coachOpen.value = false;
-  else coachStep.value++;
-}
-
+]);
 /* A lone popup, split from the main walkthrough: it fires the first time the
- * player opens the secret keyboard, once the main coach is done. Single step,
- * so no advancement dots. */
-const secretCoachOpen = ref(false);
-let secretCoachSeen = false;
+ * player opens the secret keyboard, once the main coach is done. Single step, so
+ * no advancement dots; the dock stays live and it's dismissed by typing a
+ * letter (not a button). */
 const secretCoachSteps = [
   {
     selector: '[data-tut="dock"]',
     shape: 'rect',
-    manual: true,
-    cta: 'Compris',
     html: 'Appuie sur les lettres pour taper le <strong>mot énigme</strong>.',
   },
 ];
@@ -143,11 +130,11 @@ function goCommunityNext() {
 const g = useGameState(date);
 
 /* Play stats for the finish screen — community levels and dailies both carry
- * attempts/successes; null for the tutorial. The cached seed is floored to 1
+ * attempts/successes. The cached seed is floored to 1
  * (reaching the finish panel proves this player attempted and solved) so it
  * never flashes "0 sur 0"; refreshFinishStats then replaces it with the exact
  * server count once this solve has been recorded. */
-const statRecord = isCommunity ? community : isTutorial ? null : dailyRecord(date);
+const statRecord = isCommunity ? community : dailyRecord(date);
 const finishStats = ref(
   statRecord && {
     attempts: Math.max(statRecord.attempts ?? 0, 1),
@@ -159,7 +146,6 @@ const finishStats = ref(
  * post settles, so the server has counted this player (a solve inserts a stat
  * row even without a prior attempt, so both numbers include them). */
 async function refreshFinishStats() {
-  if (isTutorial) return;
   if (isCommunity) await loadCommunityLevels(0);
   else await loadDailies(0);
   const rec = isCommunity ? communityRecord(date) : dailyRecord(date);
@@ -180,8 +166,8 @@ if (isCommunity && community) {
 }
 
 /* Daily play stats (today's daily or a past one): same anonymous per-device
- * count as community, keyed by the puzzle date. Excludes the tutorial. */
-if (!isCommunity && !isTutorial) {
+ * count as community, keyed by the puzzle date. */
+if (!isCommunity) {
   recordDailyAttempt(date);
   if (g.state.completed) recordDailySolve(date).then(refreshFinishStats);
   else
@@ -191,23 +177,63 @@ if (!isCommunity && !isTutorial) {
     );
 }
 
-/* Tutorial: the intro's one action step (writing the first word) advances when
- * a word is solved; the rest advance via Suivant/Compris. */
-if (isTutorial) {
+/* Coach shows on a first-ever play (unless this level is already finished),
+ * resuming at the last-reached step; progress persists per device. */
+const coachOpen = ref(!tut.done && !g.state.completed);
+const coachStep = ref(tut.step ?? 0);
+function coachNext() {
+  if (coachStep.value >= tutorialSteps.value.length - 1) {
+    coachOpen.value = false;
+    saveTutorialState({ done: true, step: coachStep.value });
+  } else {
+    coachStep.value++;
+    saveTutorialState({ step: coachStep.value });
+  }
+}
+/* The "Glisse" step (index 1) teaches the drawing gesture: hide it once the
+ * player has traced two letters so they finish the word unhindered, then bring
+ * the coach back on the "Bravo" step — spotlighting the word they solved — once
+ * a first word is found. */
+if (!tut.done) {
+  watch(
+    () => g.path.length,
+    (n) => {
+      if (coachOpen.value && coachStep.value === 1 && n >= 2) coachOpen.value = false;
+    },
+  );
   watch(
     () => g.solved.filter(Boolean).length,
     (n, o) => {
-      if (coachOpen.value && coachStep.value === 1 && n > o) coachStep.value = 2;
+      if (coachStep.value === 1 && n > o) {
+        foundCell.value = g.solved.findIndex(Boolean);
+        coachStep.value = 2;
+        coachOpen.value = true;
+        saveTutorialState({ step: 2 });
+      }
     },
   );
-  /* Reveal the keyboard popup on the first secret focus after the walkthrough. */
+}
+
+/* Keyboard hint: a lone popup the first time the secret keyboard opens (once the
+ * main coach is done), shown once per device. The dock stays live under it and
+ * it's dismissed as soon as the player types a letter. */
+const secretCoachOpen = ref(false);
+if (!tut.keyboardSeen) {
+  let hintShown = false;
   watch(
     () => g.secretActive.value,
     (active) => {
-      if (active && !secretCoachSeen && !coachOpen.value) {
-        secretCoachSeen = true;
+      if (active && !coachOpen.value && !hintShown) {
+        hintShown = true;
+        saveTutorialState({ keyboardSeen: true });
         nextTick(() => (secretCoachOpen.value = true));
       }
+    },
+  );
+  watch(
+    () => g.secretInput.value.length,
+    (n, o) => {
+      if (secretCoachOpen.value && n > o) secretCoachOpen.value = false;
     },
   );
 }
@@ -483,12 +509,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           sur {{ finishStats.attempts }}
         </p>
         <div class="finish-actions">
-          <template v-if="isTutorial">
-            <button class="cta cta-ghost" type="button" @click="router.push('/')">
-              Retour au menu
-            </button>
-          </template>
-          <template v-else-if="isDaily">
+          <template v-if="isDaily">
             <button class="cta cta-wash" type="button" @click="router.push('/challenges')">
               Défis passés
             </button>
@@ -568,7 +589,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   pointer-events: none;
   box-shadow: none;
 }
-/* During the tutorial the coach overlay (z 60) covers everything; keep the
+/* During the coach walkthrough the overlay (z 60) covers everything; keep the
    back button above it so leaving is always one tap away. */
 .icon-btn.over-coach {
   position: relative;

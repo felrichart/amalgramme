@@ -13,16 +13,19 @@ import {
   recordAttempt as recordDailyAttempt,
   recordSolve as recordDailySolve,
 } from './services/dailies.js';
-import { migrateSaves, migrateCommunitySaves, savedProgress } from './composables/useGameState.js';
+import {
+  migrateSaves,
+  migrateCommunitySaves,
+  migrateTutorial,
+  savedProgress,
+} from './composables/useGameState.js';
 import { isCommunityId, COMMUNITY_PREFIX } from './data/community.js';
-import { TUTORIAL_DATE } from './data/challenges.js';
 
 /* Report every locally-saved level to the stats backend once, so players who
  * progressed before stat reporting existed are counted. Both services dedupe
  * per device, so this is a no-op on levels already reported. */
 function backfillStats() {
   for (const { date, completed } of savedProgress()) {
-    if (date === TUTORIAL_DATE) continue;
     if (isCommunityId(date)) {
       const id = date.slice(COMMUNITY_PREFIX.length);
       recordCommunityAttempt(id);
@@ -43,6 +46,7 @@ function backfillStats() {
 Promise.all([resolveToday(), loadDailies(0), loadCommunityLevels(0)]).then(() => {
   migrateSaves();
   migrateCommunitySaves();
+  migrateTutorial();
   backfillStats();
   createApp(App).use(router).mount('#app');
 });

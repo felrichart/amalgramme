@@ -171,9 +171,6 @@ onUnmounted(() => window.removeEventListener('resize', measure));
         <p v-if="current.html" class="text" v-html="current.html"></p>
         <p v-else class="text">{{ current.text }}</p>
         <div class="foot">
-          <span v-if="steps.length > 1" class="dots" aria-hidden="true">
-            <span v-for="(s, k) in steps" :key="k" class="dot" :class="{ on: k === step }"></span>
-          </span>
           <button
             v-if="current.manual || current.holes"
             class="next"
@@ -253,21 +250,6 @@ onUnmounted(() => window.removeEventListener('resize', measure));
   align-items: center;
   gap: 0.8rem;
   min-height: 2.4rem;
-}
-.dots {
-  display: flex;
-  gap: 0.4rem;
-}
-.dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--ink);
-  opacity: 0.25;
-}
-.dot.on {
-  opacity: 1;
-  background: var(--accent);
 }
 .next {
   margin-left: auto;

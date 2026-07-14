@@ -95,12 +95,44 @@ export function savedProgress() {
   return out;
 }
 
-/* Wipe one level's saved state (e.g. so the tutorial always starts fresh). */
-export function resetLevel(date) {
+const TUTORIAL_KEY = 'amalgramme:v3:tutorial';
+
+/* Coach walkthrough progress, tracked once per device rather than per level:
+ * whether the player finished the guided intro, the step last reached (so it
+ * resumes if interrupted mid-way), and whether the one-off secret-keyboard hint
+ * has been shown. */
+export function tutorialState() {
   try {
-    localStorage.removeItem(storageKey(date));
+    return {
+      done: false,
+      step: 0,
+      keyboardSeen: false,
+      ...JSON.parse(localStorage.getItem(TUTORIAL_KEY)),
+    };
   } catch {
-    /* storage unavailable: nothing to clear */
+    return { done: false, step: 0, keyboardSeen: false };
+  }
+}
+/* Merge a patch into the stored tutorial progress. */
+export function saveTutorialState(patch) {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, JSON.stringify({ ...tutorialState(), ...patch }));
+  } catch {
+    /* storage unavailable: the coach simply reappears next session */
+  }
+}
+
+/* The tutorial used to be a standalone level (slug "tutoriel"); the coach is now
+ * an inline first-play walkthrough. A player who finished that level knows the
+ * rules, so carry them over as done and drop the orphaned save. */
+export function migrateTutorial() {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + 'tutoriel');
+    if (raw === null) return;
+    if (JSON.parse(raw)?.completed) saveTutorialState({ done: true, keyboardSeen: true });
+    localStorage.removeItem(STORAGE_PREFIX + 'tutoriel');
+  } catch {
+    /* storage unavailable: nothing to migrate */
   }
 }
 

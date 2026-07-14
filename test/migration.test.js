@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   migrateSaves,
   migrateCommunitySaves,
+  migrateTutorial,
+  tutorialState,
   levelProgress,
 } from '../src/composables/useGameState.js';
 import { listDailies } from '../src/data/challenges.js';
@@ -116,5 +118,31 @@ describe('migrateCommunitySaves: full-UUID keys → 8-char id keys', () => {
 
     expect(read(V3 + '2026-06-18').completed).toBe(true);
     expect(read(V3 + 'tutoriel').completed).toBe(true);
+  });
+});
+
+describe('migrateTutorial: legacy tutorial level → device-wide coach flag', () => {
+  it('marks the coach done for a player who finished the old tutorial', () => {
+    localStorage.setItem(V3 + 'tutoriel', JSON.stringify({ completed: true }));
+
+    migrateTutorial();
+
+    expect(localStorage.getItem(V3 + 'tutoriel')).toBeNull();
+    expect(tutorialState()).toMatchObject({ done: true, keyboardSeen: true });
+  });
+
+  it('drops an unfinished tutorial save without marking the coach done', () => {
+    localStorage.setItem(V3 + 'tutoriel', JSON.stringify({ solved: [true, false, false, false] }));
+
+    migrateTutorial();
+
+    expect(localStorage.getItem(V3 + 'tutoriel')).toBeNull();
+    expect(tutorialState().done).toBe(false);
+  });
+
+  it('is a no-op with no legacy tutorial save', () => {
+    migrateTutorial();
+
+    expect(tutorialState().done).toBe(false);
   });
 });

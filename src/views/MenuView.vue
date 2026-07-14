@@ -62,10 +62,6 @@ const communityNew = computed(() => hasNewCommunityLevels());
         <span v-if="communityNew" class="notif" aria-label="nouveaux défis">!</span>
       </button>
 
-      <button class="action tuto" type="button" @click="router.push('/play/tutoriel')">
-        Tutoriel
-      </button>
-
       <button v-if="isAdmin" class="action admin" type="button" @click="router.push('/admin')">
         Admin
       </button>
@@ -166,10 +162,6 @@ const communityNew = computed(() => hasNewCommunityLevels());
 .community {
   --tint: var(--violet);
   background: var(--tint-wash);
-  color: var(--ink);
-}
-.tuto {
-  background: var(--panel);
   color: var(--ink);
 }
 /* Admin: only rendered for the cara+ account; a quiet dashed panel. */

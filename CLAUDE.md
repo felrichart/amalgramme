@@ -36,8 +36,11 @@ test/                          vitest: puzzle, gamestate, migration
   Auto-persists to localStorage on every change.
 - **Slugs**: `/play/daily` aliases today; any other slug is a date. The most
   recent non-future date is today's daily.
-- **Tutorial**: a special puzzle with slug `tutoriel`, kept OUT of `PUZZLES` so
-  it never enters the daily rotation.
+- **Coach**: an inline guided walkthrough (`TutorialCoach`) shown over the board
+  on a player's first play. Progress lives in a single device-wide localStorage
+  record (`tutorialState`/`saveTutorialState`): `done`, last-reached `step`, and
+  `keyboardSeen` for the one-off secret-keyboard hint. No dedicated tutorial
+  level — `migrateTutorial()` retires the old `tutoriel` save at startup.
 
 ## Conventions
 

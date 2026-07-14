@@ -23,15 +23,6 @@ export function listDailies() {
   return getDailies();
 }
 
-/* The guided tutorial: identified by a slug "date", kept OUT of the daily bank
- * so it never joins the daily/challenge rotation. */
-export const TUTORIAL_DATE = 'tutoriel';
-export const TUTORIAL_PUZZLE = {
-  date: TUTORIAL_DATE,
-  secret: 'soleil',
-  words: ['rayon', 'ciel', 'astre', 'chaleur'],
-};
-
 /* Date of today's challenge: the most recent puzzle not dated in the future.
  * ISO dates compare lexicographically. Computed lazily (not at import time) so
  * this module stays importable before `resolveToday` and the daily warm-up have
@@ -49,10 +40,9 @@ export function todayDate() {
   return _today;
 }
 
-/* Puzzle for a date ("tutoriel" → the tutorial, "com-…" → a cached community
- * level, else a cached daily), or null if unknown. */
+/* Puzzle for a date ("com-…" → a cached community level, else a cached daily),
+ * or null if unknown. */
 export function puzzleForDate(date) {
-  if (date === TUTORIAL_DATE) return TUTORIAL_PUZZLE;
   if (isCommunityId(date)) return communityPuzzle(date);
   return dailyPuzzle(date);
 }
@@ -70,7 +60,7 @@ export function slugForDate(date) {
   return date === todayDate() ? 'daily' : date;
 }
 
-/* Past challenges (before today, tutorial excluded), newest first. Each record
+/* Past challenges (before today), newest first. Each record
  * carries its play stats (attempts/successes) from the cache. */
 export function pastChallenges() {
   const today = todayDate();
