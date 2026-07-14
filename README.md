@@ -13,6 +13,9 @@ les lettres trouvées alimentent le clavier qui sert à taper le secret.
   et tracer une ligne de lettre en lettre. La roue tremble si le mot est faux.
 - Un appui au centre de la roue mélange les lettres.
 - Les lettres des mots trouvés forment le stock de lettres pour taper le secret.
+- Une **aide** facultative : si le défi propose un indice supplémentaire, une
+  ampoule apparaît sur le clavier du secret ; l'activer révèle un 5ᵉ indice
+  (déjà résolu) au-dessus de l'énigme.
 - Un mot peut contenir un espace (réponse en deux mots) : l'espace est absent de
   la roue mais affiché comme un blanc dans les cases de la réponse.
 - Sur ordinateur : taper au clavier, **Backspace** pour effacer, **Échap** pour
@@ -44,6 +47,10 @@ par défi :
   défi du jour. Garder le tableau trié par date croissante, ajouter à la fin.
 - `secret` et `words` : sans accents (le `é` tapé correspond au `e` après
   normalisation). Un espace dans un mot = réponse en deux mots.
+- `hint` : un indice supplémentaire, révélable via l'ampoule du clavier. Requis à
+  la création (formulaire), mais absent des anciens niveaux (= pas d'ampoule, ils
+  restent jouables). Il suit les mêmes règles qu'un mot mais ne compte pas dans
+  les lettres qui doivent pouvoir écrire le secret.
 
 Éditer le JSON, commiter, pousser sur `main` : le déploiement se refait tout
 seul (voir ci-dessous).

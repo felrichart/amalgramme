@@ -9,9 +9,15 @@ const props = defineProps({
   spent: { type: Object, default: () => new Set() },
   /* Per-row solved flag: a solved word's row is filled solid instead of outlined. */
   solved: { type: Array, default: () => [] },
+  /* The puzzle carries an extra hint → show the lightbulb (hidden on old levels). */
+  hasHint: { type: Boolean, default: false },
+  /* The extra hint is already unlocked → the bulb becomes the revealed word chip. */
+  hintRevealed: { type: Boolean, default: false },
+  /* The extra hint's display text, shown in the chip once revealed. */
+  hint: { type: String, default: '' },
 });
 
-const emit = defineEmits(['key', 'backspace', 'clear']);
+const emit = defineEmits(['key', 'backspace', 'clear', 'hint']);
 
 /* Tray cells keyed by their exact tile so the pressed tile — not a look-alike — greys out. */
 const grid = computed(() =>
@@ -43,6 +49,40 @@ function rowStyle(r) {
       </button>
     </div>
     <div class="trow bar">
+      <!-- Revealed: the bulb becomes a lime chip showing the hint word, right where
+           the secret is built. Unrevealed: the tappable lightbulb opens the Aide popup. -->
+      <div v-if="hasHint && hintRevealed" class="hint-chip">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span>{{ hint }}</span>
+      </div>
+      <button
+        v-else-if="hasHint"
+        class="key bulb"
+        type="button"
+        tabindex="-1"
+        @click="emit('hint')"
+        aria-label="aide"
+      >
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path
+            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
       <button
         class="key wide"
         type="button"
@@ -85,7 +125,8 @@ function rowStyle(r) {
 }
 .trow.bar {
   gap: 0.5rem;
-  padding: 0;
+  /* Inset the hint/backspace/clear group ~10% each side so they don't hug the edges. */
+  padding: 0 10%;
   margin-top: 0.15rem;
 }
 .key {
@@ -145,5 +186,45 @@ function rowStyle(r) {
 .key.wide:active {
   background: var(--ink);
   color: var(--panel);
+}
+/* Lightbulb: sits on the left of the bar row; margin-right:auto pushes the
+   backspace/clear controls apart to the right, so the bulb reads as separate. */
+.key.bulb {
+  flex: 0 0 auto;
+  min-width: 3.4rem;
+  max-width: none;
+  margin-right: auto;
+  color: #000;
+  background: color-mix(in srgb, var(--lime) 20%, #fff);
+}
+.key.bulb:not(:disabled):active {
+  background: var(--lime);
+  color: #fff;
+}
+/* Revealed hint chip: replaces the bulb in place, showing the word in the lime
+   tint. margin-right:auto keeps the backspace/clear controls pushed apart. */
+.hint-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.8rem;
+  padding: 0 0.7rem;
+  border-radius: 0.6rem;
+  font-weight: 900;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--lime);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+.hint-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

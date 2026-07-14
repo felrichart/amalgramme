@@ -68,3 +68,49 @@ describe('useGameState', () => {
     expect(g.state.focus).toBe('none');
   });
 });
+
+describe('useGameState extra hint', () => {
+  const HDATE = '2026-07-08';
+  const seedHint = (hint) =>
+    localStorage.setItem(
+      'amalgramme:v3:dailies',
+      JSON.stringify({
+        levels: [
+          {
+            date: HDATE,
+            secret: 'verre',
+            words: ['vitre', 'gobelet', 'lunette', 'fragile'],
+            ...(hint ? { hint } : {}),
+          },
+        ],
+        fetchedAt: 1,
+      }),
+    );
+
+  it('exposes the parsed hint and starts unrevealed', () => {
+    seedHint('transparent');
+    const g = useGameState(HDATE);
+    expect(g.hasHint).toBe(true);
+    expect(g.hint.text).toBe('transparent');
+    expect(g.state.hintRevealed).toBe(false);
+  });
+
+  it('reveals and persists the hint across instances', async () => {
+    seedHint('transparent');
+    const g = useGameState(HDATE);
+    g.revealHint();
+    await nextTick();
+    expect(g.state.hintRevealed).toBe(true);
+    expect(JSON.parse(localStorage.getItem(KEY + HDATE)).hintRevealed).toBe(true);
+    expect(useGameState(HDATE).state.hintRevealed).toBe(true);
+  });
+
+  it('has no hint and revealHint is a no-op when the puzzle carries none', () => {
+    seedHint(null);
+    const g = useGameState(HDATE);
+    expect(g.hasHint).toBe(false);
+    expect(g.hint).toBeNull();
+    g.revealHint();
+    expect(g.state.hintRevealed).toBe(false);
+  });
+});

@@ -4,7 +4,7 @@
  * localStorage so a reload or a direct /play/com-<id> link resolves synchronously
  * (puzzleForDate reads this cache) before any fresh fetch completes.
  *
- * A cached record is { id, author, secret, words[4], created_at }. The id is the
+ * A cached record is { id, author, secret, words[4], hint?, created_at }. The id is the
  * first 8 chars of the server's UUID (see COMMUNITY_ID_LENGTH); prefixed with
  * "com-" it is the puzzle date used in routes and save keys, keeping community
  * progress namespaced away from the ISO-dated dailies.
@@ -159,7 +159,13 @@ export function communityRecord(idOrDate) {
 export function communityPuzzle(idOrDate) {
   const rec = communityRecord(idOrDate);
   if (!rec) return null;
-  return { date: COMMUNITY_PREFIX + rec.id, secret: rec.secret, words: rec.words };
+  /* Include `hint` only when set, so a hint-less puzzle keeps its bare shape. */
+  return {
+    date: COMMUNITY_PREFIX + rec.id,
+    secret: rec.secret,
+    words: rec.words,
+    ...(rec.hint ? { hint: rec.hint } : {}),
+  };
 }
 
 /* Map of author name → their newest level's created_at (epoch ms). */

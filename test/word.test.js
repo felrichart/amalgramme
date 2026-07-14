@@ -63,6 +63,7 @@ describe('validateChallenge', () => {
       author,
       words: ['carotte', 'salade', 'oignon', 'poireau'],
       secret: 'cornaline',
+      hint: 'legume',
     });
     expect(v.ok).toBe(true);
     expect(v.normalized.words).toEqual(['carotte', 'salade', 'oignon', 'poireau']);
@@ -93,5 +94,38 @@ describe('validateChallenge', () => {
     });
     expect(v.ok).toBe(false);
     expect(v.author).toBe('empty');
+  });
+
+  const withHint = (hint) =>
+    validateChallenge({
+      author,
+      words: ['carotte', 'salade', 'oignon', 'poireau'],
+      secret: 'cornaline',
+      hint,
+    });
+
+  it('requires a hint: empty fails to validate', () => {
+    const v = withHint('');
+    expect(v.ok).toBe(false);
+    expect(v.hint).toBe('empty');
+    expect(v.normalized.hint).toBeNull();
+  });
+
+  it('normalises a filled-in hint and passes when valid and distinct', () => {
+    const v = withHint('Légume');
+    expect(v.hint).toBeNull();
+    expect(v.normalized.hint).toBe('legume');
+    expect(v.ok).toBe(true);
+  });
+
+  it('rejects an invalid hint word', () => {
+    const v = withHint('ab');
+    expect(v.hint).toBe('short');
+    expect(v.ok).toBe(false);
+  });
+
+  it('rejects a hint duplicating an index or the secret', () => {
+    expect(withHint('carotte').hint).toBe('dup');
+    expect(withHint('cornaline').hint).toBe('dup');
   });
 });

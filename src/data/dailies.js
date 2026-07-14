@@ -5,7 +5,7 @@
  * reload or a direct /play/<date> link before any fresh fetch completes (the
  * warm-up in main.js populates it at startup).
  *
- * A cached record is { date, secret, words[4], attempts, successes, updated_at }.
+ * A cached record is { date, secret, words[4], hint?, attempts, successes, updated_at }.
  * `date` (ISO) is the stable id used in routes and save keys, exactly as the old
  * bundled bank was. Play stats reuse the community stat client (see community.js
  * clientId/hasReported/markReported) — the date id never collides with a UUID.
@@ -50,5 +50,11 @@ export function dailyRecord(date) {
 export function dailyPuzzle(date) {
   const rec = dailyRecord(date);
   if (!rec) return null;
-  return { date: rec.date, secret: rec.secret, words: rec.words };
+  /* Include `hint` only when set, so a hint-less puzzle keeps its bare shape. */
+  return {
+    date: rec.date,
+    secret: rec.secret,
+    words: rec.words,
+    ...(rec.hint ? { hint: rec.hint } : {}),
+  };
 }

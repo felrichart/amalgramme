@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS levels (
   author TEXT NOT NULL,
   secret TEXT NOT NULL,
   words TEXT NOT NULL,       -- JSON array of 4 index words
+  hint TEXT,                 -- optional 5th "indice supplémentaire", NULL when none
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_levels_created ON levels (created_at DESC);
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS dailies (
   date TEXT PRIMARY KEY,
   secret TEXT NOT NULL,
   words TEXT NOT NULL,       -- JSON array of 4 index words
+  hint TEXT,                 -- optional 5th "indice supplémentaire", NULL when none
   updated_at INTEGER NOT NULL
 );
 

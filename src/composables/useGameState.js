@@ -1,5 +1,5 @@
 import { reactive, computed, watch, ref } from 'vue';
-import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
+import { buildWords, buildSecret, buildHint, shuffle, normalize } from '../game/puzzle.js';
 import { listDailies, puzzleForDate } from '../data/challenges.js';
 import { COMMUNITY_PREFIX, COMMUNITY_ID_LENGTH, trimId } from '../data/community.js';
 
@@ -175,6 +175,10 @@ export function useGameState(date) {
   const puzzle = puzzleForDate(date);
   const words = buildWords(puzzle);
   const secret = buildSecret(puzzle);
+  /* Optional extra hint (null when the level has none — old levels, or authored
+   * without one); when present the player can unlock it from the secret keyboard. */
+  const hint = buildHint(puzzle);
+  const hasHint = !!hint;
 
   const saved = load(date);
 
@@ -211,6 +215,8 @@ export function useGameState(date) {
     wordIndex: initialWord,
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
+    /* Whether the player unlocked the extra hint. Absent on old saves → false. */
+    hintRevealed: saved?.hintRevealed ?? false,
   });
 
   /* Tile ids drawn so far for the active word, in order. */
@@ -425,10 +431,22 @@ export function useGameState(date) {
     state.wordIndex = null;
   }
 
+  /* Unlock the extra hint (a no-op when the level has none or it's already out). */
+  function revealHint() {
+    if (hasHint) state.hintRevealed = true;
+  }
+
   /* Persist on any change to saved state. Deep-watches the reactive collections
    * directly rather than diffing a JSON snapshot. */
   watch(
-    [solved, shuffleSeeds, secretPicks, () => state.secretFound, () => state.completed],
+    [
+      solved,
+      shuffleSeeds,
+      secretPicks,
+      () => state.secretFound,
+      () => state.completed,
+      () => state.hintRevealed,
+    ],
     () =>
       save(date, {
         solved: [...solved],
@@ -436,6 +454,7 @@ export function useGameState(date) {
         secretFound: state.secretFound,
         secretPicks: [...secretPicks],
         completed: state.completed,
+        hintRevealed: state.hintRevealed,
       }),
     { deep: true },
   );
@@ -444,6 +463,8 @@ export function useGameState(date) {
     puzzle,
     words,
     secret,
+    hint,
+    hasHint,
     state,
     path,
     current,
@@ -469,5 +490,6 @@ export function useGameState(date) {
     typeSecret,
     backspaceSecret,
     clearSecret,
+    revealHint,
   };
 }

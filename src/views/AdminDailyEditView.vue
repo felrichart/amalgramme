@@ -30,6 +30,7 @@ const isEdit = !!editDate;
 
 const initialWords = reactive(['', '', '', '']);
 const initialSecret = ref('');
+const initialHint = ref('');
 
 /* New: default to the day after the last scheduled daily (or today), skipping
  * any date already taken. Edit: the date is fixed. */
@@ -58,6 +59,7 @@ onMounted(() => {
   }
   rec.words.forEach((w, i) => (initialWords[i] = w));
   initialSecret.value = rec.secret;
+  initialHint.value = rec.hint ?? '';
 });
 
 const taken = computed(() => !isEdit && getDailies().some((d) => d.date === date.value));
@@ -99,6 +101,7 @@ async function submit(normalized) {
       :author="username"
       :initial-words="initialWords"
       :initial-secret="initialSecret"
+      :initial-hint="initialHint"
       :is-edit="isEdit"
       :submitting="submitting"
       :error="error"

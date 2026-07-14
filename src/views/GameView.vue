@@ -31,6 +31,7 @@ import {
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
+import AidePopup from '../components/AidePopup.vue';
 import { WHEEL_TINTS } from '../palette.js';
 
 const route = useRoute();
@@ -273,6 +274,14 @@ function openSecret() {
   g.activateSecret();
 }
 
+/* "Aide" popup, opened from the keyboard's lightbulb; revealing unlocks the
+ * extra hint (persisted in game state) and closes the popup. */
+const aideOpen = ref(false);
+function revealHint() {
+  g.revealHint();
+  aideOpen.value = false;
+}
+
 /* Flash a shake on the secret boxes when a full guess is wrong. */
 const secretShaking = ref(false);
 let secretShakeTimer = null;
@@ -305,19 +314,17 @@ function measureLinks() {
   const s = sec.getBoundingClientRect();
   const cx = s.left + s.width / 2 - o.left;
   const cy = s.top + s.height / 2 - o.top;
-  links.lines = cellEls
-    .map((el, i) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return {
-        x1: cx,
-        y1: cy,
-        x2: r.left + r.width / 2 - o.left,
-        y2: r.top + r.height / 2 - o.top,
-        tint: WHEEL_TINTS[i],
-      };
-    })
-    .filter(Boolean);
+  const lineTo = (el, tint) => {
+    const r = el.getBoundingClientRect();
+    return {
+      x1: cx,
+      y1: cy,
+      x2: r.left + r.width / 2 - o.left,
+      y2: r.top + r.height / 2 - o.top,
+      tint,
+    };
+  };
+  links.lines = cellEls.map((el, i) => (el ? lineTo(el, WHEEL_TINTS[i]) : null)).filter(Boolean);
 }
 
 let ro;
@@ -340,7 +347,7 @@ watch(
 
 /* Physical keyboard: routes to the secret keyboard or the active wheel. */
 function onKeydown(e) {
-  if (g.state.completed) return;
+  if (g.state.completed || aideOpen.value) return;
   if (g.secretActive.value) {
     if (e.key === 'Backspace') {
       e.preventDefault();
@@ -500,12 +507,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         :rows="g.trayRows.value"
         :solved="g.solved"
         :spent="g.spentTiles.value"
+        :has-hint="g.hasHint"
+        :hint-revealed="g.state.hintRevealed"
+        :hint="g.hint?.display ?? ''"
         @key="g.typeSecret"
         @backspace="g.backspaceSecret"
         @clear="g.clearSecret"
+        @hint="aideOpen = true"
       />
 
       <div v-else-if="g.state.completed" class="finish">
+        <!-- Recap the extra hint above Bravo: solid lime if the player used it,
+             washed-out if the level offered one but they solved without it. -->
+        <div v-if="g.hasHint" class="finish-hint" :class="{ wash: !g.state.hintRevealed }">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span>{{ g.hint.display }}</span>
+        </div>
         <div class="finish-head">
           <span class="finish-mark" aria-hidden="true">✓</span>
           <span class="finish-bravo">Bravo</span>
@@ -547,6 +573,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </div>
       </div>
     </div>
+
+    <AidePopup :open="aideOpen" @reveal="revealHint" @close="aideOpen = false" />
   </div>
 </template>
 
@@ -913,6 +941,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   display: flex;
   align-items: center;
   gap: 0.7rem;
+}
+/* Recap of the extra hint above Bravo, in the lime tint. Solid = used; washed
+   out = the level offered it but the player solved without it. */
+.finish-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 3rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.7rem;
+  font-weight: 900;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--lime);
+  border: var(--outline-w) solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+.finish-hint.wash {
+  color: var(--lime);
+  background: color-mix(in srgb, var(--lime) 18%, #fff);
 }
 .finish-bravo {
   font-size: 1.9rem;
