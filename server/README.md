@@ -72,8 +72,7 @@ exercise the API locally; leave it empty to run the app offline from cache.
 | POST   | `/auth`          | `{author, pin, mode}`                   | `connexion` verifies an existing name+PIN; `inscription` claims a new name |
 | GET    | `/levels`        | —                                       | all levels, newest first (no PINs)                                         |
 | POST   | `/levels`        | `{author, pin, secret, words[4]}`       | claims/verifies the name via PIN; rate-limited; 429 over the cap           |
-| PUT    | `/levels/:id`    | `{author, pin, secret, words[4]}`       | author must match + PIN verify (or the `cara+` account)                    |
-| DELETE | `/levels/:id`    | `{author, pin}`                         | owner PIN (or the `cara+` account)                                         |
+| DELETE | `/levels/:id`    | `{author, pin}`                         | owner PIN (or the `cara+` account); community levels are create-only       |
 | GET    | `/dailies`       | —                                       | all dailies (with play stats), oldest first                                |
 | POST   | `/dailies`       | `{author, pin, date, secret, words[4]}` | admin (`cara+`) only; `date` must be today or later                        |
 | PUT    | `/dailies/:date` | `{author, pin, secret, words[4]}`       | admin only; `date` must be today or later                                  |

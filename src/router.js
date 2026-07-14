@@ -13,7 +13,6 @@ const routes = [
   { path: '/challenges', component: ChallengesView },
   { path: '/community', component: CommunityView },
   { path: '/community/create', component: CreateChallengeView },
-  { path: '/community/edit/:id', component: CreateChallengeView },
   { path: '/community/:author', component: CommunityAuthorView },
   { path: '/admin', component: AdminView },
   { path: '/admin/new', component: AdminDailyEditView },

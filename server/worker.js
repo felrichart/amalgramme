@@ -4,9 +4,8 @@
  *   GET    /levels        list every level, newest first (never returns PINs)
  *   POST   /levels        create one (claims/verifies the author via name+PIN,
  *                         globally rate-limited, validated)
- *   PUT    /levels/:id     edit one (author+PIN); mints a fresh id, dropping the
- *                         old row so in-progress solvers aren't left mismatched
- *   DELETE /levels/:id     remove one (author+PIN)
+ *   DELETE /levels/:id     remove one (author+PIN). Community levels are
+ *                         create-only — there is no edit endpoint.
  *   POST   /levels/:id/attempt  record a play by an anonymous client (no sign-in)
  *   POST   /levels/:id/solve    record a completion by an anonymous client
  *   GET    /dailies         list every daily (with play stats), oldest first
@@ -228,61 +227,8 @@ export default {
 
     const match = pathname.match(/^\/levels\/([^/]+)$/);
 
-    if (match && request.method === 'PUT') {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ error: 'bad_json' }, 400);
-      }
-      const level = await env.DB.prepare(
-        'SELECT author, secret, words, created_at FROM levels WHERE id = ?',
-      )
-        .bind(match[1])
-        .first();
-      if (!level) return json({ error: 'not_found' }, 404);
-      const author = String(body.author ?? '').trim();
-      const auth = await authAuthor(env, author, String(body.pin ?? ''), false);
-      /* Own level, or the admin editing anyone's. The author is preserved so an
-       * admin editing someone else's level keeps the original byline. */
-      if (auth !== 'ok' || (author !== ADMIN_NAME && author !== level.author))
-        return json({ error: 'forbidden' }, 403);
-
-      const challenge = parseChallenge(body);
-      if (!challenge) return json({ error: 'invalid' }, 422);
-
-      const words = JSON.stringify(challenge.words);
-      /* No actual change (both sides normalised): keep the row as-is so a re-save
-       * doesn't needlessly break links or reset stats. */
-      if (challenge.secret === level.secret && words === level.words)
-        return json({
-          id: match[1],
-          author: level.author,
-          secret: level.secret,
-          words: JSON.parse(level.words),
-          created_at: level.created_at,
-        });
-
-      /* Content changed → mint a fresh id. Solvers key their progress by level
-       * id, so reusing it would leave anyone mid-solve with a board that no
-       * longer matches. Dropping the old row (its stats included) lets the level
-       * reappear as fresh, unsolved content. */
-      const newId = newLevelId();
-      const created_at = Date.now();
-      await env.DB.batch([
-        env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(match[1]),
-        env.DB.prepare(
-          'INSERT INTO levels (id, author, secret, words, created_at) VALUES (?, ?, ?, ?, ?)',
-        ).bind(newId, level.author, challenge.secret, words, created_at),
-      ]);
-      return json({
-        id: newId,
-        author: level.author,
-        secret: challenge.secret,
-        words: challenge.words,
-        created_at,
-      });
-    }
+    /* Community levels are create-only — no edit endpoint. Admin edits daily
+     * challenges through the dailies API instead. */
 
     if (match && request.method === 'DELETE') {
       let body = {};

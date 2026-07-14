@@ -10,8 +10,9 @@ const route = useRoute();
 const router = useRouter();
 const author = route.params.author;
 
-/* The player may edit/delete this list when it's their own, or they're the
- * admin (the PIN is checked server-side on the actual edit/delete). */
+/* The player may delete a level when it's their own, or they're the admin.
+ * Community levels can't be edited by anyone once posted — deletion is the only
+ * owner/admin action. The PIN is checked server-side. */
 const mine = computed(() => username.value === author || isAdmin.value);
 
 function build() {
@@ -96,19 +97,15 @@ async function confirmDelete() {
             <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
           </span>
         </button>
-        <template v-if="mine">
-          <button
-            class="act"
-            type="button"
-            aria-label="modifier"
-            @click="router.push(`/community/edit/${c.id}`)"
-          >
-            ✎
-          </button>
-          <button class="act danger" type="button" aria-label="supprimer" @click="pending = c.id">
-            ✕
-          </button>
-        </template>
+        <button
+          v-if="mine"
+          class="act danger"
+          type="button"
+          aria-label="supprimer"
+          @click="pending = c.id"
+        >
+          ✕
+        </button>
       </li>
       <li v-if="!items.length" class="empty">Aucun défi.</li>
     </ul>

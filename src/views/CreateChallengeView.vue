@@ -1,40 +1,14 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { createCommunityLevel, updateCommunityLevel } from '../services/community.js';
-import { communityRecord, shortCommunityId } from '../data/community.js';
-import { username, pin, pinValid, isAdmin } from '../composables/useUsername.js';
+/* Community levels are create-only: once posted, they can't be edited by anyone
+ * (authors or admin). Admin edits live in the daily editor instead. */
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { createCommunityLevel } from '../services/community.js';
+import { username, pin, pinValid } from '../composables/useUsername.js';
 import ChallengeForm from '../components/ChallengeForm.vue';
 import UsernamePrompt from '../components/UsernamePrompt.vue';
 
-const route = useRoute();
 const router = useRouter();
-
-/* Trim to the canonical short id so a legacy full-UUID edit link still targets
- * the right cached record and backend row. */
-const editId = route.params.id ? shortCommunityId(route.params.id) : null;
-const isEdit = !!editId;
-
-const initialWords = reactive(['', '', '', '']);
-const initialSecret = ref('');
-
-/* Original author of the level being edited (kept for the recap and preserved
- * server-side when the admin edits someone else's level). */
-const editAuthor = ref('');
-
-/* Edit mode: prefill from the cached level; bounce unless it's the player's own
- * (or they're the admin, who may edit anyone's). */
-onMounted(() => {
-  if (!isEdit) return;
-  const rec = communityRecord(editId);
-  if (!rec || (rec.author !== username.value && !isAdmin.value)) {
-    router.replace('/community');
-    return;
-  }
-  editAuthor.value = rec.author;
-  rec.words.forEach((w, i) => (initialWords[i] = w));
-  initialSecret.value = rec.secret;
-});
 
 /* No identity yet → force the name/PIN prompt open. */
 const nameOpen = ref(!username.value || !pinValid(pin.value));
@@ -45,10 +19,7 @@ const error = ref('');
 async function submit(normalized) {
   submitting.value = true;
   error.value = '';
-  const payload = { ...normalized, pin: pin.value };
-  const res = isEdit
-    ? await updateCommunityLevel(editId, payload)
-    : await createCommunityLevel(payload);
+  const res = await createCommunityLevel({ ...normalized, pin: pin.value });
   submitting.value = false;
   if (res.ok) router.push(`/community/${res.level.author}`);
   else error.value = res.error;
@@ -66,7 +37,7 @@ async function submit(normalized) {
       >
         ←
       </button>
-      <h1 class="title">{{ isEdit ? 'Modifier le défi' : 'Créer un défi' }}</h1>
+      <h1 class="title">Créer un défi</h1>
       <div class="spacer" />
     </header>
 
@@ -77,12 +48,10 @@ async function submit(normalized) {
 
     <ChallengeForm
       :author="username"
-      :initial-words="initialWords"
-      :initial-secret="initialSecret"
-      :is-edit="isEdit"
       :submitting="submitting"
       :error="error"
-      :recap-byline="`par ${isEdit ? editAuthor : username}`"
+      :recap-byline="`par ${username}`"
+      confirm-note="Vous ne pourrez plus modifier ce défi une fois publié."
       @submit="submit"
     />
 

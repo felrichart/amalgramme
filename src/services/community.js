@@ -109,30 +109,6 @@ export async function createCommunityLevel(payload) {
 }
 
 /*
- * Edit a challenge. `payload` is { author, pin, secret, words }. The backend
- * mints a fresh id (see PUT /levels/:id), so this drops the old id from the
- * cache and prepends the new record. Returns { ok: true, level } or
- * { ok: false, error }.
- */
-export async function updateCommunityLevel(id, payload) {
-  if (!COMMUNITY_API) return { ok: false, error: 'Serveur non configuré.' };
-  try {
-    const res = await fetch(`${COMMUNITY_API}/levels/${id}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return { ok: false, error: await reason(res, 'Modification refusée.') };
-    const level = await res.json();
-    setCache([level, ...getCache().filter((l) => l.id !== id && l.id !== level.id)], Date.now());
-    return { ok: true, level };
-  } catch {
-    return { ok: false, error: 'Connexion impossible, réessaie plus tard.' };
-  }
-}
-
-/*
  * Report a play stat for a bare level id. `kind` is 'attempt' (opened) or
  * 'solve' (completed). Fail-soft — stats never surface to the player. Reported
  * at most once per kind per level for this client (the backend also dedupes by

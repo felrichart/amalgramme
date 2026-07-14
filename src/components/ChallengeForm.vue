@@ -22,6 +22,9 @@ const props = defineProps({
   error: { type: String, default: '' },
   /* Byline under the recap title, e.g. "par cara+" or the date label. */
   recapByline: { type: String, default: '' },
+  /* Optional warning shown in the recap before confirming (e.g. "you can't
+   * edit this later"). */
+  confirmNote: { type: String, default: '' },
   /* Extra guard the parent can add (e.g. missing/past date); blocks submit. */
   extraValid: { type: Boolean, default: true },
 });
@@ -126,15 +129,15 @@ function confirm() {
       :disabled="!v.ok || !extraValid"
       @click="confirmOpen = true"
     >
-      {{ isEdit ? 'Enregistrer' : 'Créer' }}
+      {{ isEdit ? 'Enregistrer' : 'Publier' }}
     </button>
   </footer>
 
   <!-- Recap / confirmation -->
   <div v-if="confirmOpen" class="overlay" @click.self="!submitting && (confirmOpen = false)">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Confirmer le défi">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Publier le défi">
       <h2 class="modal-title">
-        {{ isEdit ? 'Enregistrer les modifications ?' : 'Confirmer le défi' }}
+        {{ isEdit ? 'Enregistrer les modifications ?' : 'Publier le défi' }}
       </h2>
       <p v-if="recapByline" class="modal-by">{{ recapByline }}</p>
       <!-- Cross recap: the 4 indices in the corners, the énigme at the centre,
@@ -169,6 +172,7 @@ function confirm() {
         >
         <span class="chip secret-chip center">{{ v.normalized.secret }}</span>
       </div>
+      <p v-if="confirmNote" class="note">⚠ {{ confirmNote }}</p>
       <p v-if="error" class="err">{{ error }}</p>
       <div class="modal-actions">
         <button
@@ -180,7 +184,7 @@ function confirm() {
           Modifier
         </button>
         <button class="cta" type="button" :disabled="submitting" @click="confirm">
-          {{ submitting ? '…' : 'Confirmer' }}
+          {{ submitting ? '…' : 'Publier' }}
         </button>
       </div>
     </div>
@@ -384,6 +388,16 @@ function confirm() {
   color: var(--pink);
   font-weight: 800;
   font-size: 0.9rem;
+}
+/* Pre-confirm warning (e.g. "no edits later"). */
+.note {
+  text-align: center;
+  color: red;
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0.6rem 0.7rem;
 }
 .modal-actions {
   display: flex;
