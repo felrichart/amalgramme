@@ -1,7 +1,12 @@
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useGameState, tutorialState, saveTutorialState } from '../composables/useGameState.js';
+import {
+  useGameState,
+  tutorialState,
+  saveTutorialState,
+  savedProgress,
+} from '../composables/useGameState.js';
 import {
   todayDate,
   puzzleForDate,
@@ -93,7 +98,7 @@ const tutorialSteps = computed(() => [
     shape: 'rect',
     manual: true,
     cta: 'Compris',
-    html: 'Devine le <strong>mot énigme</strong> au centre grâce aux 4 indices.',
+    html: 'Devine le <strong>mot énigme</strong> au centre grâce aux 4 <span style="color:var(--gold);font-weight:900">indices</span>.',
   },
 ]);
 /* A lone popup, split from the main walkthrough: it fires the first time the
@@ -177,9 +182,12 @@ if (!isCommunity) {
     );
 }
 
-/* Coach shows on a first-ever play (unless this level is already finished),
- * resuming at the last-reached step; progress persists per device. */
-const coachOpen = ref(!tut.done && !g.state.completed);
+/* Coach shows only on a genuine first-ever play: never once the player has any
+ * saved progress anywhere (that already implies they know the rules), whichever
+ * level they open first. */
+const firstPlay = savedProgress().length === 0;
+const coachEnabled = firstPlay && !tut.done;
+const coachOpen = ref(coachEnabled && !g.state.completed);
 const coachStep = ref(tut.step ?? 0);
 function coachNext() {
   if (coachStep.value >= tutorialSteps.value.length - 1) {
@@ -194,7 +202,7 @@ function coachNext() {
  * player has traced two letters so they finish the word unhindered, then bring
  * the coach back on the "Bravo" step — spotlighting the word they solved — once
  * a first word is found. */
-if (!tut.done) {
+if (coachEnabled) {
   watch(
     () => g.path.length,
     (n) => {
@@ -218,7 +226,7 @@ if (!tut.done) {
  * main coach is done), shown once per device. The dock stays live under it and
  * it's dismissed as soon as the player types a letter. */
 const secretCoachOpen = ref(false);
-if (!tut.keyboardSeen) {
+if (firstPlay && !tut.keyboardSeen) {
   let hintShown = false;
   watch(
     () => g.secretActive.value,
