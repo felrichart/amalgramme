@@ -25,13 +25,35 @@ export const COMMUNITY_PREFIX = 'com-';
  * resolving to the same record and progress. */
 export const COMMUNITY_ID_LENGTH = 8;
 
-function trimId(id) {
-  return String(id).slice(0, COMMUNITY_ID_LENGTH);
-}
+/*
+ * A community level has one identity in two dresses: a bare 8-char id (the
+ * server's `levels.id`, e.g. "550e8400") and, as a puzzle "date"/route slug, that
+ * same id under a "com-" prefix ("com-550e8400") to namespace it from the
+ * ISO-dated dailies. So a value reaching these helpers may be either form — and a
+ * legacy one may still carry a full UUID. Two orthogonal operations untangle it:
+ * trimId collapses any length to the canonical 8, stripPrefix drops the "com-",
+ * and bareId does both — the single home for id truncation.
+ */
 
 /* True for a puzzle date/slug that names a community level. */
 export function isCommunityId(id) {
   return typeof id === 'string' && id.startsWith(COMMUNITY_PREFIX);
+}
+
+/* Collapse an id of any length to its canonical 8 chars. Exported for the save
+ * migration, which re-keys raw storage keys (see useGameState.migrateCommunitySaves). */
+export function trimId(id) {
+  return String(id).slice(0, COMMUNITY_ID_LENGTH);
+}
+
+/* Drop the "com-" slug prefix if present, leaving the (possibly long) bare id. */
+function stripPrefix(idOrDate) {
+  return isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+}
+
+/* Canonical 8-char bare id from a bare, "com-"-prefixed, or legacy full-UUID id. */
+function bareId(idOrDate) {
+  return trimId(stripPrefix(idOrDate));
 }
 
 function readCache() {
@@ -64,24 +86,17 @@ export function setCache(levels, fetchedAt) {
   }
 }
 
-/* Bare, canonical-length community id from a "com-<id>" date or a bare id; trims
- * a legacy full UUID to its short form. Community-space callers only. */
-function bareId(idOrDate) {
-  const bare = isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
-  return trimId(bare);
-}
-
-/* First-8 canonical bare id from a bare or "com-"-prefixed id (accepts a legacy
- * full UUID). Used where a raw id, not a date, is needed (e.g. edit routes). */
+/* Canonical bare id from a bare or "com-"-prefixed id (accepts a legacy full
+ * UUID). Used where a raw id, not a slug, is needed (e.g. edit routes). */
 export function shortCommunityId(idOrDate) {
   return bareId(idOrDate);
 }
 
-/* Canonical "com-<id>" date for a community slug/date, collapsing a legacy
+/* Canonical "com-<id>" slug/date for a community reference, collapsing a legacy
  * full-UUID id onto its short form so old /play/com-<uuid> links resolve to the
- * same puzzle and saved progress as the short id. */
+ * same puzzle and saved progress. */
 export function shortCommunityDate(idOrDate) {
-  return COMMUNITY_PREFIX + bareId(idOrDate);
+  return COMMUNITY_PREFIX + shortCommunityId(idOrDate);
 }
 
 /* This device's anonymous id, minted (and persisted) on first use. Null only
@@ -109,11 +124,12 @@ function readReported() {
   return {};
 }
 
-/* Dedup key for a reported play. A community level keys on its bare id; a daily
- * keys on its full ISO date — trimming (bareId) would collapse every daily in a
- * month onto one key and silently drop later reports (e.g. a win not counted). */
+/* The key a level's play is recorded under, matching the server's level_id: a
+ * community level keys on its canonical bare id; a daily keys on its ISO date
+ * as-is. Trimming a daily date here would collapse every daily in a month onto
+ * one key and silently drop later reports (e.g. a win not counted). */
 function reportKey(idOrDate) {
-  return isCommunityId(idOrDate) ? idOrDate.slice(COMMUNITY_PREFIX.length) : idOrDate;
+  return isCommunityId(idOrDate) ? bareId(idOrDate) : idOrDate;
 }
 
 /* Whether this client already reported `kind` ('attempt'|'solve') for a level. */

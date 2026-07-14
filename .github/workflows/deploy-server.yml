@@ -7,6 +7,7 @@ on:
       - 'server/**'
       # Local wrangler/miniflare dev state isn't deployed — ignore it.
       - '!server/.wrangler/**'
+      - 'shared/**'
       - '.github/workflows/deploy-server.yml'
   workflow_dispatch:
 

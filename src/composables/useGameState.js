@@ -1,7 +1,7 @@
 import { reactive, computed, watch, ref } from 'vue';
 import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
 import { listDailies, puzzleForDate } from '../data/challenges.js';
-import { COMMUNITY_PREFIX, COMMUNITY_ID_LENGTH } from '../data/community.js';
+import { COMMUNITY_PREFIX, COMMUNITY_ID_LENGTH, trimId } from '../data/community.js';
 
 const STORAGE_PREFIX = 'amalgramme:v3:level:';
 
@@ -47,7 +47,7 @@ export function migrateCommunitySaves() {
     for (const oldKey of keys) {
       const id = oldKey.slice(prefix.length);
       if (id.length <= COMMUNITY_ID_LENGTH) continue;
-      const newKey = prefix + id.slice(0, COMMUNITY_ID_LENGTH);
+      const newKey = prefix + trimId(id);
       const raw = localStorage.getItem(oldKey);
       if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, raw);
       localStorage.removeItem(oldKey);

@@ -49,7 +49,6 @@ export function shuffle(arr, seed = 0) {
   return a;
 }
 
-/* Strip diacritics so a typed "é" matches the accent-free answers. */
-export function normalize(ch) {
-  return ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-}
+/* Strip diacritics so a typed "é" matches the accent-free answers. Shared with
+ * the word rules (and the Worker) — see shared/word-rules.js. */
+export { normalizeChar as normalize } from '../../shared/word-rules.js';

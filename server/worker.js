@@ -19,8 +19,10 @@
  * Identity: a username is claimed by a PIN on first use and stored in `users`
  * (plaintext, by design — a casual ownership check, not a password). Reusing a
  * name later requires the same PIN. The reserved name `cara+` may edit/delete
- * any level once its PIN checks out. Word rules mirror src/game/word.js.
+ * any level once its PIN checks out. Word rules are shared verbatim with the
+ * client via ../shared/word-rules.js.
  */
+import { normalizeWord, wordError, canBuildSecret } from '../shared/word-rules.js';
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -38,66 +40,6 @@ function json(data, status = 200) {
     status,
     headers: { 'content-type': 'application/json', ...CORS },
   });
-}
-
-/* --- word rules (kept in sync with src/game/word.js) --- */
-const MAX_LETTERS = 12;
-const MIN_LETTERS = 3;
-const MAX_SEP = 4;
-
-function isSep(ch) {
-  return ch === ' ' || ch === '-' || ch === "'";
-}
-
-function normalizeWord(raw) {
-  const chars = String(raw ?? '')
-    .replace(/’/g, "'")
-    .split('')
-    .map((ch) => (isSep(ch) ? ch : ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()));
-  let out = '';
-  let prevSep = true;
-  for (const ch of chars) {
-    const sep = isSep(ch);
-    if (sep && prevSep) continue;
-    out += ch;
-    prevSep = sep;
-  }
-  return out.replace(/[ \-']+$/, '');
-}
-
-function wordError(w) {
-  if (!w) return 'empty';
-  let letters = 0;
-  let sep = 0;
-  let other = 0;
-  for (const ch of w) {
-    if (ch >= 'a' && ch <= 'z') letters++;
-    else if (isSep(ch)) sep++;
-    else other++;
-  }
-  if (other > 0) return 'char';
-  if (letters < 1) return 'empty';
-  if (letters < MIN_LETTERS) return 'short';
-  if (letters > MAX_LETTERS) return 'long';
-  if (sep > MAX_SEP) return 'sep';
-  return null;
-}
-
-function bag(w) {
-  const b = {};
-  for (const ch of w) if (ch >= 'a' && ch <= 'z') b[ch] = (b[ch] || 0) + 1;
-  return b;
-}
-
-function canBuild(secret, words) {
-  const pool = {};
-  for (const w of words) {
-    const b = bag(w);
-    for (const ch in b) pool[ch] = (pool[ch] || 0) + b[ch];
-  }
-  const need = bag(secret);
-  for (const ch in need) if ((pool[ch] || 0) < need[ch]) return false;
-  return true;
 }
 
 const PIN_RE = /^\d{4}$/;
@@ -118,7 +60,7 @@ function parseChallenge(body) {
     !words.some((w) => wordError(w)) &&
     new Set(words).size === words.length &&
     !wordError(secret) &&
-    canBuild(secret, words);
+    canBuildSecret(secret, words);
   return valid ? { words, secret } : null;
 }
 

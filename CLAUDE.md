@@ -20,8 +20,15 @@ src/
   utils/today.js               resolve today's date (time API, device-clock fallback)
   views/                       MenuView, ChallengesView, GameView (the board)
   components/                  LetterWheel, LetterKeyboard, TutorialCoach
+shared/word-rules.js           word normalise/validate rules; imported by both the
+                               client (game/word.js) and the Worker (server/worker.js)
+server/worker.js               Cloudflare Worker: dailies + community API over D1
 test/                          vitest: puzzle, gamestate, migration
 ```
+
+> `shared/` is dependency-free and bundles for both the browser (Vite) and the
+> Worker (esbuild) — editing it changes server-side validation, so redeploy the
+> Worker (`wrangler deploy` from `server/`).
 
 ## Core concepts
 
