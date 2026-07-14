@@ -10,7 +10,7 @@
  *   POST   /levels/:id/solve    record a completion by an anonymous client
  *   GET    /dailies         list every daily (with play stats), oldest first
  *   POST   /dailies         create one (admin only, date must be today or later)
- *   PUT    /dailies/:date    edit one (admin only, today or later)
+ *   PUT    /dailies/:date    edit one (admin only; past dailies: hint-only)
  *   DELETE /dailies/:date    remove one (admin only, today or later)
  *   POST   /dailies/:date/attempt|solve  record an anonymous play, like /levels
  *   POST   /admin/export    full DB dump for the admin's manual backup
@@ -357,11 +357,19 @@ export default {
       const adminErr = await requireAdmin(env, body);
       if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
       const date = dailyMatch[1];
-      const row = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
+      const row = await env.DB.prepare('SELECT secret, words FROM dailies WHERE date = ?')
+        .bind(date)
+        .first();
       if (!row) return json({ error: 'not_found' }, 404);
-      if (date < serverToday()) return json({ error: 'past_date' }, 422);
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
+      /* Past dailies are locked: an already-played puzzle can't change — only its
+       * hint may be added/edited. Reject any change to the words or the énigme. */
+      if (date < serverToday()) {
+        const samePuzzle =
+          challenge.secret === row.secret && JSON.stringify(challenge.words) === row.words;
+        if (!samePuzzle) return json({ error: 'past_locked' }, 422);
+      }
       const updated_at = Date.now();
       await env.DB.prepare(
         'UPDATE dailies SET secret = ?, words = ?, hint = ?, updated_at = ? WHERE date = ?',

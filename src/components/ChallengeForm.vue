@@ -17,6 +17,9 @@ const props = defineProps({
   initialSecret: { type: String, default: '' },
   initialHint: { type: String, default: '' },
   isEdit: { type: Boolean, default: false },
+  /* Lock the puzzle (words + énigme read-only), leaving only the hint editable —
+   * for a past daily whose played puzzle must not change. */
+  lockPuzzle: { type: Boolean, default: false },
   /* When true, the recap "Confirmer" action is blocked from re-firing. */
   submitting: { type: Boolean, default: false },
   /* A server error shown inside the recap; keeps the modal open. */
@@ -96,6 +99,10 @@ function confirm() {
   <main class="form">
     <slot name="fields-top" />
 
+    <p v-if="lockPuzzle" class="lock-banner">
+      Défi passé : le puzzle est verrouillé, seule l’aide est modifiable.
+    </p>
+
     <section class="section">
       <h2 class="section-title">Indices</h2>
       <label v-for="(w, i) in words" :key="i" class="field" :style="{ '--tint': WHEEL_TINTS[i] }">
@@ -108,6 +115,7 @@ function confirm() {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
+          :readonly="lockPuzzle"
           :placeholder="`Indice ${i + 1}`"
         />
         <span v-if="wordHint(v.words[i])" class="hint">{{ wordHint(v.words[i]) }}</span>
@@ -125,6 +133,7 @@ function confirm() {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
+          :readonly="lockPuzzle"
           placeholder="Mot énigme"
         />
         <span v-if="secretHint" class="hint">{{ secretHint }}</span>
@@ -343,6 +352,24 @@ function confirm() {
 .input:focus-visible {
   outline: 2px solid var(--tint, var(--accent));
   outline-offset: 2px;
+}
+/* Locked puzzle field (past daily): dimmed and not editable. */
+.input:read-only {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+/* Banner atop the form when only the hint may change. */
+.lock-banner {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.9rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--lime) 18%, var(--panel));
+  border: var(--outline-w) solid var(--lime);
 }
 .hint {
   font-size: 0.78rem;

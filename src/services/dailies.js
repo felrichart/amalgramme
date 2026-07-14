@@ -41,6 +41,7 @@ async function reason(res, fallback) {
     no_pin: 'Choisis un code à 4 chiffres.',
     forbidden: 'Réservé au compte admin.',
     past_date: 'Trop tard : seuls aujourd’hui et les jours suivants sont modifiables.',
+    past_locked: 'Défi passé : seule l’aide peut être modifiée, pas le puzzle.',
     date_taken: 'Un défi existe déjà pour cette date.',
     bad_date: 'Date invalide.',
     invalid: 'Défi invalide, vérifie les indices et l’énigme.',
