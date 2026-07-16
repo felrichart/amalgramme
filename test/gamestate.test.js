@@ -69,48 +69,102 @@ describe('useGameState', () => {
   });
 });
 
-describe('useGameState extra hint', () => {
-  const HDATE = '2026-07-08';
-  const seedHint = (hint) =>
+describe('useGameState help reveals', () => {
+  const totalRevealed = (g) => g.revealed.reduce((a, b) => a + b, 0);
+
+  it('starts with 3 word reveals available (secret needs solved words first)', async () => {
+    const g = useGameState(DATE);
+    expect(g.helpLeft.value).toBe(3);
+    expect(g.canRevealWord.value).toBe(true);
+    expect(g.canRevealSecret.value).toBe(true);
+    g.useHelp('word');
+    await nextTick();
+    expect(totalRevealed(g)).toBe(1);
+    expect(g.helpLeft.value).toBe(2);
+    const saved = JSON.parse(localStorage.getItem(KEY + DATE));
+    expect(saved.helpUsed).toBe(1);
+    expect(saved.revealed.reduce((a, b) => a + b, 0)).toBe(1);
+  });
+
+  it('caps at 3 reveals, then disables both and does nothing', () => {
+    const g = useGameState(DATE);
+    g.useHelp('word');
+    g.useHelp('word');
+    g.useHelp('word');
+    expect(g.helpLeft.value).toBe(0);
+    expect(g.canRevealWord.value).toBe(false);
+    expect(g.canRevealSecret.value).toBe(false);
+    g.useHelp('word');
+    expect(g.helpLeft.value).toBe(0);
+  });
+
+  it('reveals a secret letter on demand and leaves words untouched', async () => {
+    const g = useGameState(DATE);
+    g.useHelp('secret');
+    await nextTick();
+    expect(g.state.secretReveal).toBe(1);
+    expect(totalRevealed(g)).toBe(0);
+  });
+
+  it('disables the secret reveal once the secret is found', async () => {
+    const g = useGameState(DATE);
+    for (let i = 0; i < g.words.length; i++) {
+      g.activate(i);
+      await typeWord(g, g.words[i].text);
+    }
+    for (const ch of g.secret.text) g.typeSecret(ch);
+    await nextTick();
+    expect(g.state.secretFound).toBe(true);
+    expect(g.canRevealSecret.value).toBe(false);
+    expect(g.canRevealWord.value).toBe(false);
+  });
+
+  it('pre-traces the revealed letters onto the active wheel and locks them', () => {
+    const g = useGameState(DATE); // focused on word 0 = "vitre"
+    g.useHelp('word'); // deterministic first pick is word 0
+    expect(g.revealed[0]).toBe(1);
+    /* The reveal seeds the path so the leading letter is already drawn. */
+    expect(g.current.value).toBe('v');
+    /* And can't be undone: backspace never eats the revealed prefix. */
+    g.backspace();
+    expect(g.current.value).toBe('v');
+    /* The player only extends it. */
+    for (const ch of 'itre') g.typeLetter(ch);
+    expect(g.solved[0]).toBe(true);
+  });
+
+  it('pre-fills the revealed secret letters as locked input', () => {
+    const g = useGameState(DATE); // secret "verre"
+    g.useHelp('secret');
+    expect(g.state.secretReveal).toBe(1);
+    expect(g.secretInput.value).toBe('v');
+  });
+
+  it('does not double a revealed secret letter an old save had already typed', () => {
+    /* Pre-feature saves stored revealed letters as typed picks (ghosts, not
+     * auto-filled), so the prefix must not re-add them. */
     localStorage.setItem(
-      'amalgramme:v3:dailies',
+      KEY + DATE,
       JSON.stringify({
-        levels: [
-          {
-            date: HDATE,
-            secret: 'verre',
-            words: ['vitre', 'gobelet', 'lunette', 'fragile'],
-            ...(hint ? { hint } : {}),
-          },
+        solved: [false, false, false, false],
+        secretReveal: 2,
+        secretPicks: [
+          { r: 0, id: 0, ch: 'v' },
+          { r: 0, id: 1, ch: 'e' },
         ],
-        fetchedAt: 1,
       }),
     );
-
-  it('exposes the parsed hint and starts unrevealed', () => {
-    seedHint('transparent');
-    const g = useGameState(HDATE);
-    expect(g.hasHint).toBe(true);
-    expect(g.hint.text).toBe('transparent');
-    expect(g.state.hintRevealed).toBe(false);
+    const g = useGameState(DATE);
+    expect(g.secretInput.value).toBe('ve');
   });
 
-  it('reveals and persists the hint across instances', async () => {
-    seedHint('transparent');
-    const g = useGameState(HDATE);
-    g.revealHint();
-    await nextTick();
-    expect(g.state.hintRevealed).toBe(true);
-    expect(JSON.parse(localStorage.getItem(KEY + HDATE)).hintRevealed).toBe(true);
-    expect(useGameState(HDATE).state.hintRevealed).toBe(true);
-  });
-
-  it('has no hint and revealHint is a no-op when the puzzle carries none', () => {
-    seedHint(null);
-    const g = useGameState(HDATE);
-    expect(g.hasHint).toBe(false);
-    expect(g.hint).toBeNull();
-    g.revealHint();
-    expect(g.state.hintRevealed).toBe(false);
+  it('loads legacy saves (extra-hint fields) without error', () => {
+    localStorage.setItem(
+      KEY + DATE,
+      JSON.stringify({ solved: [false, false, false, false], hintRevealed: true, secretPicks: [] }),
+    );
+    const g = useGameState(DATE);
+    expect(g.state.helpUsed).toBe(0);
+    expect(g.revealed).toEqual([0, 0, 0, 0]);
   });
 });

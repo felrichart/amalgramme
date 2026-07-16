@@ -262,9 +262,15 @@ const slots = computed(() => {
   return w.layout.map((spaceAfter, i) => ({ ch: cur[i] || '', spaceAfter }));
 });
 
-/* Secret boxes: one per letter, filled as the player types; gap where spaced. */
+/* Secret boxes: one per letter, filled as the player types; gap where spaced.
+ * The leading boxes revealed by help are pre-filled and locked (`given`), styled
+ * apart from the letters the player types. */
 const secretSlots = computed(() =>
-  g.secret.layout.map((spaceAfter, i) => ({ ch: g.secretInput.value[i] || '', spaceAfter })),
+  g.secret.layout.map((spaceAfter, i) => ({
+    ch: g.secretInput.value[i] || '',
+    given: i < g.state.secretReveal,
+    spaceAfter,
+  })),
 );
 
 /* Remount the keyboard on each reveal so its shuffle-in animation replays. */
@@ -274,12 +280,27 @@ function openSecret() {
   g.activateSecret();
 }
 
-/* "Aide" popup, opened from the keyboard's lightbulb. Revealing unlocks the
- * extra hint (persisted in game state) but keeps the popup open so it shows the
- * hint in place; the player closes it themselves. Re-opening shows it again. */
+/* "Aide" popup, opened from the header lightbulb: spends one reveal on the
+ * chosen kind ('word' | 'secret') and closes. */
 const aideOpen = ref(false);
-function revealHint() {
-  g.revealHint();
+function useHelp(kind) {
+  g.useHelp(kind);
+  aideOpen.value = false;
+}
+
+/* One-off "Nouveau, clique !" nudge towards the help button, dismissed forever
+ * on first open. */
+const AIDE_HINT_KEY = 'amalgramme:aideHintSeen';
+const aideHintSeen = ref(localStorage.getItem(AIDE_HINT_KEY) === '1');
+const aideHintOpen = computed(
+  () => !aideHintSeen.value && (g.canRevealWord.value || g.canRevealSecret.value),
+);
+function openAide() {
+  aideOpen.value = true;
+  if (!aideHintSeen.value) {
+    aideHintSeen.value = true;
+    localStorage.setItem(AIDE_HINT_KEY, '1');
+  }
 }
 
 /* Flash a shake on the secret boxes when a full guess is wrong. */
@@ -389,7 +410,30 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         ←
       </button>
       <h1 class="title">{{ title }}</h1>
-      <span class="icon-btn spacer" aria-hidden="true"></span>
+      <!-- Help: spend a reveal on a letter. Disabled once none remain. -->
+      <button
+        class="icon-btn help-btn"
+        type="button"
+        :disabled="!g.canRevealWord.value && !g.canRevealSecret.value"
+        @click="openAide"
+        aria-label="aide"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path
+            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span class="help-count">{{ g.helpLeft.value }}/3</span>
+      </button>
+      <div v-if="aideHintOpen" class="aide-hint" aria-hidden="true">
+        <span class="aide-hint-text">Nouveau&nbsp;!</span>
+        <span class="aide-hint-arrow">→</span>
+      </div>
     </header>
 
     <TutorialCoach v-if="coachOpen" :steps="tutorialSteps" :step="coachStep" @next="coachNext" />
@@ -440,7 +484,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             @pointerdown="g.activate(i)"
             @focus="g.activate(i)"
           >
-            <LetterWheel :tiles="g.wheelTiles(i)" :active="wordActive && g.state.wordIndex === i" />
+            <LetterWheel
+              :tiles="g.wheelTiles(i)"
+              :active="wordActive && g.state.wordIndex === i"
+              :revealed="g.revealed[i]"
+            />
           </button>
         </div>
       </template>
@@ -461,7 +509,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
               v-for="(s, i) in secretSlots"
               :key="i"
               class="sbox"
-              :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
+              :class="{ set: s.ch && !s.given, given: s.given, 'gap-after': s.spaceAfter }"
               >{{ s.ch }}</span
             >
           </span>
@@ -491,6 +539,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             active
             :tiles="g.wheelTiles(g.state.wordIndex)"
             :path="g.path"
+            :revealed="g.revealed[g.state.wordIndex]"
             :shake="g.shakeSignal.value"
             @begin="g.clearPath"
             @enter="g.appendTile"
@@ -507,31 +556,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         :rows="g.trayRows.value"
         :solved="g.solved"
         :spent="g.spentTiles.value"
-        :has-hint="g.hasHint"
-        :hint-revealed="g.state.hintRevealed"
-        :hint="g.hint?.display ?? ''"
         @key="g.typeSecret"
         @backspace="g.backspaceSecret"
         @clear="g.clearSecret"
-        @hint="aideOpen = true"
       />
 
       <div v-else-if="g.state.completed" class="finish">
-        <!-- Recap the extra hint above Bravo: solid lime if the player used it,
-             washed-out if the level offered one but they solved without it. -->
-        <div v-if="g.hasHint" class="finish-hint" :class="{ wash: !g.state.hintRevealed }">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path
-              d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span>{{ g.hint.display }}</span>
-        </div>
         <div class="finish-head">
           <span class="finish-mark" aria-hidden="true">✓</span>
           <span class="finish-bravo">Bravo</span>
@@ -576,9 +606,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
     <AidePopup
       :open="aideOpen"
-      :revealed="g.state.hintRevealed"
-      :hint="g.hint?.display ?? ''"
-      @reveal="revealHint"
+      :can-word="g.canRevealWord.value"
+      :can-secret="g.canRevealSecret.value"
+      :left="g.helpLeft.value"
+      @reveal="useHelp"
       @close="aideOpen = false"
     />
   </div>
@@ -595,10 +626,39 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 
 .top {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.6rem;
   padding: 0.9rem 1rem 0.5rem;
+}
+/* One-off nudge towards the help button: faded blue text + arrow, gently pulsing. */
+.aide-hint {
+  position: absolute;
+  top: 50%;
+  right: 6rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #3b82f6;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: aide-hint-fade 1.6s ease-in-out infinite;
+}
+.aide-hint-arrow {
+  font-size: 1rem;
+}
+@keyframes aide-hint-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
 }
 .icon-btn {
   width: 2.6rem;
@@ -625,11 +685,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   outline: 2px solid var(--outline);
   outline-offset: 2px;
 }
-/* Balances the back button so the title stays centred. */
-.icon-btn.spacer {
-  visibility: hidden;
-  pointer-events: none;
-  box-shadow: none;
+/* Help button: a lime pill in the top-right, lightbulb + remaining count in a row. */
+.help-btn {
+  width: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.6rem;
+  font-size: 1rem;
+  color: #fff;
+  background: var(--lime);
+}
+.help-count {
+  font-weight: 900;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+.help-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+  transform: none;
+  box-shadow: 0 0 0 var(--outline);
 }
 /* During the coach walkthrough the overlay (z 60) covers everything; keep the
    back button above it so leaving is always one tap away. */
@@ -732,6 +809,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: #fff;
   background: var(--accent);
   animation: press 0.14s ease;
+}
+/* Help-given leading letter: pre-filled and locked, filled in the secret's accent
+   like a typed letter but ringed in lime so it reads as a given clue. */
+.sbox.given {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--lime);
 }
 /* Wrong full guess: fade the tiles and strike each with a diagonal bar. */
 .secret-boxes.wrong .sbox {
@@ -947,28 +1031,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   display: flex;
   align-items: center;
   gap: 0.7rem;
-}
-/* Recap of the extra hint above Bravo, in the lime tint. Solid = used; washed
-   out = the level offered it but the player solved without it. */
-.finish-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 3rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 0.7rem;
-  font-weight: 900;
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: #fff;
-  background: var(--lime);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-}
-.finish-hint.wash {
-  color: var(--lime);
-  background: color-mix(in srgb, var(--lime) 18%, #fff);
 }
 .finish-bravo {
   font-size: 1.9rem;

@@ -1,8 +1,8 @@
 <script setup>
 /*
- * Admin dashboard: the daily bank, newest first, with play stats. Every row
- * opens the editor; today/future are fully editable and deletable, past dailies
- * are hint-only (their played puzzle is locked — the Worker enforces this too).
+ * Admin dashboard: the daily bank, newest first, with play stats. Today/future
+ * rows open the editor and can be deleted; past dailies are locked (their played
+ * puzzle can't change — the Worker enforces this too) and shown read-only.
  * Also mints a full-DB backup download. Admin-only (cara+).
  */
 import { ref, computed, onMounted } from 'vue';
@@ -28,9 +28,8 @@ function build() {
       secret: d.secret,
       attempts: d.attempts ?? 0,
       successes: d.successes ?? 0,
-      /* Full edit + delete for today/future; past dailies are hint-only. */
+      /* Full edit + delete for today/future; past dailies are locked. */
       editable: d.date >= today,
-      hasHint: !!d.hint,
     }));
 }
 
@@ -102,28 +101,21 @@ async function downloadBackup() {
 
     <ul class="list">
       <li v-for="c in items" :key="c.date" class="item">
-        <button
+        <component
+          :is="c.editable ? 'button' : 'div'"
           class="row"
           :class="{ past: !c.editable }"
-          type="button"
-          :aria-label="c.editable ? 'modifier' : 'ajouter une aide'"
-          @click="router.push(`/admin/edit/${c.date}`)"
+          :type="c.editable ? 'button' : undefined"
+          :aria-label="c.editable ? 'modifier' : undefined"
+          @click="c.editable && router.push(`/admin/edit/${c.date}`)"
         >
           <span class="date">{{ c.label }}</span>
           <span class="secret">{{ c.secret }}</span>
           <span class="stats">
-            <!-- Past daily: a bulb flags whether it already carries an aide. -->
-            <span
-              v-if="!c.editable"
-              class="bulb-flag"
-              :class="{ on: c.hasHint }"
-              :aria-label="c.hasHint ? 'aide présente' : 'aide manquante'"
-              >💡</span
-            >
             <span class="stat" :aria-label="`${c.attempts} joueurs`">▶ {{ c.attempts }}</span>
             <span class="stat" :aria-label="`${c.successes} réussites`">✓ {{ c.successes }}</span>
           </span>
-        </button>
+        </component>
         <button
           v-if="c.editable"
           class="act danger"
@@ -265,7 +257,7 @@ async function downloadBackup() {
   border: var(--outline-w) solid var(--outline);
   box-shadow: var(--pop);
 }
-/* Every row navigates to the editor. */
+/* Today/future rows navigate to the editor. */
 .row {
   cursor: pointer;
   transition:
@@ -276,19 +268,15 @@ async function downloadBackup() {
   transform: translate(3px, 4px);
   box-shadow: 0 0 0 var(--outline);
 }
-/* Past rows read quieter — they open in hint-only mode. */
+/* Past rows read quieter and are locked (not interactive). */
 .row.past {
   background: var(--panel);
   opacity: 0.85;
+  cursor: default;
 }
-/* Bulb flag on a past row: dim = no aide yet, lit lime = aide present. */
-.bulb-flag {
-  filter: grayscale(1);
-  opacity: 0.5;
-}
-.bulb-flag.on {
-  filter: none;
-  opacity: 1;
+.row.past:active {
+  transform: none;
+  box-shadow: var(--pop);
 }
 .date {
   font-size: 0.92rem;

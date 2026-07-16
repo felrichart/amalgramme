@@ -1,5 +1,5 @@
 import { reactive, computed, watch, ref } from 'vue';
-import { buildWords, buildSecret, buildHint, shuffle, normalize } from '../game/puzzle.js';
+import { buildWords, buildSecret, shuffle, normalize } from '../game/puzzle.js';
 import { listDailies, puzzleForDate } from '../data/challenges.js';
 import { COMMUNITY_PREFIX, COMMUNITY_ID_LENGTH, trimId } from '../data/community.js';
 
@@ -175,12 +175,11 @@ export function useGameState(date) {
   const puzzle = puzzleForDate(date);
   const words = buildWords(puzzle);
   const secret = buildSecret(puzzle);
-  /* Optional extra hint (null when the level has none — old levels, or authored
-   * without one); when present the player can unlock it from the secret keyboard. */
-  const hint = buildHint(puzzle);
-  const hasHint = !!hint;
 
   const saved = load(date);
+
+  /* Total letter reveals the player may spend across the level (see useHelp). */
+  const HELP_MAX = 3;
 
   const solved = reactive(saved?.solved ?? words.map(() => false));
   const shuffleSeeds = reactive(saved?.shuffleSeeds ?? words.map((_, i) => i + 1));
@@ -215,9 +214,14 @@ export function useGameState(date) {
     wordIndex: initialWord,
     secretFound: saved?.secretFound ?? false,
     completed: saved?.completed ?? false,
-    /* Whether the player unlocked the extra hint. Absent on old saves → false. */
-    hintRevealed: saved?.hintRevealed ?? false,
+    /* Letter reveals spent so far, 0..HELP_MAX (see useHelp). */
+    helpUsed: saved?.helpUsed ?? 0,
+    /* Count of leading secret letters revealed by help, once no word is left to reveal. */
+    secretReveal: saved?.secretReveal ?? 0,
   });
+
+  /* Per-word count of leading letters revealed by help (tile ids 0..n-1 of the answer). */
+  const revealed = reactive(saved?.revealed ?? words.map(() => 0));
 
   /* Tile ids drawn so far for the active word, in order. */
   const path = reactive([]);
@@ -225,8 +229,20 @@ export function useGameState(date) {
    * Secret guess as the specific tray tiles spent, in typed order. Each pick is
    * { r, id, ch } — r is the tray row, id the tile's per-word id — so the exact
    * tile the player pressed greys out, even when several tiles share a letter.
+   *
+   * Retrocompat: revealed secret letters used to be mere ghosts the player still
+   * had to type, so an old save may hold picks for the now auto-filled prefix.
+   * Drop those leading picks so the prefix doesn't double them (see secretInput).
    */
-  const secretPicks = reactive(saved?.secretPicks ?? []);
+  const savedPicks = saved?.secretPicks ?? [];
+  let prefixTyped = 0;
+  while (
+    prefixTyped < (saved?.secretReveal ?? 0) &&
+    prefixTyped < savedPicks.length &&
+    normalize(savedPicks[prefixTyped].ch) === secret.text[prefixTyped]
+  )
+    prefixTyped++;
+  const secretPicks = reactive(savedPicks.slice(prefixTyped));
   /* Bumped whenever a full-but-wrong word is committed, so the wheel can shake. */
   const shakeSignal = ref(0);
   /* Bumped on a full-but-wrong secret guess, so the boxes can shake. */
@@ -247,6 +263,17 @@ export function useGameState(date) {
 
   const allSolved = computed(() => solved.every(Boolean));
 
+  /* Letter reveals the player has left. */
+  const helpLeft = computed(() => HELP_MAX - state.helpUsed);
+  /* Whether a reveal can still land on a word / the secret: reveals remain and
+   * something is left to uncover there. Drive the two Aide buttons. */
+  const canRevealWord = computed(
+    () => helpLeft.value > 0 && words.some((w, i) => !solved[i] && revealed[i] < w.length),
+  );
+  const canRevealSecret = computed(
+    () => helpLeft.value > 0 && !state.secretFound && state.secretReveal < secret.length,
+  );
+
   const wordActive = computed(() => state.focus === 'word');
   const secretActive = computed(() => state.focus === 'secret');
 
@@ -261,9 +288,12 @@ export function useGameState(date) {
     ),
   );
 
-  /* The guess so far, as a string, for matching and box display. */
+  /* The guess so far: the help-revealed leading letters (locked prefix the player
+   * can't edit) followed by the tiles they've typed. */
   const secretInput = computed(() =>
-    state.secretFound ? secret.text : secretPicks.map((p) => p.ch).join(''),
+    state.secretFound
+      ? secret.text
+      : secret.text.slice(0, state.secretReveal) + secretPicks.map((p) => p.ch).join(''),
   );
 
   /* Guess is full but doesn't match: drives the crossed-out "wrong" styling. */
@@ -274,8 +304,26 @@ export function useGameState(date) {
       secretInput.value !== secret.text,
   );
 
-  /* `${row}-${id}` of every spent tile, so the keyboard can grey the exact tiles. */
-  const spentTiles = computed(() => new Set(secretPicks.map((p) => `${p.r}-${p.id}`)));
+  /* `${row}-${id}` of every spent tile, so the keyboard can grey the exact tiles:
+   * the tiles the help-revealed secret prefix consumed (one free matching tile
+   * per given leading letter, shown already pressed) plus the ones the player
+   * typed. Reserving the prefix tiles also keeps physical typing off them. */
+  const spentTiles = computed(() => {
+    const set = new Set();
+    const rows = trayRows.value;
+    for (let i = 0; i < state.secretReveal; i++) {
+      const ch = secret.text[i];
+      for (let r = 0; r < rows.length; r++) {
+        const t = rows[r].find((t) => t.ch === ch && !set.has(`${r}-${t.id}`));
+        if (t) {
+          set.add(`${r}-${t.id}`);
+          break;
+        }
+      }
+    }
+    secretPicks.forEach((p) => set.add(`${p.r}-${p.id}`));
+    return set;
+  });
 
   /* First tray tile of `ch` not already spent — used when typing on a physical keyboard. */
   function firstFreeTile(ch) {
@@ -296,6 +344,16 @@ export function useGameState(date) {
     if (allSolved.value && state.secretFound && !state.completed) finish();
   }
 
+  /* Reset the draw to the active word's help-revealed leading letters, so a reveal
+   * pre-traces the path and the player only extends it. Empty when the focus is
+   * the secret / nothing. */
+  function seedPath() {
+    path.length = 0;
+    if (state.focus === 'word' && state.wordIndex != null) {
+      for (let i = 0; i < revealed[state.wordIndex]; i++) path.push(i);
+    }
+  }
+
   /* After a word resolves: focus the given next word, else the unsolved secret,
    * else nothing left to type. `next` is a word index or null (none open). */
   function focusAfterWord(next) {
@@ -309,6 +367,7 @@ export function useGameState(date) {
       state.focus = 'none';
       state.wordIndex = null;
     }
+    seedPath();
   }
 
   /* Promote a word to the big wheel; tapping a solved word is a no-op. */
@@ -317,7 +376,7 @@ export function useGameState(date) {
     if (state.focus !== 'word' || state.wordIndex !== w) {
       state.focus = 'word';
       state.wordIndex = w;
-      path.length = 0;
+      seedPath();
     }
   }
 
@@ -325,7 +384,7 @@ export function useGameState(date) {
   function activateSecret() {
     if (state.completed || state.secretFound) return;
     state.focus = 'secret';
-    path.length = 0;
+    seedPath();
   }
 
   function shuffleWheel() {
@@ -340,9 +399,10 @@ export function useGameState(date) {
     path.push(id);
   }
 
-  /* Drop the current draw — on a fresh press (finger down) or an explicit clear. */
+  /* Drop the current draw back to the revealed prefix — on a fresh press (finger
+   * down) or an explicit clear. */
   function clearPath() {
-    path.length = 0;
+    seedPath();
   }
 
   /* Keyboard entry: consume the next unused tile matching the typed letter. */
@@ -357,8 +417,10 @@ export function useGameState(date) {
     if (path.length === words[w].length) commit();
   }
 
+  /* Undo the last drawn tile, but never past the locked revealed prefix. */
   function backspace() {
-    path.pop();
+    const floor = state.focus === 'word' && state.wordIndex != null ? revealed[state.wordIndex] : 0;
+    if (path.length > floor) path.pop();
   }
 
   /*
@@ -370,15 +432,14 @@ export function useGameState(date) {
     const w = state.wordIndex;
     if (current.value === words[w].text) {
       solved[w] = true;
-      path.length = 0;
       /* Focus the next open word; when none remain, the unsolved secret, else nothing. */
       focusAfterWord(nextUnsolved(w));
       maybeFinish();
     } else if (path.length === words[w].length) {
       shakeSignal.value++;
-      path.length = 0;
+      seedPath();
     } else {
-      path.length = 0;
+      seedPath();
     }
   }
 
@@ -431,10 +492,37 @@ export function useGameState(date) {
     state.wordIndex = null;
   }
 
-  /* Unlock the extra hint (a no-op when the level has none or it's already out). */
-  function revealHint() {
-    if (hasHint) state.hintRevealed = true;
+  /*
+   * Spend one reveal on `kind` ('word' | 'secret'). A word reveal uncovers the
+   * next leading letter (first, then second, …) of a randomly chosen unsolved
+   * word that still hides one; a secret reveal uncovers the next leading letter
+   * of the énigme. A no-op when that kind can't be revealed (none left, or all
+   * uncovered). The word pick is a deterministic pseudo-random spread over
+   * helpUsed (no Math.random, per the seeded-shuffle convention), reproducible
+   * across reloads.
+   */
+  function useHelp(kind) {
+    if (kind === 'word') {
+      if (!canRevealWord.value) return;
+      const candidates = words
+        .map((_, i) => i)
+        .filter((i) => !solved[i] && revealed[i] < words[i].length);
+      const s = (state.helpUsed * 9301 + 49297) % 233280;
+      const pick = candidates[Math.floor((s / 233280) * candidates.length)];
+      revealed[pick]++;
+      /* If the revealed word is the docked one, extend its traced prefix now. */
+      if (state.focus === 'word' && state.wordIndex === pick) seedPath();
+    } else if (kind === 'secret') {
+      if (!canRevealSecret.value) return;
+      state.secretReveal++;
+    } else {
+      return;
+    }
+    state.helpUsed++;
   }
+
+  /* Trace the focused word's revealed prefix from the first render. */
+  seedPath();
 
   /* Persist on any change to saved state. Deep-watches the reactive collections
    * directly rather than diffing a JSON snapshot. */
@@ -443,9 +531,11 @@ export function useGameState(date) {
       solved,
       shuffleSeeds,
       secretPicks,
+      revealed,
       () => state.secretFound,
       () => state.completed,
-      () => state.hintRevealed,
+      () => state.helpUsed,
+      () => state.secretReveal,
     ],
     () =>
       save(date, {
@@ -454,7 +544,9 @@ export function useGameState(date) {
         secretFound: state.secretFound,
         secretPicks: [...secretPicks],
         completed: state.completed,
-        hintRevealed: state.hintRevealed,
+        revealed: [...revealed],
+        helpUsed: state.helpUsed,
+        secretReveal: state.secretReveal,
       }),
     { deep: true },
   );
@@ -463,13 +555,15 @@ export function useGameState(date) {
     puzzle,
     words,
     secret,
-    hint,
-    hasHint,
     state,
     path,
     current,
     solved,
+    revealed,
     allSolved,
+    helpLeft,
+    canRevealWord,
+    canRevealSecret,
     wordActive,
     secretActive,
     trayRows,
@@ -490,6 +584,6 @@ export function useGameState(date) {
     typeSecret,
     backspaceSecret,
     clearSecret,
-    revealHint,
+    useHelp,
   };
 }

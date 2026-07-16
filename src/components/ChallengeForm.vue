@@ -15,11 +15,7 @@ const props = defineProps({
   author: { type: String, default: '' },
   initialWords: { type: Array, default: () => ['', '', '', ''] },
   initialSecret: { type: String, default: '' },
-  initialHint: { type: String, default: '' },
   isEdit: { type: Boolean, default: false },
-  /* Lock the puzzle (words + énigme read-only), leaving only the hint editable —
-   * for a past daily whose played puzzle must not change. */
-  lockPuzzle: { type: Boolean, default: false },
   /* When true, the recap "Confirmer" action is blocked from re-firing. */
   submitting: { type: Boolean, default: false },
   /* A server error shown inside the recap; keeps the modal open. */
@@ -37,22 +33,18 @@ const emit = defineEmits(['submit']);
 
 const words = reactive([...props.initialWords]);
 const secret = ref(props.initialSecret);
-const hint = ref(props.initialHint);
 
 /* Re-seed when the parent supplies values asynchronously (edit prefill). */
 watch(
-  () => [props.initialWords, props.initialSecret, props.initialHint],
+  () => [props.initialWords, props.initialSecret],
   () => {
     props.initialWords.forEach((w, i) => (words[i] = w));
     secret.value = props.initialSecret;
-    hint.value = props.initialHint;
   },
 );
 
 /* Live validation drives the field hints and the submit button. */
-const v = computed(() =>
-  validateChallenge({ author: props.author, words, secret: secret.value, hint: hint.value }),
-);
+const v = computed(() => validateChallenge({ author: props.author, words, secret: secret.value }));
 
 const ERRORS = {
   char: 'Caractère non autorisé',
@@ -73,11 +65,6 @@ const secretHint = computed(() => {
     return 'L’énigme doit s’écrire avec les lettres des indices';
   return '';
 });
-/* The extra hint is required; flag an invalid value but stay quiet while blank
-   (like the word fields — a blank field just leaves the publish button disabled). */
-const hintHint = computed(() =>
-  v.value.hint && v.value.hint !== 'empty' ? ERRORS[v.value.hint] : '',
-);
 
 /* Endpoints (in the recap's 0–100 viewBox) of the lines from the centre énigme
  * to each corner index — order matches WHEEL_TINTS / the corner chips. */
@@ -99,10 +86,6 @@ function confirm() {
   <main class="form">
     <slot name="fields-top" />
 
-    <p v-if="lockPuzzle" class="lock-banner">
-      Défi passé : le puzzle est verrouillé, seule l’aide est modifiable.
-    </p>
-
     <section class="section">
       <h2 class="section-title">Indices</h2>
       <label v-for="(w, i) in words" :key="i" class="field" :style="{ '--tint': WHEEL_TINTS[i] }">
@@ -115,7 +98,6 @@ function confirm() {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
-          :readonly="lockPuzzle"
           :placeholder="`Indice ${i + 1}`"
         />
         <span v-if="wordHint(v.words[i])" class="hint">{{ wordHint(v.words[i]) }}</span>
@@ -133,41 +115,9 @@ function confirm() {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
-          :readonly="lockPuzzle"
           placeholder="Mot énigme"
         />
         <span v-if="secretHint" class="hint">{{ secretHint }}</span>
-      </label>
-    </section>
-
-    <section class="section hint-section">
-      <h2 class="section-title">
-        <span class="bulb-ico" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18">
-            <path
-              d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </span>
-        Aide
-      </h2>
-      <label class="field hintf">
-        <input
-          v-model="hint"
-          class="input"
-          type="text"
-          maxlength="15"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          placeholder="Indice supplémentaire"
-        />
-        <span v-if="hintHint" class="hint">{{ hintHint }}</span>
       </label>
     </section>
   </main>
@@ -222,21 +172,6 @@ function confirm() {
         >
         <span class="chip secret-chip center">{{ v.normalized.secret }}</span>
       </div>
-      <!-- Extra hint: a badge below the schema, pinned left, with the bulb icon —
-           an aide, not a linked corner clue. -->
-      <span v-if="v.normalized.hint" class="chip hint-chip recap-hint">
-        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-          <path
-            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        {{ v.normalized.hint }}
-      </span>
       <p v-if="confirmNote" class="note">⚠ {{ confirmNote }}</p>
       <p v-if="error" class="err">{{ error }}</p>
       <div class="modal-actions">
@@ -280,10 +215,6 @@ function confirm() {
 .secret-section {
   border-color: var(--accent);
 }
-/* Aide: a separate block for the required extra hint, in the lime tint. */
-.hint-section {
-  border-color: var(--lime);
-}
 .section-title {
   display: flex;
   align-items: center;
@@ -298,26 +229,12 @@ function confirm() {
 .secret-section .section-title {
   color: var(--accent);
 }
-.hint-section .section-title {
-  color: var(--lime);
-}
-.bulb-ico {
-  display: inline-grid;
-  place-items: center;
-}
 .section-note {
   margin: -0.2rem 0 0;
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.35;
   color: var(--muted);
-}
-.hint-section .lab,
-.hint-section .input {
-  color: var(--lime);
-}
-.hint-section .input:focus-visible {
-  outline-color: var(--lime);
 }
 .field {
   display: flex;
@@ -352,24 +269,6 @@ function confirm() {
 .input:focus-visible {
   outline: 2px solid var(--tint, var(--accent));
   outline-offset: 2px;
-}
-/* Locked puzzle field (past daily): dimmed and not editable. */
-.input:read-only {
-  opacity: 0.55;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-/* Banner atop the form when only the hint may change. */
-.lock-banner {
-  margin: 0;
-  padding: 0.7rem 0.9rem;
-  border-radius: 0.9rem;
-  font-size: 0.86rem;
-  font-weight: 800;
-  line-height: 1.35;
-  color: var(--ink);
-  background: color-mix(in srgb, var(--lime) 18%, var(--panel));
-  border: var(--outline-w) solid var(--lime);
 }
 .hint {
   font-size: 0.78rem;
@@ -493,19 +392,6 @@ function confirm() {
 }
 .secret-chip {
   background: var(--accent);
-}
-.hint-chip {
-  background: var(--lime);
-}
-/* Extra hint: a small badge below the schema, pinned left, with the bulb icon in
-   front — matches the keyboard chip, not a linked corner clue. */
-.recap-hint {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.55rem;
-  font-size: 0.82rem;
 }
 .err {
   text-align: center;

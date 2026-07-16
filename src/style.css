@@ -13,7 +13,7 @@
   --violet: #8b5cf6;
   --pink: #f0559f;
   --accent: #4f7cf7; /* app accent: secret word, level tiles, primary actions */
-  --lime: #5cb85c; /* extra-hint accent: the lightbulb + "indice supplémentaire" */
+  --lime: #5cb85c; /* help accent: the header lightbulb + revealed letters */
 
   /* 20% wash of the accent over white — the faint fills. */
   --accent-wash: color-mix(in srgb, var(--accent) 20%, #fff);

@@ -9,16 +9,9 @@ const props = defineProps({
   spent: { type: Object, default: () => new Set() },
   /* Per-row solved flag: a solved word's row is filled solid instead of outlined. */
   solved: { type: Array, default: () => [] },
-  /* The puzzle carries an extra hint → show the lightbulb (hidden on old levels). */
-  hasHint: { type: Boolean, default: false },
-  /* The extra hint is already unlocked → the bulb reads as "used" (solid lime)
-     and shows the hint word beside its icon. */
-  hintRevealed: { type: Boolean, default: false },
-  /* The extra hint's display text, shown (cropped) in the bulb once revealed. */
-  hint: { type: String, default: '' },
 });
 
-const emit = defineEmits(['key', 'backspace', 'clear', 'hint']);
+const emit = defineEmits(['key', 'backspace', 'clear']);
 
 /* Tray cells keyed by their exact tile so the pressed tile — not a look-alike — greys out. */
 const grid = computed(() =>
@@ -49,30 +42,7 @@ function rowStyle(r) {
         {{ cell.ch }}
       </button>
     </div>
-    <div class="trow bar" :class="{ 'has-bulb': hasHint }">
-      <!-- Lightbulb opens the Aide popup (which shows the hint once unlocked).
-           Solid lime once used, a light wash before. Hidden on old levels. -->
-      <button
-        v-if="hasHint"
-        class="key bulb"
-        :class="{ used: hintRevealed }"
-        type="button"
-        tabindex="-1"
-        @click="emit('hint')"
-        aria-label="aide"
-      >
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-          <path
-            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span v-if="hintRevealed" class="bulb-word">{{ hint }}</span>
-      </button>
+    <div class="trow bar">
       <div class="controls">
         <button
           class="key wide"
@@ -118,12 +88,8 @@ function rowStyle(r) {
 .trow.bar {
   gap: 0.5rem;
   margin-top: 0.15rem;
-  /* No bulb: the controls stay centred, inset from the edges. */
+  /* The controls stay centred, inset from the edges. */
   padding: 0 8%;
-}
-/* With the bulb, split the row: bulb to the left edge, controls to the right. */
-.trow.bar.has-bulb {
-  justify-content: space-between;
 }
 .controls {
   display: flex;
@@ -186,40 +152,5 @@ function rowStyle(r) {
 .key.wide:active {
   background: var(--ink);
   color: var(--panel);
-}
-/* Lightbulb: opens the Aide popup. Light lime wash before use; once the hint is
-   unlocked (.used) it goes solid lime and shows the hint word beside the icon,
-   shrinking and cropping so the controls keep their room. */
-.key.bulb {
-  flex: 0 1 auto;
-  min-width: 3.4rem;
-  max-width: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem;
-  overflow: hidden;
-  color: #000;
-  background: color-mix(in srgb, var(--lime) 20%, #fff);
-}
-.key.bulb svg {
-  flex: 0 0 auto;
-}
-.bulb-word {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.9rem;
-  letter-spacing: 0.02em;
-}
-.key.bulb.used {
-  color: #fff;
-  background: var(--lime);
-}
-.key.bulb:active {
-  background: var(--lime);
-  color: #fff;
 }
 </style>

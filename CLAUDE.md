@@ -32,19 +32,24 @@ test/                          vitest: puzzle, gamestate, migration
 
 ## Core concepts
 
-- **A puzzle** = `{ date, secret, words[4], hint? }`. `date` (ISO) is its stable
+- **A puzzle** = `{ date, secret, words[4] }`. `date` (ISO) is its stable
   id everywhere — routes, saved progress, links. Text carries no accents (typed
   `é` matches `e` via `normalize`). A space in a word = two-word answer: dropped
-  from the wheel, shown as a gap in the answer slots. `hint` (the "indice
-  supplémentaire") is a bonus clue the player unlocks from the secret keyboard's
-  lightbulb — it appears in place of the bulb once revealed. Required by the
-  create form, but absent on old levels (→ no lightbulb, still playable). It's
-  excluded from the buildable-secret rule.
+  from the wheel, shown as a gap in the answer slots.
 - **`useGameState(date)`** owns everything mutable for one level: focused input
   (`'word'` | `'secret'` | `'none'`), drawn path, secret picks, solved flags,
   shake signals. Words commit on finger-release; the secret is typed from tiles
   of solved words. Level completes when all words AND the secret are found.
   Auto-persists to localStorage on every change.
+- **Help** (`useHelp('word' | 'secret')`): the header lightbulb opens `AidePopup`,
+  which always offers both reveals; each spends one of 3 reveals (`helpUsed`,
+  capped at `HELP_MAX`) and is disabled once nothing's left to uncover there
+  (`canRevealWord` / `canRevealSecret`). A word reveal uncovers the next leading
+  letter (1st, 2nd, …) of a randomly chosen unsolved word that still hides one
+  (`revealed[]`, a per-word count, badged on the wheel tile); a secret reveal
+  uncovers the next leading letter of the énigme (`secretReveal`, shown as a
+  ghost in the boxes). The word pick is a deterministic pseudo-random spread over
+  `helpUsed` (no `Math.random`, per the seeded-shuffle convention).
 - **Slugs**: `/play/daily` aliases today; any other slug is a date. The most
   recent non-future date is today's daily.
 - **Coach**: an inline guided walkthrough (`TutorialCoach`) shown over the board

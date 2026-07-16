@@ -12,6 +12,7 @@ const props = defineProps({
   interactive: { type: Boolean, default: false },
   active: { type: Boolean, default: false }, // highlight the disc (docked word)
   shake: { type: Number, default: 0 }, // bump to play the "wrong" shake
+  revealed: { type: Number, default: 0 }, // count of leading answer letters revealed by help
 });
 const emit = defineEmits(['begin', 'enter', 'backtrack', 'end', 'shuffle']);
 
@@ -198,7 +199,7 @@ watch(
       v-for="(t, k) in tiles"
       :key="t.id"
       class="node"
-      :class="{ on: pathSet.has(t.id) }"
+      :class="{ on: pathSet.has(t.id), revealed: t.id < revealed }"
       :style="nodeStyle(k)"
     >
       <span>{{ t.ch }}</span>
@@ -284,6 +285,14 @@ watch(
   background: var(--tint);
   color: #fff;
   transform: translate(-50%, -50%) scale(1.12);
+}
+/* Revealed by help: the tile fills with the wheel's tint (like a touched letter)
+   and gains a lime ring so a given letter reads as a clue — shown the same on the
+   interactive input wheel and the corner preview. */
+.node.revealed {
+  background: var(--tint);
+  color: #fff;
+  box-shadow: 0 0 0 max(2px, 1cqw) var(--lime);
 }
 
 .wheel {

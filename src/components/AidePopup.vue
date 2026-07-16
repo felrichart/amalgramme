@@ -1,12 +1,17 @@
 <script setup>
-/* The "Aide" popup, opened from the secret keyboard's lightbulb. Before the hint
- * is unlocked it offers to reveal it; once `revealed`, it shows the hint word in
- * place (revealing doesn't close the popup). The parent owns the reveal (emits
- * `reveal`), the unlocked flag, and the open flag; this is purely presentational. */
+/* The "Aide" popup, opened from the lightbulb in the game header. It always
+ * offers both reveals — a letter of an indice, a letter of the énigme — each
+ * disabled once nothing's left to uncover there (or no reveals remain) — plus a
+ * dismiss. The parent owns the reveal (emits `reveal` with 'word' | 'secret'),
+ * the can-reveal flags, the remaining count and the open flag; this is purely
+ * presentational. */
 defineProps({
   open: { type: Boolean, default: false },
-  revealed: { type: Boolean, default: false },
-  hint: { type: String, default: '' },
+  /* Whether each reveal is still available (drives its button's disabled state). */
+  canWord: { type: Boolean, default: false },
+  canSecret: { type: Boolean, default: false },
+  /* Reveals the player has left. */
+  left: { type: Number, default: 0 },
 });
 const emit = defineEmits(['reveal', 'close']);
 </script>
@@ -26,25 +31,33 @@ const emit = defineEmits(['reveal', 'close']);
           />
         </svg>
       </div>
-      <template v-if="!revealed">
-        <h2 class="title">Besoin d’aide ?</h2>
-        <p class="sub">Débloque un indice supplémentaire pour t’aider à deviner l’énigme.</p>
-        <div class="actions">
-          <button class="cta cta-hint" type="button" @click="emit('reveal')">
-            Obtenir un indice supplémentaire
-          </button>
-          <button class="cta cta-ghost" type="button" @click="emit('close')">
-            Je ne veux pas d’aide
-          </button>
-        </div>
-      </template>
-      <template v-else>
-        <h2 class="title">Indice supplémentaire</h2>
-        <p class="hint-word">{{ hint }}</p>
-        <div class="actions">
-          <button class="cta cta-hint" type="button" @click="emit('close')">Continuer</button>
-        </div>
-      </template>
+      <h2 class="title">Besoin d’aide ?</h2>
+      <p class="sub">
+        Révèle une lettre pour te débloquer.
+        <br />
+        Il te reste {{ left }} aide{{ left > 1 ? 's' : '' }}.
+      </p>
+      <div class="actions">
+        <button
+          class="cta cta-hint"
+          type="button"
+          :disabled="!canWord"
+          @click="emit('reveal', 'word')"
+        >
+          Révéler une lettre d’un indice
+        </button>
+        <button
+          class="cta cta-hint"
+          type="button"
+          :disabled="!canSecret"
+          @click="emit('reveal', 'secret')"
+        >
+          Révéler une lettre de l’énigme
+        </button>
+        <button class="cta cta-ghost" type="button" @click="emit('close')">
+          Pas besoin d’aide
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -97,15 +110,6 @@ const emit = defineEmits(['reveal', 'close']);
   color: var(--muted);
   line-height: 1.35;
 }
-.hint-word {
-  margin: 0.2rem 0;
-  text-align: center;
-  font-size: 1.35rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--lime);
-}
 .actions {
   display: flex;
   flex-direction: column;
@@ -129,6 +133,12 @@ const emit = defineEmits(['reveal', 'close']);
 }
 .cta:active {
   transform: translate(3px, 4px);
+  box-shadow: 0 0 0 var(--outline);
+}
+.cta:disabled {
+  cursor: default;
+  opacity: 0.4;
+  transform: none;
   box-shadow: 0 0 0 var(--outline);
 }
 .cta-hint {

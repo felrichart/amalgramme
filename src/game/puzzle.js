@@ -37,12 +37,6 @@ export function buildSecret(puzzle) {
   return parseAnswer(puzzle.secret);
 }
 
-/* Optional extra hint (the "indice supplémentaire"), revealed already-solved on
- * demand from the secret keyboard; null when the puzzle carries none (old levels). */
-export function buildHint(puzzle) {
-  return puzzle.hint ? parseAnswer(puzzle.hint) : null;
-}
-
 /* Deterministic Fisher-Yates so shuffles vary by seed without Math.random. */
 export function shuffle(arr, seed = 0) {
   const a = arr.slice();

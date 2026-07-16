@@ -10,7 +10,7 @@
  *   POST   /levels/:id/solve    record a completion by an anonymous client
  *   GET    /dailies         list every daily (with play stats), oldest first
  *   POST   /dailies         create one (admin only, date must be today or later)
- *   PUT    /dailies/:date    edit one (admin only; past dailies: hint-only)
+ *   PUT    /dailies/:date    edit one (admin only, today or future only)
  *   DELETE /dailies/:date    remove one (admin only, today or later)
  *   POST   /dailies/:date/attempt|solve  record an anonymous play, like /levels
  *   POST   /admin/export    full DB dump for the admin's manual backup
@@ -50,23 +50,17 @@ function newLevelId() {
   return crypto.randomUUID().slice(0, 8);
 }
 
-/* A well-formed challenge payload → normalised {words, secret, hint}, or null.
- * `hint` (the optional "indice supplémentaire") is null when absent; when given
- * it must be a valid word, distinct from the four indices and the secret. It is
- * deliberately excluded from canBuildSecret — a free bonus clue, not a feeder. */
+/* A well-formed challenge payload → normalised {words, secret}, or null. */
 function parseChallenge(body) {
   const words = Array.isArray(body.words) ? body.words.map(normalizeWord) : [];
   const secret = normalizeWord(body.secret);
-  const hint = normalizeWord(body.hint ?? '');
-  const hintValid = !hint || (!wordError(hint) && !words.includes(hint) && hint !== secret);
   const valid =
     words.length === 4 &&
     !words.some((w) => wordError(w)) &&
     new Set(words).size === words.length &&
     !wordError(secret) &&
-    canBuildSecret(secret, words) &&
-    hintValid;
-  return valid ? { words, secret, hint: hint || null } : null;
+    canBuildSecret(secret, words);
+  return valid ? { words, secret } : null;
 }
 
 /*
@@ -162,7 +156,7 @@ export default {
     if (pathname === '/levels' && request.method === 'GET') {
       /* attempts = distinct clients who opened it, successes = those who solved it. */
       const { results } = await env.DB.prepare(
-        `SELECT l.id, l.author, l.secret, l.words, l.hint, l.created_at,
+        `SELECT l.id, l.author, l.secret, l.words, l.created_at,
                 COALESCE(s.attempts, 0) AS attempts,
                 COALESCE(s.successes, 0) AS successes
          FROM levels l
@@ -221,16 +215,9 @@ export default {
       const id = newLevelId();
       const created_at = Date.now();
       await env.DB.prepare(
-        'INSERT INTO levels (id, author, secret, words, hint, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO levels (id, author, secret, words, created_at) VALUES (?, ?, ?, ?, ?)',
       )
-        .bind(
-          id,
-          author,
-          challenge.secret,
-          JSON.stringify(challenge.words),
-          challenge.hint,
-          created_at,
-        )
+        .bind(id, author, challenge.secret, JSON.stringify(challenge.words), created_at)
         .run();
       return json(
         {
@@ -238,7 +225,6 @@ export default {
           author,
           secret: challenge.secret,
           words: challenge.words,
-          hint: challenge.hint,
           created_at,
         },
         201,
@@ -275,7 +261,7 @@ export default {
 
     if (pathname === '/dailies' && request.method === 'GET') {
       const { results } = await env.DB.prepare(
-        `SELECT d.date, d.secret, d.words, d.hint, d.updated_at,
+        `SELECT d.date, d.secret, d.words, d.updated_at,
                 COALESCE(s.attempts, 0) AS attempts,
                 COALESCE(s.successes, 0) AS successes
          FROM dailies d
@@ -310,16 +296,15 @@ export default {
 
       const updated_at = Date.now();
       await env.DB.prepare(
-        'INSERT INTO dailies (date, secret, words, hint, updated_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO dailies (date, secret, words, updated_at) VALUES (?, ?, ?, ?)',
       )
-        .bind(date, challenge.secret, JSON.stringify(challenge.words), challenge.hint, updated_at)
+        .bind(date, challenge.secret, JSON.stringify(challenge.words), updated_at)
         .run();
       return json(
         {
           date,
           secret: challenge.secret,
           words: challenge.words,
-          hint: challenge.hint,
           updated_at,
           attempts: 0,
           successes: 0,
@@ -357,30 +342,22 @@ export default {
       const adminErr = await requireAdmin(env, body);
       if (adminErr) return json({ error: adminErr }, adminErr === 'no_pin' ? 400 : 403);
       const date = dailyMatch[1];
-      const row = await env.DB.prepare('SELECT secret, words FROM dailies WHERE date = ?')
-        .bind(date)
-        .first();
+      const row = await env.DB.prepare('SELECT 1 FROM dailies WHERE date = ?').bind(date).first();
       if (!row) return json({ error: 'not_found' }, 404);
+      /* An already-played puzzle can't change: past dailies are locked. */
+      if (date < serverToday()) return json({ error: 'past_locked' }, 422);
       const challenge = parseChallenge(body);
       if (!challenge) return json({ error: 'invalid' }, 422);
-      /* Past dailies are locked: an already-played puzzle can't change — only its
-       * hint may be added/edited. Reject any change to the words or the énigme. */
-      if (date < serverToday()) {
-        const samePuzzle =
-          challenge.secret === row.secret && JSON.stringify(challenge.words) === row.words;
-        if (!samePuzzle) return json({ error: 'past_locked' }, 422);
-      }
       const updated_at = Date.now();
       await env.DB.prepare(
-        'UPDATE dailies SET secret = ?, words = ?, hint = ?, updated_at = ? WHERE date = ?',
+        'UPDATE dailies SET secret = ?, words = ?, updated_at = ? WHERE date = ?',
       )
-        .bind(challenge.secret, JSON.stringify(challenge.words), challenge.hint, updated_at, date)
+        .bind(challenge.secret, JSON.stringify(challenge.words), updated_at, date)
         .run();
       return json({
         date,
         secret: challenge.secret,
         words: challenge.words,
-        hint: challenge.hint,
         updated_at,
       });
     }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWords, buildSecret, buildHint, shuffle, normalize } from '../src/game/puzzle.js';
+import { buildWords, buildSecret, shuffle, normalize } from '../src/game/puzzle.js';
 
 describe('buildWords', () => {
   it('strips spaces for the wheel but records the gap in layout/display', () => {
@@ -37,20 +37,6 @@ describe('buildSecret', () => {
     const s = buildSecret({ secret: 'porto rico', words: [] });
     expect(s.text).toBe('portorico');
     expect(s.layout.filter(Boolean)).toHaveLength(1);
-  });
-});
-
-describe('buildHint', () => {
-  it('parses the extra hint like a word, keeping gaps', () => {
-    const h = buildHint({ hint: 'porte cle', secret: 'x', words: [] });
-    expect(h.text).toBe('portecle');
-    expect(h.display).toBe('porte cle');
-    expect(h.layout.filter(Boolean)).toHaveLength(1);
-  });
-
-  it('is null when the puzzle carries no hint', () => {
-    expect(buildHint({ secret: 'x', words: [] })).toBeNull();
-    expect(buildHint({ hint: '', secret: 'x', words: [] })).toBeNull();
   });
 });
 

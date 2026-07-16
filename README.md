@@ -13,9 +13,6 @@ les lettres trouvées alimentent le clavier qui sert à taper le secret.
   et tracer une ligne de lettre en lettre. La roue tremble si le mot est faux.
 - Un appui au centre de la roue mélange les lettres.
 - Les lettres des mots trouvés forment le stock de lettres pour taper le secret.
-- Une **aide** facultative : si le défi propose un indice supplémentaire, une
-  ampoule apparaît sur le clavier du secret ; l'activer révèle un 5ᵉ indice
-  (déjà résolu) au-dessus de l'énigme.
 - Un mot peut contenir un espace (réponse en deux mots) : l'espace est absent de
   la roue mais affiché comme un blanc dans les cases de la réponse.
 - Sur ordinateur : taper au clavier, **Backspace** pour effacer, **Échap** pour

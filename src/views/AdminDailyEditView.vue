@@ -1,10 +1,9 @@
 <script setup>
 /*
  * Admin editor for one daily challenge. Create (/admin/new) or edit
- * (/admin/edit/:date). Wraps ChallengeForm and prepends a date field. Today and
- * future dailies are fully editable; a past daily is locked to its already-played
- * puzzle and only its hint can be added/changed. Enforced here for UX and again
- * by the Worker, which is authoritative.
+ * (/admin/edit/:date). Wraps ChallengeForm and prepends a date field. Only
+ * today and future dailies are editable; a past daily's played puzzle is locked
+ * (edits are refused here and again by the Worker, which is authoritative).
  */
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -28,12 +27,9 @@ function addDays(iso, n) {
 
 const editDate = route.params.date ?? null;
 const isEdit = !!editDate;
-/* A past daily is locked to its played puzzle — only its hint is editable. */
-const lockPuzzle = computed(() => isEdit && editDate < today);
 
 const initialWords = reactive(['', '', '', '']);
 const initialSecret = ref('');
-const initialHint = ref('');
 
 /* New: default to the day after the last scheduled daily (or today), skipping
  * any date already taken. Edit: the date is fixed. */
@@ -48,13 +44,17 @@ function firstFreeDate() {
 
 const date = ref(isEdit ? editDate : firstFreeDate());
 
-/* Admin only; edit only an existing daily (past ones open hint-only). */
+/* Admin only; edit only an existing today/future daily (past ones are locked). */
 onMounted(() => {
   if (!isAdmin.value) {
     router.replace('/');
     return;
   }
   if (!isEdit) return;
+  if (editDate < today) {
+    router.replace('/admin');
+    return;
+  }
   const rec = dailyRecord(editDate);
   if (!rec) {
     router.replace('/admin');
@@ -62,11 +62,11 @@ onMounted(() => {
   }
   rec.words.forEach((w, i) => (initialWords[i] = w));
   initialSecret.value = rec.secret;
-  initialHint.value = rec.hint ?? '';
 });
 
 const taken = computed(() => !isEdit && getDailies().some((d) => d.date === date.value));
-/* Edit: the date is fixed (a past daily is allowed, hint-only). New: today or later, free. */
+/* Edit: the date is fixed (today/future only — past edits are refused on mount).
+   New: today or later, free. */
 const dateValid = computed(() =>
   isEdit ? true : !!date.value && date.value >= today && !taken.value,
 );
@@ -108,9 +108,7 @@ async function submit(normalized) {
       :author="username"
       :initial-words="initialWords"
       :initial-secret="initialSecret"
-      :initial-hint="initialHint"
       :is-edit="isEdit"
-      :lock-puzzle="lockPuzzle"
       :submitting="submitting"
       :error="error"
       :recap-byline="formatChallengeDate(date)"
