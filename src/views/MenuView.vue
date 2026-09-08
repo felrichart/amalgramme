@@ -20,6 +20,10 @@ const router = useRouter();
 /* Fresh read: the view remounts on every navigation (App keys on route). */
 const daily = computed(() => levelProgress(todayDate()));
 const communityNew = computed(() => hasNewCommunityLevels());
+
+function openSondage() {
+  window.open('https://forms.gle/X7Kqgeq3u1ZqyqPa9', '_blank');
+}
 </script>
 
 <template>
@@ -60,6 +64,10 @@ const communityNew = computed(() => hasNewCommunityLevels());
       <button class="action community" type="button" @click="router.push('/community')">
         Défis de la communauté
         <span v-if="communityNew" class="notif" aria-label="nouveaux défis">!</span>
+      </button>
+
+      <button class="action sondage" type="button" @click="openSondage">
+        Aidez moi à améliorer le jeu !
       </button>
 
       <button v-if="isAdmin" class="action admin" type="button" @click="router.push('/admin')">
@@ -162,6 +170,10 @@ const communityNew = computed(() => hasNewCommunityLevels());
 .community {
   --tint: var(--violet);
   background: var(--tint-wash);
+  color: var(--ink);
+}
+.sondage {
+  background: var(--gold);
   color: var(--ink);
 }
 /* Admin: only rendered for the cara+ account; a quiet dashed panel. */
