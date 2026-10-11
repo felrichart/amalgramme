@@ -81,7 +81,7 @@ function onCreate() {
 
 <style scoped>
 .page {
-  --tint: var(--violet);
+  --tint: var(--gold);
 }
 .list {
   padding-bottom: 1rem;
@@ -93,7 +93,7 @@ function onCreate() {
 .notif {
   margin-left: auto;
   padding: 0.2rem 0.5rem;
-  color: var(--violet);
+  color: color-mix(in srgb, var(--gold) 70%, var(--ink));
   font-size: 0.75rem;
 }
 .count {

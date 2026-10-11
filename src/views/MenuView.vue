@@ -160,7 +160,7 @@ const showContact = ref(false);
   color: var(--ink);
 }
 .community {
-  --tint: var(--violet);
+  --tint: var(--gold);
   background: color-mix(in srgb, var(--tint) 20%, var(--panel));
   color: var(--ink);
 }
@@ -202,7 +202,7 @@ const showContact = ref(false);
   top: 0.6rem;
   right: 0.7rem;
 }
-/* New-content badge, top-right corner (violet on the community wash). */
+/* New-content badge, top-right corner (deep mustard on the community wash). */
 .notif {
   position: absolute;
   top: 0.55rem;
@@ -210,6 +210,6 @@ const showContact = ref(false);
   font-size: 1.2rem;
   font-weight: 900;
   line-height: 1;
-  color: var(--violet);
+  color: color-mix(in srgb, var(--gold) 70%, var(--ink));
 }
 </style>

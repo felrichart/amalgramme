@@ -85,6 +85,6 @@ async function confirmDelete() {
 
 <style scoped>
 .list {
-  --tint: var(--violet);
+  --tint: var(--gold);
 }
 </style>
