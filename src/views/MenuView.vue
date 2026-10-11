@@ -156,7 +156,7 @@ const showContact = ref(false);
   color: var(--on-color);
 }
 .past {
-  background: color-mix(in srgb, var(--violet) 30%, var(--panel));
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
   color: var(--ink);
 }
 .community {
