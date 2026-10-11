@@ -75,6 +75,9 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
   (`services/sync.js`, debounced); merging never loses progress, so the only
   question (`SyncPrompt`) is at sign-in when the device holds outside progress —
   declining stashes it until logout.
+- **Stats** (`services/stats.js`): one attempt/solve per (puzzle, player); the
+  player is the account when signed in, else the device id, and signing in claims
+  the device's anonymous plays (`claimPlays`). Server keeps running counters.
 - **Comments** (`CommentsModal`, from the finish screen): signed-in players who
   solved the level read them and post one final comment; the Worker checks the
   solve against the account's synced save (`syncSave` first).

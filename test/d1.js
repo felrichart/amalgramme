@@ -4,9 +4,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 
 const DIR = new URL('../server/migrations/', import.meta.url);
 
-export function createD1() {
+const MIGRATIONS = readdirSync(DIR).sort();
+
+/* Migrations named before `until` (e.g. '0011') only, when given; `migrate(name)`
+ * applies one later, to test it over seeded rows. */
+export function createD1({ until } = {}) {
   const db = new DatabaseSync(':memory:');
-  for (const f of readdirSync(DIR).sort()) db.exec(readFileSync(new URL(f, DIR), 'utf8'));
+  const migrate = (f) => db.exec(readFileSync(new URL(f, DIR), 'utf8'));
+  MIGRATIONS.filter((f) => !until || f < until).forEach(migrate);
   const prepare = (sql) => {
     let args = [];
     const stmt = {
@@ -23,5 +28,6 @@ export function createD1() {
       for (const s of stmts) await s.run();
     },
     sql: (query, ...args) => db.prepare(query).all(...args),
+    migrate: (prefix) => migrate(MIGRATIONS.find((f) => f.startsWith(prefix))),
   };
 }

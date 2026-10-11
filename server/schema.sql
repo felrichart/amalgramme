@@ -57,17 +57,26 @@ CREATE TABLE IF NOT EXISTS dailies (
   updated_at INTEGER NOT NULL
 );
 
--- Per-puzzle play stats: one row per (puzzle, anonymous client). solved flips 0→1
--- on completion. attempts = row count, successes = SUM(solved) per puzzle. level_id
--- is a community level id or a daily's ISO date (the two id spaces never collide).
-CREATE TABLE IF NOT EXISTS level_stats (
-  level_id TEXT NOT NULL,
-  client_id TEXT NOT NULL,
+-- Play stats. plays: one row per (puzzle, player); puzzle_id = progress key
+-- (ISO date or "com-<id>"), player = "u:<username>" signed in, else "c:<device>"
+-- (claimed into the account at sign-in). puzzle_stats: running counters per
+-- puzzle, kept in step with plays by the Worker. (level_stats_legacy: pre-0011
+-- rows, kept for a manual check.)
+CREATE TABLE IF NOT EXISTS plays (
+  puzzle_id TEXT NOT NULL,
+  player TEXT NOT NULL,
   solved INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (level_id, client_id)
+  started_at INTEGER NOT NULL,
+  solved_at INTEGER,
+  PRIMARY KEY (puzzle_id, player)
 );
-CREATE INDEX IF NOT EXISTS idx_level_stats_level ON level_stats (level_id);
+CREATE INDEX IF NOT EXISTS idx_plays_player ON plays (player);
+
+CREATE TABLE IF NOT EXISTS puzzle_stats (
+  puzzle_id TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  successes INTEGER NOT NULL DEFAULT 0
+);
 
 -- Level comments: one per (puzzle, account), gated on the account's synced
 -- progress showing the puzzle completed. level_id = progress key (date or com-<id>).

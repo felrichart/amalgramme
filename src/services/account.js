@@ -4,6 +4,7 @@ import { PIN_RE } from '../../shared/constants.js';
 import { KEY_PREFIX, readJSON, removeKey } from '../utils/storage.js';
 import { setSession, updateUser, clearSession, connected } from '../composables/useAccount.js';
 import { afterSignIn, afterSignOut } from './sync.js';
+import { claimPlays, resetClaim } from './stats.js';
 
 const MESSAGES = {
   bad_name: 'Nom invalide (20 caractères max, sans / ? # %).',
@@ -27,6 +28,8 @@ const call = (path, body, fallback = 'Requête refusée.') =>
 async function signedIn(res) {
   if (res.ok) {
     setSession(res.data.token, res.data.user);
+    resetClaim();
+    claimPlays();
     await afterSignIn();
   }
   return res;

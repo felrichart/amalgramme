@@ -321,20 +321,6 @@ describe('worker routes', () => {
     const ok = await call(env, 'POST', '/dailies', body, await signup(env, 'cara+'));
     expect(ok.status).toBe(201);
   });
-
-  it('stats: records against the right table and 404s unknown puzzles', async () => {
-    const env = fakeEnv();
-    env.DB.sql(
-      "INSERT INTO dailies (date, secret, words, updated_at) VALUES ('2999-01-01', 's', '[]', 1)",
-    );
-    expect((await call(env, 'POST', '/dailies/2999-01-01/solve', {})).status).toBe(400);
-    expect((await call(env, 'POST', '/levels/abc/attempt', { client: 'c' })).status).toBe(404);
-    const ok = await call(env, 'POST', '/dailies/2999-01-01/solve', { client: 'c' });
-    expect(ok.status).toBe(200);
-    expect(env.DB.sql("SELECT solved FROM level_stats WHERE level_id = '2999-01-01'")).toEqual([
-      expect.objectContaining({ solved: 1 }),
-    ]);
-  });
 });
 
 describe('comments', () => {
@@ -391,5 +377,107 @@ describe('comments', () => {
     await call(env, 'POST', '/comments/2026-01-01', { body: 'ok' }, bob);
     expect((await call(env, 'DELETE', '/comments/2026-01-01/bob', {}, admin)).status).toBe(200);
     expect(env.DB.sql('SELECT * FROM comments')).toEqual([]);
+  });
+});
+
+describe('play stats', () => {
+  const daily = (env, date = '2999-01-01') =>
+    env.DB.sql(
+      "INSERT INTO dailies (date, secret, words, updated_at) VALUES (?, 's', '[]', 1)",
+      date,
+    );
+  const stats = (env) =>
+    env.DB.sql('SELECT puzzle_id, attempts, successes FROM puzzle_stats ORDER BY puzzle_id').map(
+      (r) => [r.puzzle_id, r.attempts, r.successes],
+    );
+  const play = (env, puzzle, kind, client, token) =>
+    call(env, 'POST', `/plays/${puzzle}`, { client, kind }, token);
+
+  it('counts each player once per puzzle, by device or account', async () => {
+    const env = fakeEnv();
+    daily(env);
+    expect((await play(env, '2999-01-01', 'attempt')).status).toBe(400);
+    expect((await play(env, '2999-01-02', 'attempt', 'd1')).status).toBe(404);
+    await play(env, '2999-01-01', 'attempt', 'd1');
+    await play(env, '2999-01-01', 'attempt', 'd1');
+    await play(env, '2999-01-01', 'solve', 'd1');
+    await play(env, '2999-01-01', 'solve', 'd1');
+    const bob = await signup(env, 'bob');
+    await play(env, '2999-01-01', 'solve', 'd2', bob);
+    expect(stats(env)).toEqual([['2999-01-01', 2, 2]]);
+    expect(env.DB.sql('SELECT player FROM plays ORDER BY player').map((r) => r.player)).toEqual([
+      'c:d1',
+      'u:bob',
+    ]);
+  });
+
+  it('old clients still post to /levels|dailies/:id/<kind>, keyed like progress', async () => {
+    const env = fakeEnv();
+    daily(env);
+    const level = await (
+      await call(env, 'POST', '/levels', { words: WORDS, secret: 'sol' }, await signup(env))
+    ).json();
+    await call(env, 'POST', `/levels/${level.id}/attempt`, { client: 'd1' });
+    await call(env, 'POST', '/dailies/2999-01-01/solve', { client: 'd1' });
+    expect(stats(env)).toEqual([
+      ['2999-01-01', 1, 1],
+      [`com-${level.id}`, 1, 0],
+    ]);
+    const list = await (await call(env, 'GET', '/levels')).json();
+    expect(list[0]).toMatchObject({ attempts: 1, successes: 0 });
+  });
+
+  it('claim folds device plays into the account without double counting', async () => {
+    const env = fakeEnv();
+    ['2999-01-01', '2999-01-02', '2999-01-03'].forEach((d) => daily(env, d));
+    const bob = await signup(env, 'bob');
+    // Device: solved 01, opened 02 and 03. Account: opened 01, solved 02.
+    await play(env, '2999-01-01', 'solve', 'd1');
+    await play(env, '2999-01-02', 'attempt', 'd1');
+    await play(env, '2999-01-03', 'attempt', 'd1');
+    await play(env, '2999-01-01', 'attempt', null, bob);
+    await play(env, '2999-01-02', 'solve', null, bob);
+
+    expect((await call(env, 'POST', '/plays/claim', { client: 'd1' })).status).toBe(401);
+    await call(env, 'POST', '/plays/claim', { client: 'd1' }, bob);
+    expect(stats(env)).toEqual([
+      ['2999-01-01', 1, 1],
+      ['2999-01-02', 1, 1],
+      ['2999-01-03', 1, 0],
+    ]);
+    expect(env.DB.sql("SELECT COUNT(*) n FROM plays WHERE player = 'c:d1'")[0].n).toBe(0);
+  });
+
+  it('deleting a puzzle drops its plays, counters and comments', async () => {
+    const env = fakeEnv();
+    daily(env);
+    const admin = await signup(env, 'cara+');
+    await play(env, '2999-01-01', 'solve', 'd1');
+    await call(env, 'DELETE', '/dailies/2999-01-01', {}, admin);
+    expect(stats(env)).toEqual([]);
+    expect(env.DB.sql('SELECT * FROM plays')).toEqual([]);
+  });
+
+  it('migration 0011 carries live level_stats over and leaves orphans', () => {
+    const DB = createD1({ until: '0011' });
+    DB.sql(
+      "INSERT INTO levels (id, author, secret, words, created_at) VALUES ('abcd1234', 'a', 's', '[]', 1)",
+    );
+    DB.sql(
+      "INSERT INTO dailies (date, secret, words, updated_at) VALUES ('2026-01-01', 's', '[]', 1)",
+    );
+    const row =
+      'INSERT INTO level_stats (level_id, client_id, solved, updated_at) VALUES (?, ?, ?, 5)';
+    DB.sql(row, 'abcd1234', 'x', 1);
+    DB.sql(row, 'abcd1234', 'y', 0);
+    DB.sql(row, '2026-01-01', 'x', 1);
+    DB.sql(row, 'gone0000', 'x', 1);
+    DB.migrate('0011');
+    expect(DB.sql('SELECT * FROM puzzle_stats ORDER BY puzzle_id').map((r) => ({ ...r }))).toEqual([
+      { puzzle_id: '2026-01-01', attempts: 1, successes: 1 },
+      { puzzle_id: 'com-abcd1234', attempts: 2, successes: 1 },
+    ]);
+    expect(DB.sql("SELECT solved_at FROM plays WHERE player = 'c:y'")[0].solved_at).toBeNull();
+    expect(DB.sql('SELECT COUNT(*) n FROM level_stats_legacy')[0].n).toBe(4);
   });
 });

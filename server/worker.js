@@ -22,8 +22,8 @@
  *   POST   /dailies                  create one (admin, today or later)
  *   PUT    /dailies/:date            edit one (admin, today or later)
  *   DELETE /dailies/:date            remove one (admin, today or later)
- *   POST   /levels/:id/(attempt|solve), /dailies/:date/(attempt|solve)
- *                                    record an anonymous play (no sign-in)
+ *   POST   /plays/:puzzle            record an attempt or solve (by account, else device)
+ *   POST   /plays/claim              fold this device's anonymous plays into the account
  *   POST   /admin/export             full DB dump for the admin's manual backup
  *
  * Community levels are create-only: there is no edit endpoint.
@@ -155,11 +155,13 @@ function publicUser(u) {
 /* Delete an account and everything only it can reach; its levels stay, authored by
  * the bare name (see deleteLevel for why a later namesake can't claim them). */
 function dropUser(env, name) {
-  return env.DB.batch(
-    ['users', 'sessions', 'email_tokens', 'progress', 'comments'].map((t) =>
+  return env.DB.batch([
+    ...['users', 'sessions', 'email_tokens', 'progress', 'comments'].map((t) =>
       env.DB.prepare(`DELETE FROM ${t} WHERE username = ?`).bind(name),
     ),
-  );
+    // Its plays go; the puzzle counters keep counting them.
+    env.DB.prepare('DELETE FROM plays WHERE player = ?').bind('u:' + name),
+  ]);
 }
 
 /* `extra` rides along in the response (the dev mail link). */
@@ -239,17 +241,15 @@ async function takeToken(env, token, kind) {
   return row.expires_at >= Date.now() ? row.username : null;
 }
 
-/* attempts = distinct clients who opened a puzzle, successes = those who solved it. */
-function listWithStats(env, columns, table, key, order) {
+/* attempts = distinct players who opened a puzzle, successes = those who solved it.
+ * `puzzleId` is the SQL expression giving a row's puzzle id. */
+function listWithStats(env, columns, table, puzzleId, order) {
   return env.DB.prepare(
     `SELECT ${columns},
             COALESCE(s.attempts, 0) AS attempts,
             COALESCE(s.successes, 0) AS successes
      FROM ${table} t
-     LEFT JOIN (
-       SELECT level_id, COUNT(*) AS attempts, SUM(solved) AS successes
-       FROM level_stats GROUP BY level_id
-     ) s ON s.level_id = t.${key}
+     LEFT JOIN puzzle_stats s ON s.puzzle_id = ${puzzleId}
      ORDER BY ${order}`,
   ).all();
 }
@@ -502,7 +502,7 @@ async function listLevels({ env }) {
     env,
     't.id, t.author, t.secret, t.words, t.created_at',
     'levels',
-    'id',
+    `'com-' || t.id`,
     't.created_at DESC',
   );
   return json(results.map(withWords));
@@ -539,7 +539,7 @@ async function deleteLevel({ env, params, user }) {
   if (!owner && user.username !== ADMIN_NAME) return fail('forbidden', 403);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(params.id),
-    env.DB.prepare('DELETE FROM comments WHERE level_id = ?').bind('com-' + params.id),
+    ...forgetPuzzle(env, 'com-' + params.id),
   ]);
   return json({ ok: true });
 }
@@ -549,7 +549,7 @@ async function listDailies({ env }) {
     env,
     't.date, t.secret, t.words, t.updated_at',
     'dailies',
-    'date',
+    't.date',
     't.date',
   );
   return json(results.map(withWords));
@@ -597,40 +597,116 @@ async function deleteDaily({ env, params }) {
   const { date } = params;
   if (!(await exists(env, 'dailies', 'date', date))) return fail('not_found', 404);
   if (date < serverToday()) return fail('past_date', 422);
-  await env.DB.prepare('DELETE FROM dailies WHERE date = ?').bind(date).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM dailies WHERE date = ?').bind(date),
+    ...forgetPuzzle(env, date),
+  ]);
   return json({ ok: true });
 }
 
-/* Record a play (attempt) or a completion (solve) of a puzzle in `table`, keyed
- * by `col`. Deduped by the (level, client) primary key: attempt inserts once,
- * solve upserts to 1. Community ids and daily dates share level_stats — the two
- * id spaces never collide. */
-function recordStat(table, col) {
-  return async ({ request, env, params }) => {
-    const body = (await readBody(request)) ?? {};
-    const client = String(body.client ?? '').slice(0, 64);
-    if (!client) return fail('no_client', 400);
-    if (!(await exists(env, table, col, params.id))) return fail('not_found', 404);
-    await env.DB.prepare(
-      `INSERT INTO level_stats (level_id, client_id, solved, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(level_id, client_id)
-       DO UPDATE SET solved = MAX(solved, excluded.solved), updated_at = excluded.updated_at`,
+/* --- Play stats --- */
+
+/* Statements dropping everything attached to a deleted puzzle. */
+const forgetPuzzle = (env, puzzleId) =>
+  ['comments', 'plays', 'puzzle_stats'].map((t) =>
+    env.DB.prepare(
+      `DELETE FROM ${t} WHERE ${t === 'comments' ? 'level_id' : 'puzzle_id'} = ?`,
+    ).bind(puzzleId),
+  );
+
+function puzzleExists(env, puzzleId) {
+  return puzzleId.startsWith('com-')
+    ? exists(env, 'levels', 'id', puzzleId.slice(4))
+    : exists(env, 'dailies', 'date', puzzleId);
+}
+
+const bumpStats = (env, puzzleId, attempts, successes) =>
+  env.DB.prepare(
+    `INSERT INTO puzzle_stats (puzzle_id, attempts, successes) VALUES (?, ?, ?)
+     ON CONFLICT(puzzle_id) DO UPDATE SET attempts = attempts + excluded.attempts,
+                                          successes = successes + excluded.successes`,
+  ).bind(puzzleId, attempts, successes);
+
+const deviceId = (body) => String(body?.client ?? '').slice(0, 64);
+
+/* An attempt counts once per player, a solve flips it once; the counters move
+ * only when a row actually changes, so repeats are free. Signed in, the player is
+ * the account; otherwise the device id sent in the body. */
+async function recordPlay({ request, env, params }) {
+  const body = (await readBody(request)) ?? {};
+  const user = await sessionUser(env, request);
+  const client = deviceId(body);
+  if (!user && !client) return fail('no_client', 400);
+  const puzzleId = params.puzzle;
+  if (!(await puzzleExists(env, puzzleId))) return fail('not_found', 404);
+
+  const player = user ? 'u:' + user.username : 'c:' + client;
+  const solved = (params.kind ?? body.kind) === 'solve' ? 1 : 0;
+  const now = Date.now();
+  const inserted = await env.DB.prepare(
+    `INSERT INTO plays (puzzle_id, player, solved, started_at, solved_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(puzzle_id, player) DO NOTHING`,
+  )
+    .bind(puzzleId, player, solved, now, solved ? now : null)
+    .run();
+  if (inserted.meta?.changes) {
+    await bumpStats(env, puzzleId, 1, solved).run();
+  } else if (solved) {
+    const flipped = await env.DB.prepare(
+      'UPDATE plays SET solved = 1, solved_at = ? WHERE puzzle_id = ? AND player = ? AND solved = 0',
     )
-      .bind(params.id, client, params.kind === 'solve' ? 1 : 0, Date.now())
+      .bind(now, puzzleId, player)
       .run();
-    return json({ ok: true });
-  };
+    if (flipped.meta?.changes) await bumpStats(env, puzzleId, 0, 1).run();
+  }
+  return json({ ok: true });
+}
+
+/* Pre-0011 clients posted to /levels/:id/<kind> and /dailies/:date/<kind>. */
+const legacyRecordPlay = (prefix) => (ctx) =>
+  recordPlay({ ...ctx, params: { puzzle: prefix + ctx.params.id, kind: ctx.params.kind } });
+
+/* The device's anonymous plays become the account's. Where both played the same
+ * puzzle the two rows merge (solved if either was) and the counters drop the
+ * duplicate. One batch, so it applies atomically. */
+async function claimPlays({ request, env, user }) {
+  const client = deviceId(await readBody(request));
+  if (!client) return fail('no_client', 400);
+  const anon = 'c:' + client;
+  const mine = 'u:' + user.username;
+  const both =
+    'SELECT puzzle_id FROM plays WHERE player = ?1 INTERSECT SELECT puzzle_id FROM plays WHERE player = ?2';
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE puzzle_stats SET attempts = attempts - 1,
+         successes = successes - (SELECT MIN(p.solved) FROM plays p
+                                  WHERE p.puzzle_id = puzzle_stats.puzzle_id AND p.player IN (?1, ?2))
+       WHERE puzzle_id IN (${both})`,
+    ).bind(anon, mine),
+    env.DB.prepare(
+      `UPDATE plays SET solved = 1, solved_at = (SELECT a.solved_at FROM plays a
+                                                  WHERE a.puzzle_id = plays.puzzle_id AND a.player = ?1)
+       WHERE player = ?2 AND solved = 0
+         AND puzzle_id IN (SELECT puzzle_id FROM plays WHERE player = ?1 AND solved = 1)`,
+    ).bind(anon, mine),
+    env.DB.prepare(
+      `UPDATE plays SET player = ?2
+       WHERE player = ?1 AND puzzle_id NOT IN (SELECT puzzle_id FROM plays WHERE player = ?2)`,
+    ).bind(anon, mine),
+    env.DB.prepare('DELETE FROM plays WHERE player = ?').bind(anon),
+  ]);
+  return json({ ok: true });
 }
 
 /* Full DB dump (password hashes included, sessions and email tokens left out). */
 async function exportAll({ env }) {
   const all = (sql) => env.DB.prepare(sql).all();
-  const [dailies, levels, users, stats, progress, comments] = await Promise.all([
+  const [dailies, levels, users, plays, puzzleStats, progress, comments] = await Promise.all([
     all('SELECT * FROM dailies ORDER BY date'),
     all('SELECT * FROM levels ORDER BY created_at'),
     all('SELECT * FROM users ORDER BY created_at'),
-    all('SELECT * FROM level_stats'),
+    all('SELECT * FROM plays'),
+    all('SELECT * FROM puzzle_stats'),
     all('SELECT * FROM progress'),
     all('SELECT * FROM comments'),
   ]);
@@ -639,7 +715,8 @@ async function exportAll({ env }) {
     dailies: dailies.results,
     levels: levels.results,
     users: users.results,
-    level_stats: stats.results,
+    plays: plays.results,
+    puzzle_stats: puzzleStats.results,
     progress: progress.results,
     comments: comments.results,
   });
@@ -656,6 +733,11 @@ async function cleanup(env) {
     const legacy = 'SELECT username FROM users WHERE password_hash IS NULL';
     for (const t of ['sessions', 'email_tokens', 'progress', 'comments'])
       stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE username IN (${legacy})`));
+    stmts.push(
+      env.DB.prepare(
+        `DELETE FROM plays WHERE player IN (SELECT 'u:' || username FROM (${legacy}))`,
+      ),
+    );
     stmts.push(env.DB.prepare('DELETE FROM users WHERE password_hash IS NULL'));
   }
   await env.DB.batch(stmts);
@@ -680,11 +762,13 @@ const ROUTES = [
   ['DELETE', /^\/comments\/(?<level>[^/]+)\/(?<user>[^/]+)$/, adminOnly(deleteComment)],
   ['GET', /^\/levels$/, listLevels],
   ['POST', /^\/levels$/, signedIn(createLevel)],
-  ['POST', /^\/levels\/(?<id>[^/]+)\/(?<kind>attempt|solve)$/, recordStat('levels', 'id')],
+  ['POST', /^\/plays\/claim$/, signedIn(claimPlays)],
+  ['POST', /^\/plays\/(?<puzzle>[\w-]+)$/, recordPlay],
+  ['POST', /^\/levels\/(?<id>[^/]+)\/(?<kind>attempt|solve)$/, legacyRecordPlay('com-')],
   ['DELETE', /^\/levels\/(?<id>[^/]+)$/, signedIn(deleteLevel)],
   ['GET', /^\/dailies$/, listDailies],
   ['POST', /^\/dailies$/, adminOnly(createDaily)],
-  ['POST', /^\/dailies\/(?<id>[^/]+)\/(?<kind>attempt|solve)$/, recordStat('dailies', 'date')],
+  ['POST', /^\/dailies\/(?<id>[^/]+)\/(?<kind>attempt|solve)$/, legacyRecordPlay('')],
   ['PUT', /^\/dailies\/(?<date>[^/]+)$/, adminOnly(updateDaily)],
   ['DELETE', /^\/dailies\/(?<date>[^/]+)$/, adminOnly(deleteDaily)],
   ['POST', /^\/admin\/export$/, adminOnly(exportAll)],
