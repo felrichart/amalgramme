@@ -11,19 +11,26 @@ this file covers the code only.
 
 ```
 src/
-  main.js                      entry; resolve today's date → migrate saves → mount
-  router.js                    / (menu), /challenges, /play/:slug
-  game/puzzle.js               pure helpers: parse answers, build words/secret, shuffle, normalize
-  composables/useGameState.js  ALL mutable game logic for one level (see below)
-  data/challenges.json         the puzzle bank
-  data/challenges.js           bank access: today's date, slug↔date, past challenges, tutorial
-  utils/today.js               resolve today's date (time API, device-clock fallback)
-  views/                       MenuView, ChallengesView, GameView (the board)
-  components/                  LetterWheel, LetterKeyboard, TutorialCoach, AidePopup
-shared/word-rules.js           word normalise/validate rules; imported by both the
-                               client (game/word.js) and the Worker (server/worker.js)
-server/worker.js               Cloudflare Worker: dailies + community API over D1
-test/                          vitest: puzzle, gamestate, migration
+  main.js                      entry: resolve today, warm caches, migrate saves, backfill stats, mount
+  router.js                    routes; admin routes guarded by `adminOnly`
+  config.js                    API_URL (Worker base URL), CACHE_MS
+  ui.css                       shared UI classes: .page, .press, .icon-btn, .cta, .list/.row, modal bits
+  game/puzzle.js               pure helpers: parse answers, build words/secret, answerSlots, seeded shuffle
+  game/word.js                 create-form validation on top of shared/word-rules.js
+  utils/                       storage (fail-soft localStorage), date, format (French labels), today
+  data/                        local state, synchronous: cache (factory), dailies, community, levels
+                               (date → puzzle/record, slugs), progress (saves), tutorial, migrations
+  services/                    network: api (request/mutate/refresh), levels (CRUD + auth), stats
+  composables/                 useGameState (ALL game logic for one level), useLevel, usePlayStats,
+                               useCoach, useBoardLinks, useShake, useRequest, useCachedList, useUsername
+  views/                       one per route; GameView is the board
+  components/                  LetterWheel, LetterKeyboard, TutorialCoach, AidePopup, ChallengeForm,
+                               LevelRow, UserBadge, UsernamePrompt; ui/ = PageHeader, BaseModal,
+                               ConfirmModal, ProgressMark, BulbIcon
+shared/                        word-rules.js + constants.js (ADMIN_NAME, PIN, id length); imported
+                               by both the client and the Worker
+server/worker.js               Cloudflare Worker: route table over D1 (dailies, community, auth, stats)
+test/                          vitest: puzzle, word, gamestate, migration, dailies, community, worker
 ```
 
 > `shared/` is dependency-free and bundles for both the browser (Vite) and the
@@ -63,6 +70,11 @@ test/                          vitest: puzzle, gamestate, migration
 - localStorage keys are date-based (`amalgramme:v3:level:<date>`), stable across
   bank reordering. `migrateSaves()` upgrades legacy index-based saves at startup.
 - Shuffles use seeded deterministic Fisher-Yates (no `Math.random`).
+- Every localStorage access goes through `utils/storage.js` (never throws).
+- Every Worker call goes through `services/api.js`; writes resolve to
+  `{ ok, data }` / `{ ok: false, error }` with a French message.
+- Reuse the global classes in `ui.css` (`.press` for the comic press effect) and
+  `components/ui/*` instead of restating header/modal/button styles per view.
 - Prettier-formatted; run `npm run format` before committing.
 
 ```

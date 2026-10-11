@@ -1,54 +1,61 @@
-/* Separators inside an answer — space, hyphen, apostrophe — all render as a gap
- * and are dropped from the letter wheel (see parseAnswer). */
-const SEPARATOR = /[ \-']/;
+import { isSeparator } from '../../shared/word-rules.js';
+
+/* Strip diacritics so a typed "é" matches the accent-free answers. */
+export { normalizeChar as normalize } from '../../shared/word-rules.js';
 
 /*
- * Split a raw answer into its separator-free form plus gap metadata. `text` is
- * what the player's input is compared against (no separators); `display` keeps
- * them for showing the solved answer; `layout[i]` is true where a separator
- * followed that letter, so the UI renders a gap between the parts of a
- * multi-part answer. Separators are space, hyphen and apostrophe.
+ * Split a raw answer into `text` (separators dropped — what input is compared
+ * against), `display` (as written) and `layout`, where `layout[i]` is true when a
+ * separator follows letter i so the UI renders a gap there.
  */
 function parseAnswer(raw) {
-  const text = raw.replace(/[ \-']/g, '');
   const layout = [];
-  raw.split('').forEach((ch) => {
-    if (SEPARATOR.test(ch)) layout[layout.length - 1] = true;
+  for (const ch of raw) {
+    if (isSeparator(ch)) layout[layout.length - 1] = true;
     else layout.push(false);
-  });
+  }
+  const text = [...raw].filter((ch) => !isSeparator(ch)).join('');
   return { text, display: raw, length: text.length, layout };
 }
 
-/*
- * Each word becomes a set of letter tiles for its wheel. `letters` carries a
- * stable id per tile so the wheel can shuffle positions and the drawn path can
- * reference tiles even when the answer repeats a letter. Spaces are stripped for
- * the wheel (see parseAnswer for the shared text/display/layout handling).
- */
+/* Each word plus its wheel tiles; a tile's stable `id` lets the wheel shuffle and
+ * the drawn path tell apart repeated letters. */
 export function buildWords(puzzle) {
   return puzzle.words.map((raw) => {
     const a = parseAnswer(raw);
-    return { ...a, letters: a.text.split('').map((ch, id) => ({ id, ch })) };
+    return { ...a, letters: [...a.text].map((ch, id) => ({ id, ch })) };
   });
 }
 
-/* Secret the player types to guess a level's theme; spaces render as a gap. */
 export function buildSecret(puzzle) {
   return parseAnswer(puzzle.secret);
 }
 
-/* Deterministic Fisher-Yates so shuffles vary by seed without Math.random. */
+/* Answer boxes for `typed` so far: one per letter, `gapAfter` where a separator was. */
+export function answerSlots(answer, typed) {
+  return answer.layout.map((gapAfter, i) => ({ ch: typed[i] || '', gapAfter }));
+}
+
+/* Identifies one secret-keyboard tile: its tray row and per-word tile id. */
+export const tileKey = (r, id) => `${r}-${id}`;
+
+/* Linear congruential step, the project's seeded randomness (no Math.random). */
+const M = 233280;
+const lcg = (s) => (s * 9301 + 49297) % M;
+
+/* Deterministic pseudo-random index in [0, n) for `seed`. */
+export function seededIndex(seed, n) {
+  return Math.floor((lcg(seed) / M) * n);
+}
+
+/* Deterministic Fisher-Yates. */
 export function shuffle(arr, seed = 0) {
   const a = arr.slice();
-  let s = (seed * 9301 + 49297) % 233280 || 1;
+  let s = lcg(seed) || 1;
   for (let i = a.length - 1; i > 0; i--) {
-    s = (s * 9301 + 49297) % 233280;
-    const j = Math.floor((s / 233280) * (i + 1));
+    s = lcg(s);
+    const j = Math.floor((s / M) * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
-
-/* Strip diacritics so a typed "é" matches the accent-free answers. Shared with
- * the word rules (and the Worker) — see shared/word-rules.js. */
-export { normalizeChar as normalize } from '../../shared/word-rules.js';

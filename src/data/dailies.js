@@ -1,58 +1,57 @@
 /*
- * Local cache of the daily puzzle bank fetched from the backend. Dailies moved
- * out of the bundled challenges.json into D1 so the admin can edit them at
- * runtime; this cache lets puzzleForDate / todayDate resolve synchronously on a
- * reload or a direct /play/<date> link before any fresh fetch completes (the
- * warm-up in main.js populates it at startup).
- *
- * A cached record is { date, secret, words[4], attempts, successes, updated_at }.
- * `date` (ISO) is the stable id used in routes and save keys, exactly as the old
- * bundled bank was. Play stats reuse the community stat client (see community.js
- * clientId/hasReported/markReported) — the date id never collides with a UUID.
+ * The daily puzzle bank, cached from the backend (warmed at startup in main.js).
+ * A record is { date, secret, words[4], attempts, successes, updated_at }; its ISO
+ * `date` is the stable id used in routes and save keys. One daily per day: the most
+ * recent non-future one is today's.
  */
-const CACHE_KEY = 'amalgramme:v3:dailies';
+import { KEY_PREFIX } from '../utils/storage.js';
+import { getToday } from '../utils/today.js';
+import { createCache } from './cache.js';
 
-function readCache() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(CACHE_KEY));
-    if (raw && Array.isArray(raw.levels)) return raw;
-  } catch {
-    /* absent or corrupt: treat as empty */
-  }
-  return { levels: [], fetchedAt: 0 };
-}
+export const dailyCache = createCache(KEY_PREFIX + 'dailies');
 
-/* The cached daily bank, oldest date first. */
+/* The bank, oldest first. */
 export function getDailies() {
-  return [...readCache().levels].sort((a, b) => a.date.localeCompare(b.date));
+  return [...dailyCache.levels()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/* Epoch ms of the last successful fetch, 0 if never fetched. */
-export function cacheFetchedAt() {
-  return readCache().fetchedAt;
-}
-
-/* Replace the cached bank and stamp the fetch time. */
 export function setDailies(levels, fetchedAt) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ levels, fetchedAt }));
-  } catch {
-    /* storage unavailable: fall back to network each visit */
-  }
+  dailyCache.set(levels, fetchedAt);
 }
 
-/* Cached record for an ISO date, or null. */
 export function dailyRecord(date) {
   return getDailies().find((d) => d.date === date) ?? null;
 }
 
-/* Puzzle shape ({date, secret, words}) for a daily date, or null. */
 export function dailyPuzzle(date) {
   const rec = dailyRecord(date);
-  if (!rec) return null;
-  return {
-    date: rec.date,
-    secret: rec.secret,
-    words: rec.words,
-  };
+  return rec && { date: rec.date, secret: rec.secret, words: rec.words };
+}
+
+/* Date of today's daily: the latest one not in the future, or null for an empty
+ * bank. Memoised once resolved, so it stays stable for the session. */
+let today = null;
+export function todayDate() {
+  if (today) return today;
+  const list = getDailies();
+  if (!list.length) return null;
+  const now = getToday();
+  today = list.reduce((date, p) => (p.date <= now ? p.date : date), list[0].date);
+  return today;
+}
+
+/* Dailies before today, newest first. */
+export function pastChallenges() {
+  const today = todayDate();
+  if (!today) return [];
+  return getDailies()
+    .filter((p) => p.date < today)
+    .reverse();
+}
+
+/* The daily one day older than `date`, or null at the oldest / for unknowns. */
+export function olderDate(date) {
+  const list = getDailies();
+  const i = list.findIndex((p) => p.date === date);
+  return i > 0 ? list[i - 1].date : null;
 }

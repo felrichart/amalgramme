@@ -1,12 +1,12 @@
 <script setup>
-import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { todayDate } from '../data/challenges.js';
+import { todayDate } from '../data/dailies.js';
 import { hasNewCommunityLevels } from '../data/community.js';
 import { isAdmin } from '../composables/useUsername.js';
-import { levelProgress } from '../composables/useGameState.js';
+import { levelProgress } from '../data/progress.js';
 import { TILE_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
+import ProgressMark from '../components/ui/ProgressMark.vue';
 
 /* Title rendered as keyboard tiles: each letter cycles the five tints. */
 const BRAND = 'Amalgramme';
@@ -17,9 +17,9 @@ const brandTiles = BRAND.split('').map((ch, i) => ({
 
 const router = useRouter();
 
-/* Fresh read: the view remounts on every navigation (App keys on route). */
-const daily = computed(() => levelProgress(todayDate()));
-const communityNew = computed(() => hasNewCommunityLevels());
+// Read once: the view remounts on every navigation (App keys on route).
+const daily = levelProgress(todayDate());
+const communityNew = hasNewCommunityLevels();
 
 function openSondage() {
   window.open('https://forms.gle/X7Kqgeq3u1ZqyqPa9', '_blank');
@@ -46,31 +46,30 @@ function openSondage() {
     </header>
 
     <nav class="actions">
-      <button
-        class="action daily"
-        :class="{ done: daily.completed, partial: daily.partial }"
-        type="button"
-        @click="router.push('/play/daily')"
-      >
+      <button class="action daily press" type="button" @click="router.push('/play/daily')">
         Défi quotidien
-        <span v-if="daily.completed" class="check" aria-label="terminé">✓</span>
-        <span v-else-if="daily.partial" class="dot" aria-label="en cours"></span>
+        <ProgressMark class="mark" :completed="daily.completed" :partial="daily.partial" />
       </button>
 
-      <button class="action past" type="button" @click="router.push('/challenges')">
+      <button class="action past press" type="button" @click="router.push('/challenges')">
         Défis passés
       </button>
 
-      <button class="action community" type="button" @click="router.push('/community')">
+      <button class="action community press" type="button" @click="router.push('/community')">
         Défis de la communauté
         <span v-if="communityNew" class="notif" aria-label="nouveaux défis">!</span>
       </button>
 
-      <button class="action sondage" type="button" @click="openSondage">
+      <button class="action sondage press" type="button" @click="openSondage">
         Aidez moi à améliorer le jeu !
       </button>
 
-      <button v-if="isAdmin" class="action admin" type="button" @click="router.push('/admin')">
+      <button
+        v-if="isAdmin"
+        class="action admin press"
+        type="button"
+        @click="router.push('/admin')"
+      >
         Admin
       </button>
     </nav>
@@ -141,22 +140,7 @@ function openSondage() {
   border-radius: 1.1rem;
   font-weight: 900;
   font-size: 1.15rem;
-  cursor: pointer;
-  border: var(--outline-w-lg) solid var(--outline);
-  box-shadow: var(--pop);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.action:active {
-  transform: translate(4px, 5px);
-  box-shadow: 0 0 0 var(--outline);
-}
-/* Focus (keyboard): show the button pressed rather than ringed. */
-.action:focus-visible {
-  outline: none;
-  transform: translate(4px, 5px);
-  box-shadow: 0 0 0 var(--outline);
+  border-width: var(--outline-w-lg);
 }
 /* Daily: always solid accent; state shown only by the corner marker. */
 .daily {
@@ -193,25 +177,12 @@ function openSondage() {
   opacity: 0.35;
 }
 
-/* Success mark, top-right corner. */
-.check {
+/* Completion marker, top-right corner (white dot on the accent fill). */
+.mark {
+  --dot: #fff;
   position: absolute;
-  top: 0.55rem;
+  top: 0.6rem;
   right: 0.7rem;
-  font-size: 0.95rem;
-  font-weight: 900;
-  line-height: 1;
-}
-/* In-progress dot, top-right corner (white on the accent fill). */
-.dot {
-  position: absolute;
-  top: 0.7rem;
-  right: 0.7rem;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: #fff;
-  border: 1.5px solid var(--outline);
 }
 /* New-content badge, top-right corner (violet on the community wash). */
 .notif {

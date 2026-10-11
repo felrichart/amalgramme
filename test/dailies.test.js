@@ -5,11 +5,17 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('../src/utils/today.js', () => ({
   getToday: () => '2026-06-20',
   resolveToday: async () => '2026-06-20',
-  deviceTimeZone: () => 'UTC',
 }));
 
-import { setDailies, getDailies, dailyPuzzle, dailyRecord } from '../src/data/dailies.js';
-import { todayDate, puzzleForDate, pastChallenges } from '../src/data/challenges.js';
+import {
+  setDailies,
+  getDailies,
+  dailyPuzzle,
+  dailyRecord,
+  todayDate,
+  pastChallenges,
+} from '../src/data/dailies.js';
+import { puzzleForDate } from '../src/data/levels.js';
 
 const seed = (levels) =>
   localStorage.setItem('amalgramme:v3:dailies', JSON.stringify({ levels, fetchedAt: 1 }));

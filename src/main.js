@@ -1,52 +1,27 @@
 import { createApp } from 'vue';
 import './style.css';
+import './ui.css';
 import App from './App.vue';
 import router from './router.js';
 import { resolveToday } from './utils/today.js';
-import {
-  loadCommunityLevels,
-  recordAttempt as recordCommunityAttempt,
-  recordSolve as recordCommunitySolve,
-} from './services/community.js';
-import {
-  loadDailies,
-  recordAttempt as recordDailyAttempt,
-  recordSolve as recordDailySolve,
-} from './services/dailies.js';
-import {
-  migrateSaves,
-  migrateCommunitySaves,
-  migrateTutorial,
-  savedProgress,
-} from './composables/useGameState.js';
-import { isCommunityId, COMMUNITY_PREFIX } from './data/community.js';
+import { loadDailies, loadCommunityLevels } from './services/levels.js';
+import { recordPlay } from './services/stats.js';
+import { runMigrations } from './data/migrations.js';
+import { savedProgress } from './data/progress.js';
 
-/* Report every locally-saved level to the stats backend once, so players who
- * progressed before stat reporting existed are counted. Both services dedupe
- * per device, so this is a no-op on levels already reported. */
+/* Report every locally saved level once, so players who progressed before stats
+ * existed are counted (no-op for levels already reported). */
 function backfillStats() {
   for (const { date, completed } of savedProgress()) {
-    if (isCommunityId(date)) {
-      const id = date.slice(COMMUNITY_PREFIX.length);
-      recordCommunityAttempt(id);
-      if (completed) recordCommunitySolve(id);
-    } else {
-      recordDailyAttempt(date);
-      if (completed) recordDailySolve(date);
-    }
+    recordPlay(date, 'attempt');
+    if (completed) recordPlay(date, 'solve');
   }
 }
 
-/* Resolve today's date (time API, device-clock fallback) before mounting, since
- * views read it lazily via todayDate() during render, and warm the daily +
- * community caches in the same pass so today's puzzle and a direct
- * /play/<date>|/play/com-<id> link resolve. None reject — the device clock and
- * the local caches back them up — so load always proceeds. Then bring any legacy
- * saves up to the current schema (needs the daily bank, hence after the warm-up). */
+/* Views read today's date and the cached banks synchronously, so resolve and warm
+ * them before mounting. None reject (device clock and local caches back them up). */
 Promise.all([resolveToday(), loadDailies(0), loadCommunityLevels(0)]).then(() => {
-  migrateSaves();
-  migrateCommunitySaves();
-  migrateTutorial();
+  runMigrations();
   backfillStats();
   createApp(App).use(router).mount('#app');
 });

@@ -59,7 +59,12 @@ wrangler d1 migrations apply amalgramme --remote
 ```sh
 wrangler dev                                        # http://localhost:8787 (local D1)
 wrangler d1 migrations apply amalgramme --local     # seed the local DB once
+npm run db:pull                                     # or: mirror the remote DB locally
 ```
+
+`db:pull` (from the repo root, `wrangler dev` stopped) exports the remote D1 and
+replaces the local one with it. Needs `wrangler login`; the dump holds plaintext
+PINs, so it's written to a temp dir and deleted after import.
 
 The app's `npm run dev` reads `.env.development`. Set
 `VITE_COMMUNITY_API=http://localhost:8787` there (while `wrangler dev` runs) to

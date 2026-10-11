@@ -1,396 +1,100 @@
 <script setup>
-import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import {
-  useGameState,
-  tutorialState,
-  saveTutorialState,
-  savedProgress,
-} from '../composables/useGameState.js';
-import {
-  todayDate,
-  puzzleForDate,
-  dateForSlug,
-  slugForDate,
-  olderDate,
-  formatChallengeDate,
-} from '../data/challenges.js';
-import {
-  isCommunityId,
-  communityRecord,
-  challengesByAuthor,
-  COMMUNITY_PREFIX,
-} from '../data/community.js';
-import { dailyRecord } from '../data/dailies.js';
-import { recordAttempt, recordSolve, loadCommunityLevels } from '../services/community.js';
-import {
-  recordAttempt as recordDailyAttempt,
-  recordSolve as recordDailySolve,
-  loadDailies,
-} from '../services/dailies.js';
+import { useGameState, HELP_MAX } from '../composables/useGameState.js';
+import { useLevel } from '../composables/useLevel.js';
+import { usePlayStats } from '../composables/usePlayStats.js';
+import { useCoach } from '../composables/useCoach.js';
+import { useBoardLinks } from '../composables/useBoardLinks.js';
+import { useShake } from '../composables/useShake.js';
+import { aideHintSeen, markAideHintSeen } from '../data/tutorial.js';
+import { answerSlots } from '../game/puzzle.js';
+import { solvedBy } from '../utils/format.js';
+import { WHEEL_TINTS } from '../palette.js';
+import PageHeader from '../components/ui/PageHeader.vue';
+import BulbIcon from '../components/ui/BulbIcon.vue';
 import LetterWheel from '../components/LetterWheel.vue';
 import LetterKeyboard from '../components/LetterKeyboard.vue';
 import TutorialCoach from '../components/TutorialCoach.vue';
 import AidePopup from '../components/AidePopup.vue';
-import { WHEEL_TINTS } from '../palette.js';
 
 const route = useRoute();
 const router = useRouter();
 
-/* Resolve the route slug to a puzzle date. Unknown slug → menu; a future
- * (not-yet-released) puzzle → today's daily. Either way fall back to today so
- * this (about-to-be-replaced) render stays valid. */
-const today = todayDate();
-const requested = dateForSlug(route.params.slug);
-const isCommunity = isCommunityId(requested);
-const playable = !!puzzleForDate(requested) && (isCommunity || requested <= today);
-if (!puzzleForDate(requested)) router.replace(isCommunity ? '/community' : '/');
-else if (!playable) router.replace('/play/daily');
-const date = playable ? requested : today;
+const level = useLevel(route.params.slug, router);
+const g = useGameState(level.date);
+const stats = usePlayStats(level.date, () => g.state.completed);
+const {
+  open: coachOpen,
+  step: coachStep,
+  steps: coachSteps,
+  next: coachNext,
+  secretOpen: secretCoachOpen,
+  secretSteps,
+} = useCoach(g);
 
-const isDaily = !isCommunity && date === today;
-
-/* Community level: resolve its author + display number for the title/back link. */
-const community = isCommunity ? communityRecord(date) : null;
-const communityNumber = community
-  ? (challengesByAuthor(community.author).find((c) => c.id === community.id)?.number ?? null)
-  : null;
-
-const title = isDaily
-  ? 'Défi quotidien'
-  : isCommunity
-    ? `Défi de ${community?.author ?? ''}${communityNumber ? ` #${communityNumber}` : ''}`
-    : formatChallengeDate(date);
-/* Back lands where the player likely came from: menu for the daily, the author's
- * list for community, the challenge list otherwise. */
-const backTo = isDaily
-  ? '/'
-  : isCommunity
-    ? `/community/${community?.author ?? ''}`
-    : '/challenges';
-
-/* Coach popups over the board, shown once on a player's first play (progress is
- * tracked per device, not per level). Steps alternate between "action" (advances
- * when the parent sees the taught gesture) and "manual" (a Suivant button). It
- * can't be skipped — it ends only once the player reaches the last step. */
-const tut = tutorialState();
-const WHEELS = [0, 1, 2, 3].map((i) => `[data-cell="${i}"] .wheel`);
-
-/* Index of the word the player just solved, so the "Bravo" step spotlights it
- * rather than a fixed corner. */
-const foundCell = ref(0);
-const tutorialSteps = computed(() => [
-  {
-    holes: WHEELS,
-    html: 'Il y a 4 <span style="color:var(--gold);font-weight:900">indices</span>, dont les lettres sont mélangées.',
-  },
-  {
-    selector: '[data-tut="dock"]',
-    shape: 'rect',
-    text: 'Glisse d’une lettre à l’autre pour écrire le mot.',
-  },
-  {
-    selector: `[data-cell="${foundCell.value}"]`,
-    manual: true,
-    html: 'Bravo, plus que 3 <span style="color:var(--gold);font-weight:900">indices</span> à trouver !',
-  },
-  {
-    selector: '[data-tut="secret"]',
-    shape: 'rect',
-    manual: true,
-    cta: 'Compris',
-    html: 'Devine le <strong>mot énigme</strong> au centre grâce aux 4 <span style="color:var(--gold);font-weight:900">indices</span>.',
-  },
-]);
-/* A lone popup, split from the main walkthrough: it fires the first time the
- * player opens the secret keyboard, once the main coach is done. Single step, so
- * no advancement dots; the dock stays live and it's dismissed by typing a
- * letter (not a button). */
-const secretCoachSteps = [
-  {
-    selector: '[data-tut="dock"]',
-    shape: 'rect',
-    html: 'Appuie sur les lettres pour taper le <strong>mot énigme</strong>.',
-  },
-];
-
-/* The challenge one day older, mirroring the newest-first list; null at the
- * oldest, where the "next" button is hidden. */
-const older = olderDate(date);
-function goOlderChallenge() {
-  if (older) router.push(`/play/${slugForDate(older)}`);
-}
-
-/* The next community challenge by the same author, in reverse order (the one
- * below in their newest-first list); null when this is their oldest. */
-const communityNext = (() => {
-  if (!isCommunity || !community) return null;
-  const list = challengesByAuthor(community.author);
-  const i = list.findIndex((c) => c.id === community.id);
-  return i >= 0 && i < list.length - 1 ? list[i + 1] : null;
-})();
-function goCommunityNext() {
-  if (communityNext) router.push(`/play/${COMMUNITY_PREFIX}${communityNext.id}`);
-}
-
-const g = useGameState(date);
-
-/* Play stats for the finish screen — community levels and dailies both carry
- * attempts/successes. The cached seed is floored to 1
- * (reaching the finish panel proves this player attempted and solved) so it
- * never flashes "0 sur 0"; refreshFinishStats then replaces it with the exact
- * server count once this solve has been recorded. */
-const statRecord = isCommunity ? community : dailyRecord(date);
-const finishStats = ref(
-  statRecord && {
-    attempts: Math.max(statRecord.attempts ?? 0, 1),
-    successes: Math.max(statRecord.successes ?? 0, 1),
-  },
-);
-
-/* Refetch this level's stats and show the exact counts. Called after the solve
- * post settles, so the server has counted this player (a solve inserts a stat
- * row even without a prior attempt, so both numbers include them). */
-async function refreshFinishStats() {
-  if (isCommunity) await loadCommunityLevels(0);
-  else await loadDailies(0);
-  const rec = isCommunity ? communityRecord(date) : dailyRecord(date);
-  if (rec) finishStats.value = { attempts: rec.attempts ?? 0, successes: rec.successes ?? 0 };
-}
-
-/* Community play stats: count this player's attempt on open (no sign-in needed)
- * and their success on completion. Both are deduped per device, so a revisit or
- * an already-finished level costs at most one no-op call. */
-if (isCommunity && community) {
-  recordAttempt(community.id);
-  if (g.state.completed) recordSolve(community.id).then(refreshFinishStats);
-  else
-    watch(
-      () => g.state.completed,
-      (done) => done && recordSolve(community.id).then(refreshFinishStats),
-    );
-}
-
-/* Daily play stats (today's daily or a past one): same anonymous per-device
- * count as community, keyed by the puzzle date. */
-if (!isCommunity) {
-  recordDailyAttempt(date);
-  if (g.state.completed) recordDailySolve(date).then(refreshFinishStats);
-  else
-    watch(
-      () => g.state.completed,
-      (done) => done && recordDailySolve(date).then(refreshFinishStats),
-    );
-}
-
-/* Coach shows only on a genuine first-ever play: never once the player has any
- * saved progress anywhere (that already implies they know the rules), whichever
- * level they open first. */
-const firstPlay = savedProgress().length === 0;
-const coachEnabled = firstPlay && !tut.done;
-const coachOpen = ref(coachEnabled && !g.state.completed);
-const coachStep = ref(tut.step ?? 0);
-function coachNext() {
-  if (coachStep.value >= tutorialSteps.value.length - 1) {
-    coachOpen.value = false;
-    saveTutorialState({ done: true, step: coachStep.value });
-  } else {
-    coachStep.value++;
-    saveTutorialState({ step: coachStep.value });
-  }
-}
-/* The "Glisse" step (index 1) teaches the drawing gesture: hide it once the
- * player has traced two letters so they finish the word unhindered, then bring
- * the coach back on the "Bravo" step — spotlighting the word they solved — once
- * a first word is found. */
-if (coachEnabled) {
-  watch(
-    () => g.path.length,
-    (n) => {
-      if (coachOpen.value && coachStep.value === 1 && n >= 2) coachOpen.value = false;
-    },
-  );
-  watch(
-    () => g.solved.filter(Boolean).length,
-    (n, o) => {
-      if (coachStep.value === 1 && n > o) {
-        foundCell.value = g.solved.findIndex(Boolean);
-        coachStep.value = 2;
-        coachOpen.value = true;
-        saveTutorialState({ step: 2 });
-      }
-    },
-  );
-}
-
-/* Keyboard hint: a lone popup the first time the secret keyboard opens (once the
- * main coach is done), shown once per device. The dock stays live under it and
- * it's dismissed as soon as the player types a letter. */
-const secretCoachOpen = ref(false);
-if (firstPlay && !tut.keyboardSeen) {
-  let hintShown = false;
-  watch(
-    () => g.secretActive.value,
-    (active) => {
-      if (active && !coachOpen.value && !hintShown) {
-        hintShown = true;
-        saveTutorialState({ keyboardSeen: true });
-        nextTick(() => (secretCoachOpen.value = true));
-      }
-    },
-  );
-  watch(
-    () => g.secretInput.value.length,
-    (n, o) => {
-      if (secretCoachOpen.value && n > o) secretCoachOpen.value = false;
-    },
-  );
-}
-
-/* A word wheel is docked when the active target is a word (not the secret). */
-const wordActive = g.wordActive;
-
-/* Cross layout: words fill the four corners, the secret sits between them. */
+/* Corners hold the words, the secret sits between them. */
 const AREAS = ['w0', 'w1', 'w2', 'w3'];
 
-/* Slots above the wheel that fill in as the path is drawn. */
-const slots = computed(() => {
-  if (!wordActive.value) return [];
-  const w = g.words[g.state.wordIndex];
-  const cur = g.current.value;
-  /* `spaceAfter` renders a gap where the answer had a space (see buildWords). */
-  return w.layout.map((spaceAfter, i) => ({ ch: cur[i] || '', spaceAfter }));
-});
+const isDocked = (i) => g.wordActive.value && g.state.wordIndex === i;
 
-/* Secret boxes: one per letter, filled as the player types; gap where spaced.
- * The leading boxes revealed by help are pre-filled and locked (`given`), styled
- * apart from the letters the player types. */
+/* Answer boxes above the docked wheel, filled as the path is drawn. */
+const slots = computed(() =>
+  g.wordActive.value ? answerSlots(g.words[g.state.wordIndex], g.current.value) : [],
+);
+/* Secret boxes; the help-revealed leading ones are `given` (locked). */
 const secretSlots = computed(() =>
-  g.secret.layout.map((spaceAfter, i) => ({
-    ch: g.secretInput.value[i] || '',
+  answerSlots(g.secret, g.secretInput.value).map((s, i) => ({
+    ...s,
     given: i < g.state.secretReveal,
-    spaceAfter,
   })),
 );
 
-/* Remount the keyboard on each reveal so its shuffle-in animation replays. */
-const revealTick = ref(0);
+/* Remount the keyboard on each opening so its shuffle-in animation replays. */
+const keyboardTick = ref(0);
 function openSecret() {
-  revealTick.value++;
+  keyboardTick.value++;
   g.activateSecret();
 }
 
-/* "Aide" popup, opened from the header lightbulb: spends one reveal on the
- * chosen kind ('word' | 'secret') and closes. */
+const canHelp = computed(() => g.canRevealWord.value || g.canRevealSecret.value);
 const aideOpen = ref(false);
-function useHelp(kind) {
+/* One-off "Nouveau !" nudge towards the help button, gone once it's opened. */
+const hintSeen = ref(aideHintSeen());
+function openAide() {
+  aideOpen.value = true;
+  hintSeen.value = true;
+  markAideHintSeen();
+}
+function reveal(kind) {
   g.useHelp(kind);
   aideOpen.value = false;
 }
 
-/* One-off "Nouveau, clique !" nudge towards the help button, dismissed forever
- * on first open. */
-const AIDE_HINT_KEY = 'amalgramme:aideHintSeen';
-const aideHintSeen = ref(localStorage.getItem(AIDE_HINT_KEY) === '1');
-const aideHintOpen = computed(
-  () => !aideHintSeen.value && (g.canRevealWord.value || g.canRevealSecret.value),
-);
-function openAide() {
-  aideOpen.value = true;
-  if (!aideHintSeen.value) {
-    aideHintSeen.value = true;
-    localStorage.setItem(AIDE_HINT_KEY, '1');
-  }
-}
+const secretShaking = useShake(() => g.secretShake.value);
 
-/* Flash a shake on the secret boxes when a full guess is wrong. */
-const secretShaking = ref(false);
-let secretShakeTimer = null;
-watch(
-  () => g.secretShake.value,
-  () => {
-    secretShaking.value = true;
-    clearTimeout(secretShakeTimer);
-    secretShakeTimer = setTimeout(() => (secretShaking.value = false), 400);
-  },
-);
-onUnmounted(() => clearTimeout(secretShakeTimer));
+const { svgEl, secretEl, setCell, links } = useBoardLinks(WHEEL_TINTS, () => [
+  ...g.solved,
+  g.state.focus,
+  g.state.wordIndex,
+]);
 
-/* Connector lines drawn from the secret to each of the 4 corner wheels. */
-const svgEl = ref(null);
-const secretEl = ref(null);
-const cellEls = [];
-const setCell = (el, i) => {
-  if (el) cellEls[i] = el;
-};
-const links = reactive({ w: 0, h: 0, lines: [] });
-
-function measureLinks() {
-  const svg = svgEl.value;
-  const sec = secretEl.value;
-  if (!svg || !sec) return;
-  const o = svg.getBoundingClientRect();
-  links.w = o.width;
-  links.h = o.height;
-  const s = sec.getBoundingClientRect();
-  const cx = s.left + s.width / 2 - o.left;
-  const cy = s.top + s.height / 2 - o.top;
-  const lineTo = (el, tint) => {
-    const r = el.getBoundingClientRect();
-    return {
-      x1: cx,
-      y1: cy,
-      x2: r.left + r.width / 2 - o.left,
-      y2: r.top + r.height / 2 - o.top,
-      tint,
-    };
-  };
-  links.lines = cellEls.map((el, i) => (el ? lineTo(el, WHEEL_TINTS[i]) : null)).filter(Boolean);
-}
-
-let ro;
-onMounted(() => {
-  nextTick(measureLinks);
-  ro = new ResizeObserver(measureLinks);
-  if (svgEl.value) ro.observe(svgEl.value);
-});
-onUnmounted(() => ro?.disconnect());
-/* Solved words swap a wheel for a bar; re-measure so the lines stay centred. */
-watch(
-  () => [...g.solved],
-  () => nextTick(measureLinks),
-);
-/* Re-measure on selection changes too, so the links stay pinned to each disc. */
-watch(
-  () => [wordActive.value, g.secretActive.value, g.state.wordIndex],
-  () => nextTick(measureLinks),
-);
-
-/* Physical keyboard: routes to the secret keyboard or the active wheel. */
+/* Physical keyboard: typing goes to the secret keyboard or the docked wheel. */
+const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 function onKeydown(e) {
   if (g.state.completed || aideOpen.value) return;
-  if (g.secretActive.value) {
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      g.backspaceSecret();
-    } else if (/^[a-zA-Zà-ÿÀ-ß]$/.test(e.key)) {
-      g.typeSecret(e.key);
-    }
-    return;
-  }
-  if (!wordActive.value) return;
-  if (e.key === 'Backspace') {
+  const secret = g.secretActive.value;
+  if (!secret && !g.wordActive.value) return;
+  if (LETTER.test(e.key)) (secret ? g.typeSecret : g.typeLetter)(e.key);
+  else if (e.key === 'Backspace') {
     e.preventDefault();
-    g.backspace();
-  } else if (e.key === 'Escape') {
-    g.clearPath();
-  } else if (e.key === 'Enter') {
-    g.commit();
-  } else if (e.key === ' ') {
+    (secret ? g.backspaceSecret : g.backspace)();
+  } else if (secret) return;
+  else if (e.key === 'Escape') g.clearPath();
+  else if (e.key === 'Enter') g.commit();
+  else if (e.key === ' ') {
     e.preventDefault();
     g.shuffleWheel();
-  } else if (/^[a-zA-Zà-ÿÀ-ß]$/.test(e.key)) {
-    g.typeLetter(e.key);
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown));
@@ -398,48 +102,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
 
 <template>
-  <div class="game">
-    <header class="top">
+  <div class="page fit game">
+    <PageHeader :title="level.title" :back="level.back" :back-on-top="coachOpen">
       <button
-        class="icon-btn"
-        :class="{ 'over-coach': coachOpen }"
+        class="icon-btn help-btn press sm"
         type="button"
-        @click="router.push(backTo)"
-        aria-label="retour"
-      >
-        ←
-      </button>
-      <h1 class="title">{{ title }}</h1>
-      <!-- Help: spend a reveal on a letter. Disabled once none remain. -->
-      <button
-        class="icon-btn help-btn"
-        type="button"
-        :disabled="!g.canRevealWord.value && !g.canRevealSecret.value"
-        @click="openAide"
+        :disabled="!canHelp"
         aria-label="aide"
+        @click="openAide"
       >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2h5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span class="help-count">{{ g.helpLeft.value }}/3</span>
+        <BulbIcon />
+        <span class="help-count">{{ g.helpLeft.value }}/{{ HELP_MAX }}</span>
       </button>
-      <div v-if="aideHintOpen" class="aide-hint" aria-hidden="true">
-        <span class="aide-hint-text">Nouveau&nbsp;!</span>
+      <div v-if="!hintSeen && canHelp" class="aide-hint" aria-hidden="true">
+        <span>Nouveau&nbsp;!</span>
         <span class="aide-hint-arrow">→</span>
       </div>
-    </header>
+    </PageHeader>
 
-    <TutorialCoach v-if="coachOpen" :steps="tutorialSteps" :step="coachStep" @next="coachNext" />
+    <TutorialCoach v-if="coachOpen" :steps="coachSteps" :step="coachStep" @next="coachNext" />
     <TutorialCoach
       v-if="secretCoachOpen"
-      :steps="secretCoachSteps"
+      :steps="secretSteps"
       :step="0"
       @next="secretCoachOpen = false"
     />
@@ -466,35 +150,30 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         />
       </svg>
 
-      <template v-for="(w, i) in g.words" :key="i">
-        <div
-          class="cell"
-          :ref="(el) => setCell(el, i)"
-          :data-cell="i"
-          :style="{ gridArea: AREAS[i], '--tint': WHEEL_TINTS[i] }"
-        >
-          <div v-if="g.solved[i]" class="slot done">
-            <span class="answer">{{ w.display }}</span>
-          </div>
-          <button
-            v-else
-            class="slot"
-            :class="{ active: wordActive && g.state.wordIndex === i }"
-            type="button"
-            @pointerdown="g.activate(i)"
-            @focus="g.activate(i)"
-          >
-            <LetterWheel
-              :tiles="g.wheelTiles(i)"
-              :active="wordActive && g.state.wordIndex === i"
-              :revealed="g.revealed[i]"
-            />
-          </button>
+      <div
+        v-for="(w, i) in g.words"
+        :key="i"
+        :ref="(el) => setCell(el, i)"
+        class="cell"
+        :data-cell="i"
+        :style="{ gridArea: AREAS[i], '--tint': WHEEL_TINTS[i] }"
+      >
+        <div v-if="g.solved[i]" class="slot done">
+          <span class="answer">{{ w.display }}</span>
         </div>
-      </template>
+        <button
+          v-else
+          class="slot"
+          :class="{ active: isDocked(i) }"
+          type="button"
+          @pointerdown="g.activate(i)"
+          @focus="g.activate(i)"
+        >
+          <LetterWheel :tiles="g.wheelTiles(i)" :active="isDocked(i)" :revealed="g.revealed[i]" />
+        </button>
+      </div>
 
-      <!-- Wrapper stays put; the button inside translates on press so the
-           connector lines (anchored here) don't shift when it's selected. -->
+      <!-- The wrapper anchors the connector lines; only the button inside moves on press. -->
       <div ref="secretEl" class="secret-cell" data-tut="secret" style="grid-area: secret">
         <button
           class="secret"
@@ -509,7 +188,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
               v-for="(s, i) in secretSlots"
               :key="i"
               class="sbox"
-              :class="{ set: s.ch && !s.given, given: s.given, 'gap-after': s.spaceAfter }"
+              :class="{ set: s.ch && !s.given, given: s.given, 'gap-after': s.gapAfter }"
               >{{ s.ch }}</span
             >
           </span>
@@ -520,19 +199,40 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     <div
       class="dock"
       data-tut="dock"
-      :style="wordActive ? { '--tint': WHEEL_TINTS[g.state.wordIndex] } : undefined"
+      :style="g.wordActive.value ? { '--tint': WHEEL_TINTS[g.state.wordIndex] } : undefined"
     >
-      <template v-if="wordActive && !g.state.completed">
+      <template v-if="g.state.completed">
+        <div class="finish">
+          <div class="finish-head">
+            <span class="finish-mark" aria-hidden="true">✓</span>
+            <span class="finish-bravo">Bravo</span>
+          </div>
+          <p v-if="stats" class="finish-stats">{{ solvedBy(stats.successes, stats.attempts) }}</p>
+          <div class="finish-actions">
+            <button
+              v-for="a in level.actions"
+              :key="a.label"
+              class="cta press"
+              :class="a.variant"
+              type="button"
+              @click="router.push(a.to)"
+            >
+              {{ a.label }}
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="g.wordActive.value">
         <div class="track" :class="{ full: g.current.value.length === slots.length }">
           <span
             v-for="(s, i) in slots"
             :key="i"
             class="tick"
-            :class="{ set: s.ch, 'gap-after': s.spaceAfter }"
+            :class="{ set: s.ch, 'gap-after': s.gapAfter }"
             >{{ s.ch }}</span
           >
         </div>
-
         <div class="stage">
           <LetterWheel
             interactive
@@ -551,8 +251,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </template>
 
       <LetterKeyboard
-        v-else-if="g.secretActive.value && !g.state.completed"
-        :key="revealTick"
+        v-else-if="g.secretActive.value"
+        :key="keyboardTick"
         :rows="g.trayRows.value"
         :solved="g.solved"
         :spent="g.spentTiles.value"
@@ -560,78 +260,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         @backspace="g.backspaceSecret"
         @clear="g.clearSecret"
       />
-
-      <div v-else-if="g.state.completed" class="finish">
-        <div class="finish-head">
-          <span class="finish-mark" aria-hidden="true">✓</span>
-          <span class="finish-bravo">Bravo</span>
-        </div>
-        <p v-if="finishStats" class="finish-stats">
-          Réussi par {{ finishStats.successes }} joueur{{
-            finishStats.successes > 1 ? 's' : ''
-          }}
-          sur {{ finishStats.attempts }}
-        </p>
-        <div class="finish-actions">
-          <template v-if="isDaily">
-            <button class="cta cta-wash" type="button" @click="router.push('/challenges')">
-              Défis passés
-            </button>
-            <button class="cta cta-ghost" type="button" @click="router.push('/')">
-              Retour au menu
-            </button>
-          </template>
-          <template v-else-if="isCommunity">
-            <button
-              v-if="communityNext"
-              class="cta cta-community"
-              type="button"
-              @click="goCommunityNext"
-            >
-              Prochain défi
-            </button>
-            <button class="cta cta-ghost" type="button" @click="router.push(backTo)">Liste</button>
-          </template>
-          <template v-else>
-            <button v-if="older" class="cta" type="button" @click="goOlderChallenge">
-              Prochain défi
-            </button>
-            <button class="cta cta-ghost" type="button" @click="router.push('/challenges')">
-              Liste des défis
-            </button>
-          </template>
-        </div>
-      </div>
     </div>
 
     <AidePopup
-      :open="aideOpen"
+      v-if="aideOpen"
       :can-word="g.canRevealWord.value"
       :can-secret="g.canRevealSecret.value"
       :left="g.helpLeft.value"
-      @reveal="useHelp"
+      @reveal="reveal"
       @close="aideOpen = false"
     />
   </div>
 </template>
 
 <style scoped>
-.game {
-  min-height: 100dvh;
-  max-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  max-width: 560px;
-  margin: 0 auto;
-}
-
-.top {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.9rem 1rem 0.5rem;
-}
 /* One-off nudge towards the help button: faded blue text + arrow, gently pulsing. */
 .aide-hint {
   position: absolute;
@@ -660,31 +302,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     opacity: 0.9;
   }
 }
-.icon-btn {
-  width: 2.6rem;
-  height: 2.6rem;
-  flex: none;
-  display: grid;
-  place-items: center;
-  font-size: 1.3rem;
-  border-radius: 0.9rem;
-  color: var(--ink);
-  cursor: pointer;
-  background: var(--panel);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.icon-btn:active {
-  transform: translate(3px, 4px);
-  box-shadow: 0 0 0 var(--outline);
-}
-.icon-btn:focus-visible {
-  outline: 2px solid var(--outline);
-  outline-offset: 2px;
-}
 /* Help button: a lime pill in the top-right, lightbulb + remaining count in a row. */
 .help-btn {
   width: auto;
@@ -701,26 +318,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 900;
   font-size: 0.9rem;
   letter-spacing: 0.02em;
-}
-.help-btn:disabled {
-  cursor: default;
-  opacity: 0.4;
-  transform: none;
-  box-shadow: 0 0 0 var(--outline);
-}
-/* During the coach walkthrough the overlay (z 60) covers everything; keep the
-   back button above it so leaving is always one tap away. */
-.icon-btn.over-coach {
-  position: relative;
-  z-index: 61;
-}
-.title {
-  flex: 1;
-  margin: 0;
-  text-align: center;
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: var(--ink);
 }
 
 /* Stable wrapper the connector lines anchor to; the button translates within. */
@@ -775,19 +372,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .secret-boxes.shake {
   animation: shake 0.4s ease;
-}
-@keyframes shake {
-  10%,
-  90% {
-    transform: translateX(-2px);
-  }
-  30%,
-  70% {
-    transform: translateX(4px);
-  }
-  50% {
-    transform: translateX(-5px);
-  }
 }
 .sbox {
   flex: 1 1 1.95rem;
@@ -942,13 +526,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: #fff;
-  animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-@keyframes answer-in {
-  from {
-    transform: scale(0.7);
-    opacity: 0;
-  }
+  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /*
@@ -1002,11 +580,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   background: var(--tint);
   animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-@keyframes pop {
-  from {
-    transform: scale(0.4);
-  }
-}
 /* Same press feedback as a touched wheel node (scale 1.12). */
 @keyframes press {
   50% {
@@ -1025,7 +598,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex-direction: column;
   align-items: center;
   gap: 1.1rem;
-  animation: answer-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .finish-head {
   display: flex;
@@ -1063,41 +636,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   justify-content: center;
   gap: 0.7rem;
 }
-.cta {
-  background: var(--accent);
-  color: #fff;
-  font-family: inherit;
-  font-weight: 900;
-  font-size: 1.02rem;
+.finish .cta {
   padding: 0.85rem 1.9rem;
+  font-size: 1.02rem;
   border-radius: 1.1rem;
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop);
-  cursor: pointer;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.cta-wash {
-  background: var(--accent-wash);
-  color: var(--ink);
-}
-.cta-ghost {
-  background: var(--panel);
-  color: var(--ink);
-}
-.cta-community {
-  background: var(--violet);
-}
-.cta:active {
-  transform: translate(4px, 5px);
-  box-shadow: 0 0 0 var(--outline);
-}
-/* Focus (keyboard): show the button pressed rather than ringed. */
-.cta:focus-visible {
-  outline: none;
-  transform: translate(4px, 5px);
-  box-shadow: 0 0 0 var(--outline);
 }
 
 .stage {

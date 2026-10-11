@@ -1,11 +1,12 @@
 <script setup>
 import { computed } from 'vue';
 import { WHEEL_TINTS } from '../palette.js';
+import { tileKey } from '../game/puzzle.js';
 
 const props = defineProps({
   /* One row of { id, ch } tiles per source word, in wheel/corner order (w0..w3). */
   rows: { type: Array, required: true },
-  /* Set of `${row}-${id}` keys for tiles already spent on the guess (grey-out). */
+  /* tileKey()s of the tiles already spent on the guess (greyed out). */
   spent: { type: Object, default: () => new Set() },
   /* Per-row solved flag: a solved word's row is filled solid instead of outlined. */
   solved: { type: Array, default: () => [] },
@@ -16,7 +17,7 @@ const emit = defineEmits(['key', 'backspace', 'clear']);
 /* Tray cells keyed by their exact tile so the pressed tile — not a look-alike — greys out. */
 const grid = computed(() =>
   props.rows.map((row, r) =>
-    row.map((t) => ({ r, id: t.id, ch: t.ch, spent: props.spent.has(`${r}-${t.id}`) })),
+    row.map((t) => ({ r, id: t.id, ch: t.ch, spent: props.spent.has(tileKey(r, t.id)) })),
   ),
 );
 
@@ -31,7 +32,7 @@ function rowStyle(r) {
     <div v-for="(row, r) in grid" :key="r" class="trow" :style="rowStyle(r)">
       <button
         v-for="cell in row"
-        :key="`${cell.r}-${cell.id}`"
+        :key="cell.id"
         class="key"
         type="button"
         tabindex="-1"

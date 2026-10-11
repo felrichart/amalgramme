@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { dateForSlug } from '../src/data/challenges.js';
+import { dateForSlug } from '../src/data/levels.js';
 import { shortCommunityId, shortCommunityDate, getCache, setCache } from '../src/data/community.js';
 
 const full = '550e8400-e29b-41d4-a716-446655440000';

@@ -1,202 +1,45 @@
 <script setup>
-import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { pastChallenges, formatChallengeDate } from '../data/challenges.js';
-import { loadDailies } from '../services/dailies.js';
-import { levelProgress } from '../composables/useGameState.js';
+import { pastChallenges } from '../data/dailies.js';
+import { levelProgress } from '../data/progress.js';
+import { loadDailies } from '../services/levels.js';
+import { formatChallengeDate } from '../utils/format.js';
+import { useCachedList } from '../composables/useCachedList.js';
+import PageHeader from '../components/ui/PageHeader.vue';
+import LevelRow from '../components/LevelRow.vue';
 
 const router = useRouter();
 
-/* Past challenges only (today's daily lives on the menu), newest first. */
-function build() {
-  return pastChallenges().map((p) => {
-    const prog = levelProgress(p.date);
-    return {
-      date: p.date,
-      label: formatChallengeDate(p.date),
-      completed: prog.completed,
-      partial: prog.partial,
-      attempts: p.attempts ?? 0,
-      successes: p.successes ?? 0,
-    };
-  });
-}
-
-const items = ref(build());
-
-/* Force a fresh fetch on every open so play counts reflect the visit that just
- * happened (e.g. an attempt recorded on the daily the player came back from). */
-onMounted(async () => {
-  await loadDailies(0);
-  items.value = build();
-});
+/* Today's daily lives on the menu; this lists the earlier ones, newest first. */
+const { items } = useCachedList(
+  () => pastChallenges().map((p) => ({ ...p, progress: levelProgress(p.date) })),
+  loadDailies,
+);
 </script>
 
 <template>
-  <div class="challenges">
-    <header class="top">
-      <button class="icon-btn" type="button" @click="router.push('/')" aria-label="menu">←</button>
-      <h1 class="title">Défis passés</h1>
-      <div class="spacer" />
-    </header>
-
+  <div class="page">
+    <PageHeader title="Défis passés" back="/" back-label="menu" />
     <ul class="list">
       <li v-for="c in items" :key="c.date">
-        <button
-          class="row"
-          :class="{ done: c.completed, partial: c.partial }"
-          type="button"
+        <LevelRow
+          :progress="c.progress"
+          :attempts="c.attempts"
+          :successes="c.successes"
           @click="router.push(`/play/${c.date}`)"
         >
-          <span class="date">{{ c.label }}</span>
-          <span class="meta">
-            <span class="stats">
-              <span class="stat" :aria-label="`${c.successes} réussites sur ${c.attempts}`"
-                >Réussi par {{ c.successes }} joueur{{ c.successes > 1 ? 's' : '' }} sur
-                {{ c.attempts }}</span
-              >
-            </span>
-            <span v-if="c.completed" class="check" aria-label="terminé">✓</span>
-            <span v-else-if="c.partial" class="dot" aria-label="en cours"></span>
-          </span>
-        </button>
+          <span class="date">{{ formatChallengeDate(c.date) }}</span>
+        </LevelRow>
       </li>
     </ul>
   </div>
 </template>
 
 <style scoped>
-.challenges {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  max-width: 560px;
-  margin: 0 auto;
-}
-.top {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.9rem 1rem 0.5rem;
-}
-.icon-btn {
-  width: 2.6rem;
-  height: 2.6rem;
-  flex: none;
-  display: grid;
-  place-items: center;
-  font-size: 1.3rem;
-  border-radius: 0.9rem;
-  color: var(--ink);
-  cursor: pointer;
-  background: var(--panel);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.icon-btn:active {
-  transform: translate(3px, 4px);
-  box-shadow: 0 0 0 var(--outline);
-}
-.icon-btn:focus-visible {
-  outline: 2px solid var(--outline);
-  outline-offset: 2px;
-}
-.title {
-  flex: 1;
-  margin: 0;
-  text-align: center;
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: var(--ink);
-}
-.spacer {
-  width: 2.6rem;
-  flex: none;
-}
-
 .list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  list-style: none;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 0.6rem 1rem calc(2rem + env(safe-area-inset-bottom));
+  --tint: var(--accent);
 }
-.row {
-  position: relative;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  padding: 1rem 1.2rem;
-  border-radius: 1rem;
-  font-weight: 900;
-  font-size: 1.1rem;
-  cursor: pointer;
-  /* Default (todo): faint accent wash. */
-  color: var(--ink);
-  background: var(--accent-wash);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.row:active {
-  transform: translate(3px, 4px);
-  box-shadow: 0 0 0 var(--outline);
-}
-/* Focus (keyboard): show the row pressed rather than ringed. */
-.row:focus-visible {
-  outline: none;
-  transform: translate(3px, 4px);
-  box-shadow: 0 0 0 var(--outline);
-}
-/* Done: solid accent with a tick. In progress stays washed (a strong dot marks it). */
-.row.done {
-  background: var(--accent);
-  color: #fff;
-}
-
 .date {
-  letter-spacing: 0.01em;
   text-transform: capitalize;
-}
-/* Trailing group: play stats plus the completion mark, pushed to the row's end. */
-.meta {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-}
-.stats {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.15rem;
-}
-.stat {
-  font-size: 0.82rem;
-  font-weight: 800;
-  white-space: nowrap;
-  opacity: 0.85;
-}
-.check {
-  font-size: 1rem;
-  font-weight: 900;
-  line-height: 1;
-}
-/* Strong accent circle: reads against the washed in-progress row. */
-.dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 1.5px solid var(--outline);
 }
 </style>

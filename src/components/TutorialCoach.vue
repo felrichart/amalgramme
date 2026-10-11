@@ -170,10 +170,10 @@ onUnmounted(() => window.removeEventListener('resize', measure));
       <div class="bubble" :style="bubbleStyle">
         <p v-if="current.html" class="text" v-html="current.html"></p>
         <p v-else class="text">{{ current.text }}</p>
-        <div class="foot">
+        <div class="bubble-foot">
           <button
             v-if="current.manual || current.holes"
-            class="next"
+            class="cta next press"
             type="button"
             @click="emit('next')"
           >
@@ -245,7 +245,7 @@ onUnmounted(() => window.removeEventListener('resize', measure));
   color: var(--accent);
   font-weight: 900;
 }
-.foot {
+.bubble-foot {
   display: flex;
   align-items: center;
   gap: 0.8rem;
@@ -254,25 +254,7 @@ onUnmounted(() => window.removeEventListener('resize', measure));
 .next {
   margin-left: auto;
   pointer-events: auto;
-  background: var(--accent);
-  color: #fff;
-  font-family: inherit;
-  font-weight: 900;
-  font-size: 1rem;
   padding: 0.7rem 1.4rem;
-  border-radius: 1rem;
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop);
-  cursor: pointer;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-.next:active,
-.next:focus-visible {
-  outline: none;
-  transform: translate(4px, 5px);
-  box-shadow: 0 0 0 var(--outline);
 }
 
 @keyframes fade {

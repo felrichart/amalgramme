@@ -33,24 +33,12 @@ npm run preview    # sert le build de production
 
 ## Ajouter des niveaux
 
-Les niveaux vivent dans `src/data/challenges.json` — un simple tableau, un objet
-par défi :
-
-```json
-{ "date": "2026-07-12", "secret": "mot", "words": ["indice1", "indice2", "indice3", "indice4"] }
-```
-
-- `date` (ISO `AAAA-MM-JJ`) : un défi par jour ; le plus récent non futur est le
-  défi du jour. Garder le tableau trié par date croissante, ajouter à la fin.
-- `secret` et `words` : sans accents (le `é` tapé correspond au `e` après
-  normalisation). Un espace dans un mot = réponse en deux mots.
-- `hint` : un indice supplémentaire, révélable via l'ampoule du clavier. Requis à
-  la création (formulaire), mais absent des anciens niveaux (= pas d'ampoule, ils
-  restent jouables). Il suit les mêmes règles qu'un mot mais ne compte pas dans
-  les lettres qui doivent pouvoir écrire le secret.
-
-Éditer le JSON, commiter, pousser sur `main` : le déploiement se refait tout
-seul (voir ci-dessous).
+Les défis quotidiens vivent dans la base D1 du Worker (`server/`) et s'éditent
+depuis le tableau de bord **Admin** du jeu (compte `cara+`) : seuls aujourd'hui
+et les jours suivants sont modifiables. `src/data/challenges.json` n'est plus que
+l'artefact d'amorçage historique. Les règles d'un mot (3–12 lettres, sans
+accents, espaces/traits/apostrophes comme séparateurs) sont dans
+`shared/word-rules.js`.
 
 ## Déploiement
 
@@ -60,14 +48,4 @@ au build, mettre à jour les niveaux ne demande qu'un commit.
 
 ## Structure
 
-- `src/data/challenges.json` — banque de niveaux (données pures, éditables).
-- `src/data/challenges.js` — charge le JSON, logique du défi du jour et des
-  slugs de route.
-- `src/game/puzzle.js` — sélection du niveau, construction des roues, du secret
-  et du stock de lettres, mélange déterministe.
-- `src/composables/useGameState.js` — état du jeu, tracé du doigt, validation,
-  chrono, sauvegarde et progression par défi (localStorage).
-- `src/components/` — `LetterWheel` (roue + tracé), `LetterKeyboard` (saisie du
-  secret).
-- `src/views/` — `MenuView` (accueil, défi du jour), `ChallengesView` (défis
-  passés), `GameView` (roues + saisie du secret).
+Voir `CLAUDE.md` (section _Layout_) pour l'organisation du code.

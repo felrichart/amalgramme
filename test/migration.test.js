@@ -1,12 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  migrateSaves,
-  migrateCommunitySaves,
-  migrateTutorial,
-  tutorialState,
-  levelProgress,
-} from '../src/composables/useGameState.js';
-import { listDailies } from '../src/data/challenges.js';
+import { migrateSaves, migrateCommunitySaves, migrateTutorial } from '../src/data/migrations.js';
+import { levelProgress } from '../src/data/progress.js';
+import { tutorialState } from '../src/data/tutorial.js';
+import { getDailies } from '../src/data/dailies.js';
 
 const V3 = 'amalgramme:v3:level:';
 const read = (k) => JSON.parse(localStorage.getItem(k));
@@ -29,7 +25,7 @@ beforeEach(() => {
 
 describe('migrateSaves: legacy index keys → date keys', () => {
   it('moves an index save to its puzzle date key and preserves progress', () => {
-    const date = listDailies()[0].date;
+    const date = getDailies()[0].date;
     localStorage.setItem(
       V3 + '0',
       JSON.stringify({
@@ -49,7 +45,7 @@ describe('migrateSaves: legacy index keys → date keys', () => {
   });
 
   it('never overwrites an existing date key', () => {
-    const date = listDailies()[0].date;
+    const date = getDailies()[0].date;
     localStorage.setItem(V3 + date, JSON.stringify({ solved: [true, true, true, true] }));
     localStorage.setItem(V3 + '0', JSON.stringify({ solved: [false, false, false, false] }));
 
@@ -60,7 +56,7 @@ describe('migrateSaves: legacy index keys → date keys', () => {
   });
 
   it('is a no-op when there are no legacy keys', () => {
-    const date = listDailies()[0].date;
+    const date = getDailies()[0].date;
     localStorage.setItem(V3 + date, JSON.stringify({ solved: [true, false, false, false] }));
 
     migrateSaves();

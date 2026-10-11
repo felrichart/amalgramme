@@ -8,7 +8,7 @@ const open = ref(false);
 
 <template>
   <button
-    class="badge"
+    class="icon-btn badge press sm"
     :class="{ unset: !username }"
     type="button"
     :aria-label="username ? `Joueur : ${username}` : 'Choisir un nom de joueur'"
@@ -31,32 +31,11 @@ const open = ref(false);
 
 <style scoped>
 .badge {
-  position: relative;
-  width: 2.6rem;
-  height: 2.6rem;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 0.9rem;
   color: #fff;
-  cursor: pointer;
   background: var(--accent);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
 }
 .badge.unset {
   background: var(--panel);
   color: var(--ink);
-}
-.badge:active {
-  transform: translate(3px, 4px);
-  box-shadow: 0 0 0 var(--outline);
-}
-.badge:focus-visible {
-  outline: 2px solid var(--outline);
-  outline-offset: 2px;
 }
 </style>

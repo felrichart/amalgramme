@@ -13,6 +13,7 @@
  * spellable from the pooled letters of the four index words (the real game rule:
  * the secret is typed by spending tiles drawn from the four wheels).
  */
+export const WORD_COUNT = 4;
 export const MAX_LETTERS = 12;
 export const MIN_LETTERS = 3;
 export const MAX_SEPARATOR = 4;
@@ -86,4 +87,32 @@ export function canBuildSecret(secret, words) {
   const need = letterBag(secret);
   for (const ch in need) if ((pool[ch] || 0) < need[ch]) return false;
   return true;
+}
+
+/*
+ * Validate a challenge's index words and énigme from raw input. Returns per-field
+ * error codes (a word repeating an earlier valid one gets 'dup'), whether the
+ * énigme is buildable from the words, `ok` when everything holds, and the
+ * normalised values ready to store.
+ */
+export function checkChallenge({ words, secret }) {
+  const nWords = (Array.isArray(words) ? words : []).map(normalizeWord);
+  const nSecret = normalizeWord(secret);
+  const wordErrs = nWords.map(wordError);
+  const seen = new Set();
+  nWords.forEach((w, i) => {
+    if (wordErrs[i]) return;
+    if (seen.has(w)) wordErrs[i] = 'dup';
+    else seen.add(w);
+  });
+  const secretErr = wordError(nSecret);
+  const wordsValid = nWords.length === WORD_COUNT && wordErrs.every((e) => !e);
+  const buildable = wordsValid && !secretErr && canBuildSecret(nSecret, nWords);
+  return {
+    ok: buildable,
+    words: wordErrs,
+    secret: secretErr,
+    buildable,
+    normalized: { words: nWords, secret: nSecret },
+  };
 }

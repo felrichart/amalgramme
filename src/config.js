@@ -1,14 +1,11 @@
 /*
- * Base URL of the community-levels backend (Cloudflare Worker). Set per Vite mode
- * via VITE_COMMUNITY_API in the .env files (see .env.development / .env.production),
- * so `npm run dev` never talks to prod. Empty → no backend: the community section
- * is read-only from the local cache and creation is disabled. Trailing slash stripped.
+ * Base URL of the backend Worker (dailies, community levels, accounts, stats), set
+ * per Vite mode via VITE_COMMUNITY_API in the .env files so `npm run dev` never
+ * talks to prod. Empty → no backend: lists come from the local caches and writes
+ * are disabled.
  */
-/* The daily bank (services/dailies.js) and the admin dashboard share this same
- * Worker — the name is historical (it began as community-only). */
-export const COMMUNITY_API = (import.meta.env.VITE_COMMUNITY_API ?? '').replace(/\/$/, '');
+export const API_URL = (import.meta.env.VITE_COMMUNITY_API ?? '').replace(/\/$/, '');
 
-/* Reuse the cached community list for this long before hitting the network again.
- * Every request (GET included) counts toward the Worker free-tier 100k/day, so we
- * fetch once at startup and otherwise serve from cache within this window. */
-export const COMMUNITY_CACHE_MS = 5 * 60 * 1000;
+/* Serve cached lists for this long before hitting the network again: every request
+ * counts toward the Worker free-tier 100k/day. */
+export const CACHE_MS = 5 * 60 * 1000;

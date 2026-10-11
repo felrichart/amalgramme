@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
+import { useShake } from '../composables/useShake.js';
 
 /*
  * A ring of letter tiles. When interactive, a press-and-drag traces a path from
@@ -147,19 +148,7 @@ function onUp() {
   pointer.value = null;
 }
 
-const shaking = ref(false);
-let shakeTimer = null;
-watch(
-  () => props.shake,
-  () => {
-    shaking.value = false;
-    clearTimeout(shakeTimer);
-    requestAnimationFrame(() => {
-      shaking.value = true;
-      shakeTimer = setTimeout(() => (shaking.value = false), 400);
-    });
-  },
-);
+const shaking = useShake(() => props.shake);
 </script>
 
 <template>
