@@ -68,3 +68,13 @@ CREATE TABLE IF NOT EXISTS level_stats (
   PRIMARY KEY (level_id, client_id)
 );
 CREATE INDEX IF NOT EXISTS idx_level_stats_level ON level_stats (level_id);
+
+-- Level comments: one per (puzzle, account), gated on the account's synced
+-- progress showing the puzzle completed. level_id = progress key (date or com-<id>).
+CREATE TABLE IF NOT EXISTS comments (
+  level_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (level_id, username)
+);

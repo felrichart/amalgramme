@@ -43,3 +43,5 @@ export function emailValid(email) {
 /* A community level id is the first 8 chars of a server-minted UUID: compact
  * routes and save keys, negligible collision risk at this scale. */
 export const LEVEL_ID_LENGTH = 8;
+
+export const COMMENT_MAX_LENGTH = 280;

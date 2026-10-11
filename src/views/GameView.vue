@@ -14,6 +14,9 @@ import BulbIcon from '../components/ui/BulbIcon.vue';
 import EditIcon from '../components/ui/EditIcon.vue';
 import PuzzlePiece from '../components/PuzzlePiece.vue';
 import AidePopup from '../components/AidePopup.vue';
+import CommentsModal from '../components/CommentsModal.vue';
+import AccountModal from '../components/AccountModal.vue';
+import { connected } from '../composables/useAccount.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -121,6 +124,15 @@ function onKeydown(e) {
     g.shuffleWord();
   }
 }
+/* Comments open once solved; signing in comes first when needed. */
+const commentsOpen = ref(false);
+const accountOpen = ref(false);
+const commentCount = ref(null);
+function openComments() {
+  if (connected.value) commentsOpen.value = true;
+  else accountOpen.value = true;
+}
+
 onMounted(() => window.addEventListener('keydown', onKeydown));
 onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
@@ -190,6 +202,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           <span class="finish-bravo">Bravo</span>
         </div>
         <p v-if="stats" class="finish-stats">{{ solvedBy(stats.successes, stats.attempts) }}</p>
+        <button class="comments-btn press" type="button" @click="openComments">
+          💬 Commentaires<template v-if="commentCount != null"> ({{ commentCount }})</template>
+        </button>
         <div class="finish-actions">
           <button
             v-for="a in level.actions"
@@ -268,6 +283,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <p v-else class="idle">Touche une pièce ou le mot du milieu.</p>
     </section>
 
+    <CommentsModal
+      v-if="commentsOpen"
+      :date="level.date"
+      @count="commentCount = $event"
+      @close="commentsOpen = false"
+    />
+    <AccountModal :open="accountOpen" @close="accountOpen = false" @saved="commentsOpen = true" />
     <AidePopup
       v-if="aideOpen"
       :can-word="g.canRevealWord.value"
@@ -563,6 +585,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   background: var(--accent);
   box-shadow: var(--lift-sm);
   border: var(--outline-w) solid var(--outline);
+}
+.comments-btn {
+  margin-top: -0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.9rem;
+  font: inherit;
+  font-weight: 900;
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: var(--panel);
 }
 .finish-actions {
   display: flex;

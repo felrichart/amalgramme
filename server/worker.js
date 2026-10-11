@@ -12,6 +12,9 @@
  *   POST   /auth/reset               set a new password from its emailed token
  *   GET    /progress                 the account's saved progress, per puzzle
  *   POST   /progress                 merge device saves in, returns the merged set
+ *   GET    /comments/:level          a puzzle's comments (signed in, puzzle solved)
+ *   POST   /comments/:level          post one's single comment on it (same gate)
+ *   DELETE /comments/:level/:user    remove a comment (admin)
  *   GET    /levels                   every community level, newest first, with play stats
  *   POST   /levels                   create one (signed in, rate-limited)
  *   DELETE /levels/:id               remove one (its author, or the admin)
@@ -38,6 +41,7 @@ import {
   PIN_DEADLINE,
   NAME_MAX_LENGTH,
   LEVEL_ID_LENGTH,
+  COMMENT_MAX_LENGTH,
   passwordValid,
   emailValid,
 } from '../shared/constants.js';
@@ -152,7 +156,7 @@ function publicUser(u) {
  * the bare name (see deleteLevel for why a later namesake can't claim them). */
 function dropUser(env, name) {
   return env.DB.batch(
-    ['users', 'sessions', 'email_tokens', 'progress'].map((t) =>
+    ['users', 'sessions', 'email_tokens', 'progress', 'comments'].map((t) =>
       env.DB.prepare(`DELETE FROM ${t} WHERE username = ?`).bind(name),
     ),
   );
@@ -434,6 +438,63 @@ async function pushProgress({ request, env, user }) {
   return json(saves);
 }
 
+/* --- Comments --- */
+
+/* Comments are keyed like progress (date or "com-<id>"); the gate is the
+ * account's synced save for that puzzle, so the client syncs it first. */
+async function hasSolved(env, username, levelId) {
+  const row = await env.DB.prepare('SELECT data FROM progress WHERE username = ? AND level_id = ?')
+    .bind(username, levelId)
+    .first();
+  return !!row && !!JSON.parse(row.data).completed;
+}
+
+/* Wrap a handler on /comments/:level with the "solved it" gate. */
+const solvedOnly = (handler) =>
+  signedIn(async (ctx) => {
+    const { level } = ctx.params;
+    if (!SAVE_ID_RE.test(level)) return fail('not_found', 404);
+    if (!(await hasSolved(ctx.env, ctx.user.username, level))) return fail('not_solved', 403);
+    return handler(ctx);
+  });
+
+async function listComments({ env, params }) {
+  const { results } = await env.DB.prepare(
+    'SELECT username, body, created_at FROM comments WHERE level_id = ? ORDER BY created_at DESC',
+  )
+    .bind(params.level)
+    .all();
+  return json(results);
+}
+
+/* One comment per player and puzzle, for good: it can't be edited or reposted. */
+async function postComment({ request, env, params, user }) {
+  const body = await readBody(request);
+  if (!body) return fail('bad_json', 400);
+  // Line breaks kept, other control characters dropped.
+  const text = String(body.body ?? '')
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, '')
+    .trim();
+  if (!text || text.length > COMMENT_MAX_LENGTH) return fail('bad_comment', 422);
+  if (await rateLimited(env)) return fail('rate_limited', 429);
+  const comment = { username: user.username, body: text, created_at: Date.now() };
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO comments (level_id, username, body, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(level_id, username) DO NOTHING`,
+  )
+    .bind(params.level, comment.username, comment.body, comment.created_at)
+    .run();
+  if (!meta?.changes) return fail('already_commented', 409);
+  return json(comment, 201);
+}
+
+async function deleteComment({ env, params }) {
+  await env.DB.prepare('DELETE FROM comments WHERE level_id = ? AND username = ?')
+    .bind(params.level, decodeURIComponent(params.user))
+    .run();
+  return json({ ok: true });
+}
+
 /* --- Levels --- */
 
 async function listLevels({ env }) {
@@ -476,7 +537,10 @@ async function deleteLevel({ env, params, user }) {
   if (!level) return fail('not_found', 404);
   const owner = user.username === level.author && level.created_at >= user.created_at;
   if (!owner && user.username !== ADMIN_NAME) return fail('forbidden', 403);
-  await env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(params.id).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(params.id),
+    env.DB.prepare('DELETE FROM comments WHERE level_id = ?').bind('com-' + params.id),
+  ]);
   return json({ ok: true });
 }
 
@@ -562,12 +626,13 @@ function recordStat(table, col) {
 /* Full DB dump (password hashes included, sessions and email tokens left out). */
 async function exportAll({ env }) {
   const all = (sql) => env.DB.prepare(sql).all();
-  const [dailies, levels, users, stats, progress] = await Promise.all([
+  const [dailies, levels, users, stats, progress, comments] = await Promise.all([
     all('SELECT * FROM dailies ORDER BY date'),
     all('SELECT * FROM levels ORDER BY created_at'),
     all('SELECT * FROM users ORDER BY created_at'),
     all('SELECT * FROM level_stats'),
     all('SELECT * FROM progress'),
+    all('SELECT * FROM comments'),
   ]);
   return json({
     exported_at: Date.now(),
@@ -576,6 +641,7 @@ async function exportAll({ env }) {
     users: users.results,
     level_stats: stats.results,
     progress: progress.results,
+    comments: comments.results,
   });
 }
 
@@ -588,7 +654,7 @@ async function cleanup(env) {
   ];
   if (now >= PIN_DEADLINE) {
     const legacy = 'SELECT username FROM users WHERE password_hash IS NULL';
-    for (const t of ['sessions', 'email_tokens', 'progress'])
+    for (const t of ['sessions', 'email_tokens', 'progress', 'comments'])
       stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE username IN (${legacy})`));
     stmts.push(env.DB.prepare('DELETE FROM users WHERE password_hash IS NULL'));
   }
@@ -609,6 +675,9 @@ const ROUTES = [
   ['POST', /^\/auth\/reset$/, resetPassword],
   ['GET', /^\/progress$/, signedIn(getProgress)],
   ['POST', /^\/progress$/, signedIn(pushProgress)],
+  ['GET', /^\/comments\/(?<level>[^/]+)$/, solvedOnly(listComments)],
+  ['POST', /^\/comments\/(?<level>[^/]+)$/, solvedOnly(postComment)],
+  ['DELETE', /^\/comments\/(?<level>[^/]+)\/(?<user>[^/]+)$/, adminOnly(deleteComment)],
   ['GET', /^\/levels$/, listLevels],
   ['POST', /^\/levels$/, signedIn(createLevel)],
   ['POST', /^\/levels\/(?<id>[^/]+)\/(?<kind>attempt|solve)$/, recordStat('levels', 'id')],

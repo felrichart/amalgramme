@@ -336,3 +336,60 @@ describe('worker routes', () => {
     ]);
   });
 });
+
+describe('comments', () => {
+  const solve = (env, token, id) =>
+    call(env, 'POST', '/progress', { saves: { [id]: save(4, { completed: true }) } }, token);
+
+  it('are gated on a solved puzzle, one per player, newest first', async () => {
+    const env = fakeEnv();
+    const bob = await signup(env, 'bob');
+    const al = await signup(env, 'al');
+    const id = '2026-01-01';
+    expect((await call(env, 'GET', `/comments/${id}`)).status).toBe(401);
+    expect(await (await call(env, 'GET', `/comments/${id}`, undefined, bob)).json()).toEqual({
+      error: 'not_solved',
+    });
+    // Started but unfinished doesn't count.
+    await call(env, 'POST', '/progress', { saves: { [id]: save(3) } }, bob);
+    expect((await call(env, 'POST', `/comments/${id}`, { body: 'hi' }, bob)).status).toBe(403);
+
+    await solve(env, bob, id);
+    await solve(env, al, id);
+    const post = (token, body) => call(env, 'POST', `/comments/${id}`, { body }, token);
+    expect((await post(bob, '  ')).status).toBe(422);
+    expect((await post(bob, 'x'.repeat(281))).status).toBe(422);
+    expect((await post(bob, ' Trop dur ! ')).status).toBe(201);
+    expect(await (await post(bob, 'encore')).json()).toEqual({ error: 'already_commented' });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 1000);
+    await post(al, 'Facile');
+
+    const list = await (await call(env, 'GET', `/comments/${id}`, undefined, bob)).json();
+    expect(list.map((c) => [c.username, c.body])).toEqual([
+      ['al', 'Facile'],
+      ['bob', 'Trop dur !'],
+    ]);
+  });
+
+  it('admin deletes; deleting a level drops its comments', async () => {
+    const env = fakeEnv();
+    const bob = await signup(env, 'bob');
+    const admin = await signup(env, 'cara+');
+    const level = await (
+      await call(env, 'POST', '/levels', { words: WORDS, secret: 'sol' }, bob)
+    ).json();
+    const id = `com-${level.id}`;
+    await solve(env, bob, id);
+    await call(env, 'POST', `/comments/${id}`, { body: 'ok' }, bob);
+    expect((await call(env, 'DELETE', `/comments/${id}/bob`, {}, bob)).status).toBe(403);
+
+    await call(env, 'DELETE', `/levels/${level.id}`, {}, bob);
+    expect(env.DB.sql('SELECT * FROM comments')).toEqual([]);
+
+    await solve(env, bob, '2026-01-01');
+    await call(env, 'POST', '/comments/2026-01-01', { body: 'ok' }, bob);
+    expect((await call(env, 'DELETE', '/comments/2026-01-01/bob', {}, admin)).status).toBe(200);
+    expect(env.DB.sql('SELECT * FROM comments')).toEqual([]);
+  });
+});

@@ -90,6 +90,10 @@ exercise the API locally; leave it empty to run the app offline from cache.
   for an email + password (`POST /auth/secure`, same name and levels). Past the
   deadline the daily cron deletes them; their levels stay, and a newcomer reusing
   the name can't delete them (ownership needs `level.created_at >= user.created_at`).
+- **Comments** (`/comments/:level`): gated on the account's synced save for that
+  puzzle being `completed` (the client pushes it before asking). One per player,
+  final — no edit, only admin deletion. Trust is casual: a player could forge a
+  completed save.
 - **Progress** (`/progress`): one JSON save per (user, puzzle), merged with
   `shared/progress.js` (most advanced wins, then newest).
 
@@ -108,28 +112,31 @@ Then set `APP_URL` and `MAIL_FROM` under `[vars]` in `wrangler.toml` and deploy.
 Signed-in routes take `Authorization: Bearer <token>`; `401 unauthorized` means the
 session is gone.
 
-| Method | Path                  | Body / auth                       | Notes                                                     |
-| ------ | --------------------- | --------------------------------- | --------------------------------------------------------- |
-| POST   | `/auth/signup`        | `{username, email, password}`     | → `{token, user}`; emails a verification link             |
-| POST   | `/auth/login`         | `{login, password}`               | `login` = name or email → `{token, user}`                 |
-| POST   | `/auth/pin`           | `{username, pin}`                 | legacy accounts only, until `PIN_DEADLINE`                |
-| POST   | `/auth/logout`        | session                           | revokes this session                                      |
-| GET    | `/auth/me`            | session                           | `{username, email, emailVerified, legacy, pinDeadline}`   |
-| POST   | `/auth/secure`        | session, `{email, password}`      | legacy → secured account                                  |
-| POST   | `/auth/verify`        | `{token}`                         | from the emailed link                                     |
-| POST   | `/auth/verify/resend` | session                           |                                                           |
-| POST   | `/auth/forgot`        | `{login}`                         | always 200 (no account probing)                           |
-| POST   | `/auth/reset`         | `{token, password}`               | → `{token, user}`, other sessions revoked                 |
-| GET    | `/progress`           | session                           | `{<puzzle date>: save}`                                   |
-| POST   | `/progress`           | session, `{saves}`                | merges, returns the full merged set                       |
-| GET    | `/levels`             | —                                 | all levels, newest first                                  |
-| POST   | `/levels`             | session, `{secret, words[4]}`     | authored by the session's user; rate-limited              |
-| DELETE | `/levels/:id`         | session                           | its author (or `cara+`); community levels are create-only |
-| GET    | `/dailies`            | —                                 | all dailies (with play stats), oldest first               |
-| POST   | `/dailies`            | admin, `{date, secret, words[4]}` | `date` must be today or later                             |
-| PUT    | `/dailies/:date`      | admin, `{secret, words[4]}`       | `date` must be today or later                             |
-| DELETE | `/dailies/:date`      | admin                             | `date` must be today or later                             |
-| POST   | `/admin/export`       | admin                             | full DB dump (JSON) for a manual backup                   |
+| Method | Path                     | Body / auth                       | Notes                                                     |
+| ------ | ------------------------ | --------------------------------- | --------------------------------------------------------- |
+| POST   | `/auth/signup`           | `{username, email, password}`     | → `{token, user}`; emails a verification link             |
+| POST   | `/auth/login`            | `{login, password}`               | `login` = name or email → `{token, user}`                 |
+| POST   | `/auth/pin`              | `{username, pin}`                 | legacy accounts only, until `PIN_DEADLINE`                |
+| POST   | `/auth/logout`           | session                           | revokes this session                                      |
+| GET    | `/auth/me`               | session                           | `{username, email, emailVerified, legacy, pinDeadline}`   |
+| POST   | `/auth/secure`           | session, `{email, password}`      | legacy → secured account                                  |
+| POST   | `/auth/verify`           | `{token}`                         | from the emailed link                                     |
+| POST   | `/auth/verify/resend`    | session                           |                                                           |
+| POST   | `/auth/forgot`           | `{login}`                         | always 200 (no account probing)                           |
+| POST   | `/auth/reset`            | `{token, password}`               | → `{token, user}`, other sessions revoked                 |
+| GET    | `/progress`              | session                           | `{<puzzle date>: save}`                                   |
+| POST   | `/progress`              | session, `{saves}`                | merges, returns the full merged set                       |
+| GET    | `/comments/:level`       | session                           | `level` = progress key; 403 `not_solved` unless completed |
+| POST   | `/comments/:level`       | session, `{body}`                 | ≤ 280 chars, once per player (409 `already_commented`)    |
+| DELETE | `/comments/:level/:user` | admin                             | moderation                                                |
+| GET    | `/levels`                | —                                 | all levels, newest first                                  |
+| POST   | `/levels`                | session, `{secret, words[4]}`     | authored by the session's user; rate-limited              |
+| DELETE | `/levels/:id`            | session                           | its author (or `cara+`); community levels are create-only |
+| GET    | `/dailies`               | —                                 | all dailies (with play stats), oldest first               |
+| POST   | `/dailies`               | admin, `{date, secret, words[4]}` | `date` must be today or later                             |
+| PUT    | `/dailies/:date`         | admin, `{secret, words[4]}`       | `date` must be today or later                             |
+| DELETE | `/dailies/:date`         | admin                             | `date` must be today or later                             |
+| POST   | `/admin/export`          | admin                             | full DB dump (JSON) for a manual backup                   |
 
 ## Daily challenges
 

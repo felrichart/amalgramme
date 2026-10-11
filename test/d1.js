@@ -12,7 +12,7 @@ export function createD1() {
     const stmt = {
       bind: (...a) => ((args = a), stmt),
       first: async () => db.prepare(sql).get(...args) ?? null,
-      run: async () => (db.prepare(sql).run(...args), { success: true }),
+      run: async () => ({ success: true, meta: db.prepare(sql).run(...args) }),
       all: async () => ({ results: db.prepare(sql).all(...args) }),
     };
     return stmt;

@@ -110,6 +110,14 @@ export function afterSignOut() {
   }
 }
 
+/* Push one level's save right away (server-side gates read it, e.g. comments). */
+export async function syncSave(id) {
+  const save = allSaves()[id];
+  if (!connected.value || !save) return false;
+  dirty.delete(id);
+  return push({ [id]: save });
+}
+
 /* Send pending saves now; `onHide` uses a keepalive request that outlives the page. */
 async function flush(onHide = false) {
   clearTimeout(timer);

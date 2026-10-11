@@ -22,13 +22,13 @@ src/
                                (date → puzzle/record, slugs), progress (saves), tutorial, migrations
   services/                    network: api (request/mutate/refresh, bearer token), levels (CRUD),
                                account (sign-up/in, PIN legacy, email links), sync (progress ↔
-                               account), stats
+                               account), comments, stats
   composables/                 useGameState (ALL game logic for one level), useEntry (cursor-based
                                answer input), useLevel, usePlayStats, useCoach (paused), useShake,
                                useRequest, useCachedList, useAccount (session + profile)
   views/                       one per route; GameView is the board
   components/                  PuzzlePiece, TutorialCoach, AidePopup, ChallengeForm,
-                               LevelRow, UserBadge, AccountModal, SyncPrompt; ui/ = PageHeader, BaseModal,
+                               LevelRow, UserBadge, AccountModal, SyncPrompt, CommentsModal; ui/ = PageHeader, BaseModal,
                                ConfirmModal, ProgressMark, BulbIcon
 shared/                        word-rules.js, constants.js (ADMIN_NAME, PIN_DEADLINE, password/email
                                rules, id length), progress.js (save merge rule); imported by both
@@ -75,6 +75,9 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
   (`services/sync.js`, debounced); merging never loses progress, so the only
   question (`SyncPrompt`) is at sign-in when the device holds outside progress —
   declining stashes it until logout.
+- **Comments** (`CommentsModal`, from the finish screen): signed-in players who
+  solved the level read them and post one final comment; the Worker checks the
+  solve against the account's synced save (`syncSave` first).
 - **Coach** (paused — GameView doesn't mount it until it's rewritten for the
   puzzle board): an inline guided walkthrough (`TutorialCoach`) shown over the board
   on a player's first play. Progress lives in a single device-wide localStorage
