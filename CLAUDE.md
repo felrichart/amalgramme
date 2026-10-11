@@ -51,7 +51,7 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
   four words. Level completes when all words AND the secret are found.
   Auto-persists to localStorage on every change.
 - **GameView** = board on top (pieces + secret; pieces merge around the secret
-  while it's edited, via the View Transitions API) and an editor below (the
+  while it's edited, via a FLIP animation — `useFlip`) and an editor below (the
   enlarged piece, or the secret's letter stock).
 - **Help** (`useHelp('word' | 'secret')`): the header lightbulb opens `AidePopup`,
   which always offers both reveals; each spends one of 3 reveals (`helpUsed`,

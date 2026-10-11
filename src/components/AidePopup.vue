@@ -54,10 +54,9 @@ const emit = defineEmits(['reveal', 'close']);
   width: 3.2rem;
   height: 3.2rem;
   border-radius: 50%;
-  color: #fff;
+  color: var(--on-color);
   background: var(--lime);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
+  box-shadow: var(--lift-sm);
 }
 .modal-title {
   font-size: 1.2rem;

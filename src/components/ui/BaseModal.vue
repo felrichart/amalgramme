@@ -36,7 +36,6 @@ const emit = defineEmits(['close']);
   padding: 1.6rem 1.4rem;
   border-radius: 1.3rem;
   background: var(--panel);
-  border: var(--outline-w-lg) solid var(--outline);
-  box-shadow: var(--pop-lg);
+  box-shadow: var(--lift-lg);
 }
 </style>

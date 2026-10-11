@@ -31,7 +31,7 @@ const open = ref(false);
 
 <style scoped>
 .badge {
-  color: #fff;
+  color: var(--on-color);
   background: var(--accent);
 }
 .badge.unset {

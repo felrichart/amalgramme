@@ -4,26 +4,29 @@ import { todayDate } from '../data/dailies.js';
 import { hasNewCommunityLevels } from '../data/community.js';
 import { isAdmin } from '../composables/useUsername.js';
 import { levelProgress } from '../data/progress.js';
-import { TILE_TINTS } from '../palette.js';
+import { WORD_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
 import ProgressMark from '../components/ui/ProgressMark.vue';
 
-/* Title rendered as keyboard tiles: each letter cycles the five tints. */
-const BRAND = 'Amalgramme';
-const brandTiles = BRAND.split('').map((ch, i) => ({
-  ch,
-  tint: TILE_TINTS[i % TILE_TINTS.length],
-}));
+/* Logo: the name in ink, its A, A, A and E set as tilted puzzle pieces in the word tints. */
+const PIECES = [
+  ['tab-bottom', -5],
+  ['tab-top', 4],
+  ['tab-bottom', -3],
+  ['tab-top', 5],
+];
+const BRAND = [...'AMALGRAMME'].map((ch, i) => {
+  const n = [0, 2, 6, 9].indexOf(i);
+  if (n < 0) return { ch };
+  const [tab, tilt] = PIECES[n];
+  return { ch, shape: tab, style: { '--fill': WORD_TINTS[n], rotate: `${tilt}deg` } };
+});
 
 const router = useRouter();
 
 // Read once: the view remounts on every navigation (App keys on route).
 const daily = levelProgress(todayDate());
 const communityNew = hasNewCommunityLevels();
-
-function openSondage() {
-  window.open('https://forms.gle/X7Kqgeq3u1ZqyqPa9', '_blank');
-}
 </script>
 
 <template>
@@ -33,14 +36,18 @@ function openSondage() {
     </div>
     <header class="top">
       <h1 class="brand" aria-label="Amalgramme">
-        <span
-          v-for="(t, i) in brandTiles"
-          :key="i"
-          class="btile solid"
-          :style="{ '--tint': t.tint }"
-          aria-hidden="true"
-          >{{ t.ch }}</span
-        >
+        <template v-for="(l, i) in BRAND" :key="i">
+          <span
+            v-if="l.shape"
+            class="bpiece puzzle"
+            :class="l.shape"
+            :style="l.style"
+            aria-hidden="true"
+            ><span class="puzzle-body">{{ l.ch }}</span
+            ><span class="puzzle-tab"
+          /></span>
+          <span v-else class="bletter" aria-hidden="true">{{ l.ch }}</span>
+        </template>
       </h1>
       <p class="credit">par Cara+</p>
     </header>
@@ -58,10 +65,6 @@ function openSondage() {
       <button class="action community press" type="button" @click="router.push('/community')">
         Défis de la communauté
         <span v-if="communityNew" class="notif" aria-label="nouveaux défis">!</span>
-      </button>
-
-      <button class="action sondage press" type="button" @click="openSondage">
-        Aidez moi à améliorer le jeu !
       </button>
 
       <button
@@ -99,32 +102,31 @@ function openSondage() {
 .top {
   width: fit-content;
 }
-/* Title as a row of keyboard tiles. */
+/* Logo: ink letters, with four of them as puzzle pieces. */
 .brand {
   margin: 0;
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 0.3rem;
+  gap: 0.06em;
+  font-size: min(2.1rem, 7.2vw);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
 }
-.btile {
-  font-size: 1.45rem;
+.bpiece {
+  --k: 0.14em;
+  --rx: 0.22em;
+  --ry: 0.17em;
+  margin: 0 0.1em;
+}
+.bpiece .puzzle-body {
   display: grid;
   place-items: center;
-  min-width: 1.35em;
-  height: 1.7em;
-  padding: 0 0.2em;
-  border-radius: 0.4em;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--tint);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
-}
-/* Lift every other tile for a hand-set, playful baseline. */
-.btile:nth-child(even) {
-  transform: translateY(-0.28em);
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 0.28em;
+  color: var(--ink);
 }
 
 .actions {
@@ -140,12 +142,11 @@ function openSondage() {
   border-radius: 1.1rem;
   font-weight: 900;
   font-size: 1.15rem;
-  border-width: var(--outline-w-lg);
 }
 /* Daily: always solid accent; state shown only by the corner marker. */
 .daily {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-color);
 }
 .past {
   background: var(--accent-wash);
@@ -153,18 +154,15 @@ function openSondage() {
 }
 .community {
   --tint: var(--violet);
-  background: var(--tint-wash);
-  color: var(--ink);
-}
-.sondage {
-  background: var(--gold);
+  background: color-mix(in srgb, var(--tint) 20%, var(--panel));
   color: var(--ink);
 }
 /* Admin: only rendered for the cara+ account; a quiet dashed panel. */
 .admin {
   background: var(--panel);
   color: var(--ink);
-  border-style: dashed;
+  border: 2px dashed var(--line);
+  box-shadow: none;
 }
 
 /* Attribution, under the title. */

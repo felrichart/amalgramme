@@ -192,8 +192,7 @@ const confirmOpen = ref(false);
   padding: 0.9rem;
   border-radius: 1rem;
   background: var(--panel);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
+  box-shadow: var(--lift-sm);
 }
 .section-title,
 :slotted(.section-title) {
@@ -221,8 +220,6 @@ const confirmOpen = ref(false);
   text-transform: uppercase;
   color: var(--tint, var(--accent));
   background: var(--tile);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
 }
 .input:focus-visible {
   outline: 2px solid var(--tint, var(--accent));
@@ -230,7 +227,6 @@ const confirmOpen = ref(false);
 }
 .secret {
   --tint: var(--accent);
-  border-color: var(--accent);
 }
 .lab {
   font-weight: 800;
@@ -273,10 +269,9 @@ const confirmOpen = ref(false);
   font-weight: 900;
   font-size: 0.95rem;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--on-color);
   background: var(--tint, var(--accent));
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
+  box-shadow: var(--lift-sm);
 }
 .center {
   grid-area: sec;

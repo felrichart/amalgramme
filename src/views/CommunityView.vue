@@ -101,8 +101,8 @@ function onCreate() {
   padding: 0.2rem 0.55rem;
   border-radius: 0.7rem;
   background: var(--tint);
-  color: #fff;
-  border: 1.5px solid var(--outline);
+  color: var(--on-color);
+  border: 1.5px solid var(--line);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }

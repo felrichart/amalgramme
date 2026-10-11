@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { answerSlots } from '../game/puzzle.js';
+import EditIcon from './ui/EditIcon.vue';
 
 const props = defineProps({
   /* Corner 0..3; picks where the tab and the hole sit so the four pieces interlock. */
@@ -12,6 +13,8 @@ const props = defineProps({
   solved: { type: Boolean, default: false },
   /* Being edited below (highlighted on the board). */
   active: { type: Boolean, default: false },
+  /* Another piece is being edited. */
+  dimmed: { type: Boolean, default: false },
   /* Letters in display order, as { id, ch }. */
   tiles: { type: Array, required: true },
   /* One char per answer box ('' when empty). */
@@ -27,21 +30,34 @@ const props = defineProps({
 
 const emit = defineEmits(['open', 'tile', 'shuffle', 'cursor', 'back', 'clear', 'close']);
 
+/* Tab and hole per corner, so the four interlock when merged (w0 → w1 → w3 → w2 → w0). */
+const SHAPES = [
+  ['tab-right', 'hole-bottom'],
+  ['tab-bottom', 'hole-left'],
+  ['tab-top', 'hole-right'],
+  ['tab-left', 'hole-top'],
+];
+
 const slots = computed(() => answerSlots(props.word, props.typed));
 const opens = computed(() => props.mode !== 'open' && !props.solved && !props.active);
 </script>
 
 <template>
   <div
-    class="piece"
-    :class="[`is-${mode}`, `p${index}`, { solved, active, opens }]"
+    class="piece puzzle"
+    :class="[
+      `is-${mode}`,
+      `p${index}`,
+      mode === 'open' ? [] : SHAPES[index],
+      { solved, active, dimmed, opens, long: word.length > 9 },
+    ]"
     :role="opens ? 'button' : undefined"
     :tabindex="opens ? 0 : undefined"
     :aria-label="opens ? `mot ${index + 1}` : undefined"
     @click="opens && emit('open')"
     @keydown.enter="opens && emit('open')"
   >
-    <div class="body">
+    <div class="body puzzle-body">
       <span v-if="solved" class="word"
         ><span class="check" aria-hidden="true">✓</span>{{ word.display }}</span
       >
@@ -74,10 +90,24 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
           </button>
         </div>
         <div class="edit-bar">
-          <button class="pill" type="button" tabindex="-1" @click="emit('shuffle')">
-            ⟲ Mélanger
+          <button
+            class="pill"
+            type="button"
+            tabindex="-1"
+            aria-label="mélanger"
+            @click="emit('shuffle')"
+          >
+            <EditIcon name="shuffle" />
           </button>
-          <button class="pill" type="button" tabindex="-1" @click="emit('clear')">Effacer</button>
+          <button
+            class="pill"
+            type="button"
+            tabindex="-1"
+            aria-label="tout effacer"
+            @click="emit('clear')"
+          >
+            <EditIcon name="clear" />
+          </button>
           <button
             class="pill"
             type="button"
@@ -85,12 +115,13 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
             aria-label="effacer une lettre"
             @click="emit('back')"
           >
-            ⌫
+            <EditIcon name="back" />
           </button>
         </div>
       </template>
+      <span v-else-if="mode === 'merged'" class="unknown">?</span>
       <template v-else>
-        <span v-if="mode === 'overview'" class="slots">
+        <span class="slots">
           <span
             v-for="(s, i) in slots"
             :key="i"
@@ -99,55 +130,36 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
             >{{ s.ch }}</span
           >
         </span>
-        <span v-if="mode === 'overview'" class="letters">
+        <span class="letters">
           <span v-for="t in tiles" :key="t.id">{{ t.ch }}</span>
         </span>
       </template>
     </div>
-    <span class="tab" aria-hidden="true" />
+    <span v-if="mode !== 'open'" class="puzzle-tab" aria-hidden="true" />
   </div>
 </template>
 
 <style scoped>
-/*
- * Each piece has one tab and one hole, placed so the four interlock when merged
- * (w0 → w1 → w3 → w2 → w0). A tab is centred `--k` past its edge; the matching
- * hole sits `--k` inside the neighbour's edge, so they coincide once flush.
- */
 .piece {
-  --k: 0.3rem;
-  --rx: 0.62rem;
-  --ry: 0.5rem;
   --fill: var(--piece);
-  --edge: color-mix(in srgb, var(--tint) 55%, var(--piece));
-  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
   color: var(--ink);
-  /* One soft ledge under body + tab together (a box-shadow would be masked off). */
-  filter: drop-shadow(0 4px 0 var(--edge));
-  view-transition-name: var(--vt);
+  user-select: none;
 }
-.p0 {
-  --tx: calc(100% + var(--k));
-  --ty: 50%;
-  --hole: 50% calc(100% - var(--k));
+/* Keep the content clear of the hole (and its outline). */
+.hole-left .body {
+  padding-left: calc(0.8rem + var(--rx));
 }
-.p1 {
-  --tx: 50%;
-  --ty: calc(100% + var(--k));
-  --hole: var(--k) 50%;
+.hole-right .body {
+  padding-right: calc(0.8rem + var(--rx));
 }
-.p2 {
-  --tx: 50%;
-  --ty: calc(-1 * var(--k));
-  --hole: calc(100% - var(--k)) 50%;
+.hole-top .body {
+  padding-top: calc(1rem + var(--ry));
 }
-.p3 {
-  --tx: calc(-1 * var(--k));
-  --ty: 50%;
-  --hole: 50% var(--k);
+.hole-bottom .body {
+  padding-bottom: calc(1rem + var(--ry));
 }
 .body {
   flex: 1;
@@ -157,40 +169,27 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   justify-content: center;
   gap: 0.6rem;
   padding: 1rem 0.8rem;
-  border-radius: 1rem;
-  background: var(--fill);
-  mask: radial-gradient(var(--rx) var(--ry) at var(--hole), #0000 99%, #000 100%);
 }
-.tab {
-  position: absolute;
-  left: calc(var(--tx) - var(--rx));
-  top: calc(var(--ty) - var(--ry));
-  width: calc(2 * var(--rx));
-  height: calc(2 * var(--ry));
-  border-radius: 50%;
-  background: var(--fill);
-}
-/* Found: the piece locks in its full colour, the word knocked out in white. */
+/* Found: the piece locks in its full colour. */
 .solved {
   --fill: var(--tint);
-  --edge: color-mix(in srgb, var(--tint) 70%, #000);
-  color: #fff;
 }
 
-/* Being edited: an ink outline that follows the shape, tab included (four
-   offset drop-shadows, since a mask would clip a real outline). */
+/* Being edited: lifted off the board on a taller ledge. */
 .active:not(.is-open) {
-  --o: 2.5px;
-  filter: drop-shadow(var(--o) 0 0 var(--ink)) drop-shadow(calc(-1 * var(--o)) 0 0 var(--ink))
-    drop-shadow(0 var(--o) 0 var(--ink)) drop-shadow(0 calc(-1 * var(--o)) 0 var(--ink))
-    drop-shadow(0 4px 0 var(--edge));
+  --ledge: 7px;
+  transform: translateY(-4px);
 }
 .opens {
   cursor: pointer;
-  transition: transform 0.12s ease;
+}
+/* Another word is open: unsolved pieces step back so the one being solved stands out. */
+.dimmed:not(.solved) {
+  opacity: 0.7;
 }
 .opens:active {
-  transform: translateY(2px);
+  --ledge: 0px;
+  transform: translateY(3px);
 }
 .opens:focus-visible {
   outline: none;
@@ -201,20 +200,13 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 }
 
 /* The editor under the board: a plain card, knobs gone. */
-.is-open .tab {
-  display: none;
-}
 .is-open .body {
-  mask: none;
   gap: 1.1rem;
   padding: 1.3rem 1rem 1rem;
 }
 
 /* Assembled: square inner corners so the four read as one block, and push the
    content to the outer edge, away from the secret laid over the centre. */
-.is-merged {
-  filter: none;
-}
 .is-merged .body {
   padding: 0.8rem;
 }
@@ -245,7 +237,6 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-align: center;
-  overflow-wrap: anywhere;
   animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .check {
@@ -259,7 +250,12 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   letter-spacing: 0;
   vertical-align: 0.15em;
   color: var(--tint);
-  background: #fff;
+  background: var(--on-color);
+}
+.unknown {
+  font-weight: 900;
+  font-size: 1.6rem;
+  opacity: 0.55;
 }
 .is-open .word {
   font-size: 2rem;
@@ -269,6 +265,14 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 }
 
 /* Shuffled letters on the board: what the player has to work with. */
+.long .word {
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+.long .letters {
+  gap: 0.15rem 0.35rem;
+  font-size: 0.95rem;
+}
 .letters {
   display: flex;
   flex-wrap: wrap;
@@ -362,28 +366,21 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   text-transform: uppercase;
   color: var(--ink);
   background: var(--tile);
-  border: 0;
+  border: var(--outline-w) solid var(--outline);
   border-radius: 0.6rem;
-  box-shadow: 0 3px 0 var(--edge);
+  box-shadow: var(--lift);
   cursor: pointer;
   transition:
     opacity 0.15s ease,
     transform 0.08s ease;
 }
 .tile:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--edge);
+  transform: translateY(3px);
+  box-shadow: none;
 }
 .tile:disabled {
   opacity: 0.35;
   box-shadow: none;
   cursor: default;
-}
-.edit-bar {
-  display: flex;
-  gap: 0.5rem;
-}
-.pill {
-  background: color-mix(in srgb, var(--tile) 55%, transparent);
 }
 </style>

@@ -191,9 +191,10 @@ function logout() {
   font-weight: 900;
   color: var(--ink);
   background: var(--tile);
-  border: var(--outline-w) solid var(--outline);
   border-radius: 0.9rem;
-  box-shadow: var(--pop-sm);
+}
+.tab {
+  box-shadow: var(--lift-sm);
 }
 .tab:focus-visible,
 .field:focus-visible {
@@ -208,7 +209,7 @@ function logout() {
   color: var(--muted);
 }
 .tab.on {
-  color: #fff;
+  color: var(--on-color);
   background: var(--accent);
 }
 .field {

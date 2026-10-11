@@ -125,7 +125,7 @@ async function downloadBackup() {
 }
 .tool.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-color);
 }
 .toolbar-err {
   margin: -0.2rem 1rem 0.4rem;
@@ -142,7 +142,7 @@ async function downloadBackup() {
 .row.past {
   opacity: 0.85;
   background: var(--panel);
-  box-shadow: var(--pop);
+  box-shadow: var(--lift);
 }
 .date {
   flex: none;

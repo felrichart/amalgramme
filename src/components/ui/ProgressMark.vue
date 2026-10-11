@@ -19,6 +19,6 @@ defineProps({ completed: Boolean, partial: Boolean });
   height: 0.7rem;
   border-radius: 50%;
   background: var(--dot, var(--tint));
-  border: 1.5px solid var(--outline);
+  border: 1.5px solid var(--line);
 }
 </style>

@@ -13,8 +13,8 @@ milieu, leurs lettres servent à taper le secret.
 - Le plateau montre les 4 pièces et le mot du milieu ; toucher une pièce l'ouvre
   en grand dessous : toucher ses lettres pour remplir les cases. Le mot est
   vérifié dès que toutes les cases sont remplies (la pièce tremble s'il est faux).
-- Toucher une case y place le curseur ; **⌫** efface une lettre, **Effacer** tout
-  le mot, **Mélanger** rebat les lettres.
+- Toucher une case y place le curseur ; **⌫** efface une lettre, la corbeille tout
+  le mot, les flèches croisées rebattent les lettres.
 - Toucher le mot du milieu assemble les pièces autour de lui : les lettres des 4
   mots (dans l'ordre pour les mots trouvés) servent à taper le secret. Toucher
   une pièce du bloc revient à ce mot.

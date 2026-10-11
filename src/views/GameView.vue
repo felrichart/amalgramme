@@ -1,16 +1,17 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useGameState, HELP_MAX } from '../composables/useGameState.js';
 import { useLevel } from '../composables/useLevel.js';
 import { usePlayStats } from '../composables/usePlayStats.js';
 import { useShake } from '../composables/useShake.js';
-import { aideHintSeen, markAideHintSeen } from '../data/tutorial.js';
+import { useFlip } from '../composables/useFlip.js';
 import { answerSlots, tileKey } from '../game/puzzle.js';
 import { solvedBy } from '../utils/format.js';
 import { WORD_TINTS } from '../palette.js';
 import PageHeader from '../components/ui/PageHeader.vue';
 import BulbIcon from '../components/ui/BulbIcon.vue';
+import EditIcon from '../components/ui/EditIcon.vue';
 import PuzzlePiece from '../components/PuzzlePiece.vue';
 import AidePopup from '../components/AidePopup.vue';
 
@@ -39,22 +40,18 @@ const openWord = computed(() =>
 );
 const merged = computed(() => view.value === 'merged');
 
-function morph(update) {
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (!document.startViewTransition || reduce) return update();
-  document.startViewTransition(async () => {
-    update();
-    await nextTick();
-  });
-}
+/* The assemble / split glides the pieces and the secret to their new spots. */
+const boardEl = ref(null);
+const flip = useFlip(boardEl, '.piece, .secret');
 
 let userMove = false;
 let settle = null;
 watch(target, (t) => {
   clearTimeout(settle);
-  const apply = () => morph(() => (view.value = t));
+  const update = () => (view.value = t);
+  const apply = () => ((t === 'merged') !== merged.value ? flip(update) : update());
   if (userMove) apply();
-  else settle = setTimeout(apply, 450);
+  else settle = setTimeout(apply, 300);
   userMove = false;
 });
 onUnmounted(() => clearTimeout(settle));
@@ -79,12 +76,8 @@ function onSecret(i) {
 
 const canHelp = computed(() => g.canRevealWord.value || g.canRevealSecret.value);
 const aideOpen = ref(false);
-/* One-off "Nouveau !" nudge towards the help button, gone once it's opened. */
-const hintSeen = ref(aideHintSeen());
 function openAide() {
   aideOpen.value = true;
-  hintSeen.value = true;
-  markAideHintSeen();
 }
 function reveal(kind) {
   g.useHelp(kind);
@@ -148,17 +141,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <BulbIcon />
         <span class="help-count">{{ g.helpLeft.value }}/{{ HELP_MAX }}</span>
       </button>
-      <span v-if="!hintSeen && canHelp" class="aide-hint" aria-hidden="true">Nouveau</span>
     </PageHeader>
 
-    <main class="board" :class="{ merged }">
+    <main ref="boardEl" class="board" :class="{ merged }">
       <PuzzlePiece
         v-for="(w, i) in g.words"
         :key="i"
         v-bind="pieceProps(i)"
         :mode="merged ? 'merged' : 'overview'"
         :active="openWord === i"
-        :style="{ gridArea: AREAS[i], '--vt': `piece-${i}`, ...tint(i) }"
+        :dimmed="openWord != null && openWord !== i"
+        :style="{ gridArea: AREAS[i], ...tint(i) }"
         @open="go(() => g.activate(i))"
       />
 
@@ -171,18 +164,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         @click="!merged && !g.state.secretFound && go(g.activateSecret)"
         @keydown.enter="!merged && go(g.activateSecret)"
       >
-        <template v-if="!merged && !g.state.secretFound">
-          <svg
-            v-for="c in ['tl', 'tr', 'bl', 'br']"
-            :key="c"
-            class="arrow"
-            :class="c"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-          >
-            <path d="M2 2 L13 13 M13 6 V13 H6" />
-          </svg>
-        </template>
         <span class="secret-boxes" :class="{ shake: secretShaking, wrong: g.secretWrong.value }">
           <button
             v-for="(s, i) in secretSlots"
@@ -226,7 +207,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </div>
       </div>
 
-      <div v-else-if="openWord != null" class="editor">
+      <div v-else-if="openWord != null" :key="view" class="editor">
         <PuzzlePiece
           :key="openWord"
           v-bind="pieceProps(openWord)"
@@ -244,7 +225,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button class="close" type="button" aria-label="fermer" @click="go(g.close)">✕</button>
       </div>
 
-      <div v-else-if="merged" class="editor stock">
+      <div v-else-if="merged" key="stock" class="editor stock">
         <div
           v-for="(row, r) in g.trayRows.value"
           :key="r"
@@ -265,7 +246,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           </button>
         </div>
         <div class="edit-bar">
-          <button class="pill" type="button" tabindex="-1" @click="g.clearInput">Effacer</button>
+          <button
+            class="pill"
+            type="button"
+            tabindex="-1"
+            aria-label="tout effacer"
+            @click="g.clearInput"
+          >
+            <EditIcon name="clear" />
+          </button>
           <button
             class="pill"
             type="button"
@@ -273,7 +262,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             aria-label="effacer une lettre"
             @click="g.backspace"
           >
-            ⌫
+            <EditIcon name="back" />
           </button>
         </div>
         <button class="close" type="button" aria-label="fermer" @click="go(g.close)">✕</button>
@@ -294,30 +283,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </template>
 
 <style scoped>
-/* One-off "Nouveau !" badge pinned on the help button, gently pulsing. */
-.aide-hint {
-  position: absolute;
-  top: 0.45rem;
-  right: 0.5rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 0.68rem;
-  white-space: nowrap;
-  color: #fff;
-  background: #3b82f6;
-  pointer-events: none;
-  animation: aide-hint-fade 1.6s ease-in-out infinite;
-}
-@keyframes aide-hint-fade {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
 /* Help button: a lime pill in the top-right, lightbulb + remaining count in a row. */
 .help-btn {
   width: auto;
@@ -327,8 +292,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   gap: 0.3rem;
   padding: 0 0.6rem;
   font-size: 1rem;
-  color: #fff;
-  background: var(--lime);
+  color: var(--ink);
+  background: var(--panel);
 }
 .help-count {
   font-weight: 900;
@@ -345,70 +310,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   min-width: 0;
   display: flex;
   padding: 0.75rem 0.9rem;
-  border: 0;
+  border: var(--outline-w) solid var(--outline);
   border-radius: 1.1rem;
   background: var(--panel);
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 12%, var(--bg));
+  box-shadow: var(--lift);
   cursor: pointer;
   font: inherit;
-  view-transition-name: secret;
   transition: transform 0.12s ease;
 }
 .secret:active:not(:disabled) {
-  transform: translateY(2px);
+  transform: translateY(3px);
+  box-shadow: none;
 }
 .secret:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
-/* Inward arrows at each corner: this is where the pieces come together. */
-.arrow {
-  position: absolute;
-  width: 0.9rem;
-  height: 0.9rem;
-  fill: none;
-  stroke: color-mix(in srgb, var(--ink) 45%, var(--bg));
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  animation: arrow-in 1.8s ease-in-out infinite;
-}
-.arrow.tl {
-  --r: 0deg;
-  top: -1.2rem;
-  left: -1.2rem;
-}
-.arrow.tr {
-  --r: 90deg;
-  top: -1.2rem;
-  right: -1.2rem;
-}
-.arrow.br {
-  --r: 180deg;
-  bottom: -1.2rem;
-  right: -1.2rem;
-}
-.arrow.bl {
-  --r: 270deg;
-  bottom: -1.2rem;
-  left: -1.2rem;
-}
-@keyframes arrow-in {
-  0%,
-  100% {
-    transform: rotate(var(--r)) translate(0, 0);
-  }
-  50% {
-    transform: rotate(var(--r)) translate(3px, 3px);
-  }
-}
-/* Assembled: the secret is the empty slot the four pieces close around. */
 /* Assembled: the secret sits in the hollow the four pieces close around. */
 .secret.active {
   cursor: default;
   padding: 0.7rem 0.9rem;
-  background: var(--bg);
-  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--ink) 8%, var(--bg));
+  box-shadow: none;
 }
 .secret-boxes {
   display: flex;
@@ -459,7 +381,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-bottom-color: var(--ink);
 }
 .secret-boxes.wrong .sbox {
-  color: var(--pink);
+  color: var(--danger);
 }
 /* Secret had a space after this box: widen the gap between the parts. */
 .sbox.gap-after {
@@ -467,15 +389,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .secret.found {
   background: var(--accent);
-  box-shadow: none;
   cursor: default;
 }
 .secret.found .sbox {
-  color: #fff;
-  border-bottom-color: rgba(255, 255, 255, 0.5);
+  color: var(--on-color);
+  border-bottom-color: color-mix(in srgb, var(--ink) 35%, transparent);
   animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.board,
+.dock {
+  user-select: none;
+}
 .board {
   position: relative;
   flex: none;
@@ -516,24 +441,38 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .editor {
   position: relative;
+  animation: editor-in 0.2s ease-out;
 }
+@keyframes editor-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* Close: straddles the editor card's top edge, clear of its content. */
 .close {
   position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  width: 2rem;
-  height: 2rem;
+  top: -0.95rem;
+  right: 1rem;
+  z-index: 1;
+  width: 1.9rem;
+  height: 1.9rem;
   display: grid;
   place-items: center;
   padding: 0;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 900;
   color: var(--ink);
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
-  border: 0;
+  background: var(--panel);
+  border: var(--outline-w) solid var(--outline);
   border-radius: 50%;
+  box-shadow: var(--lift-sm);
   cursor: pointer;
+}
+.close:active {
+  transform: translateY(2px);
+  box-shadow: none;
 }
 .idle {
   margin: 1.5rem 0 0;
@@ -548,9 +487,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  padding: 2.6rem 0.8rem 1rem;
+  padding: 1rem 0.8rem;
+  border: var(--outline-w) solid var(--outline);
   border-radius: 1rem;
   background: var(--panel);
+  box-shadow: var(--lift);
 }
 .stock-row {
   display: flex;
@@ -559,7 +500,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   max-width: 100%;
 }
 .stock-key {
-  --edge: color-mix(in srgb, var(--tint) 45%, var(--panel));
   flex: 0 1 auto;
   width: 2rem;
   min-width: 0;
@@ -570,28 +510,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.05rem;
   text-transform: uppercase;
   color: var(--ink);
-  background: var(--bg);
-  border: 0;
+  background: var(--panel);
+  border: var(--outline-w) solid var(--outline);
   border-radius: 0.45rem;
-  box-shadow: 0 3px 0 var(--edge);
+  box-shadow: var(--lift-sm);
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
 .stock-key.solved {
-  background: color-mix(in srgb, var(--tint) 30%, var(--panel));
+  background: color-mix(in srgb, var(--tint) 45%, var(--panel));
 }
 .stock-key:active:not(:disabled) {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--edge);
+  box-shadow: none;
 }
 .stock-key:disabled {
   opacity: 0.3;
   box-shadow: none;
   cursor: default;
 }
-.edit-bar {
-  display: flex;
-  gap: 0.5rem;
+.stock .edit-bar {
   margin-top: 0.5rem;
 }
 .finish {
@@ -627,10 +565,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-radius: 50%;
   font-size: 1.3rem;
   font-weight: 900;
-  color: #fff;
+  color: var(--on-color);
   background: var(--accent);
-  border: var(--outline-w) solid var(--outline);
-  box-shadow: var(--pop-sm);
+  box-shadow: var(--lift-sm);
 }
 .finish-actions {
   display: flex;
@@ -642,12 +579,5 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   padding: 0.85rem 1.9rem;
   font-size: 1.02rem;
   border-radius: 1.1rem;
-}
-</style>
-
-<style>
-::view-transition-group(*) {
-  animation-duration: 0.38s;
-  animation-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1);
 }
 </style>
