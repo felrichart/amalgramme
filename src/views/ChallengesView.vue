@@ -29,6 +29,9 @@ const { items } = useCachedList(
           @click="router.push(`/play/${c.date}`)"
         >
           <span class="date">{{ formatChallengeDate(c.date) }}</span>
+          <template v-if="c.progress.secretFound" #aside>
+            <span class="secret">{{ c.secret }}</span>
+          </template>
         </LevelRow>
       </li>
     </ul>
@@ -41,5 +44,10 @@ const { items } = useCachedList(
 }
 .date {
   text-transform: capitalize;
+}
+.secret {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 </style>
