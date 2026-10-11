@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { todayDate } from '../data/dailies.js';
 import { hasNewCommunityLevels } from '../data/community.js';
@@ -7,6 +8,7 @@ import { levelProgress } from '../data/progress.js';
 import { WORD_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
 import ProgressMark from '../components/ui/ProgressMark.vue';
+import ContactModal from '../components/ContactModal.vue';
 
 /* Logo: the name in ink, its A, A, A and E set as tilted puzzle pieces in the word tints. */
 const PIECES = [
@@ -27,6 +29,8 @@ const router = useRouter();
 // Read once: the view remounts on every navigation (App keys on route).
 const daily = levelProgress(todayDate());
 const communityNew = hasNewCommunityLevels();
+
+const showContact = ref(false);
 </script>
 
 <template>
@@ -76,6 +80,9 @@ const communityNew = hasNewCommunityLevels();
         Admin
       </button>
     </nav>
+
+    <button class="contact" type="button" @click="showContact = true">Contact</button>
+    <ContactModal v-if="showContact" @close="showContact = false" />
   </div>
 </template>
 
@@ -173,6 +180,19 @@ const communityNew = hasNewCommunityLevels();
   font-weight: 700;
   color: var(--ink);
   opacity: 0.35;
+}
+
+/* Quiet text link under the actions. */
+.contact {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--ink);
+  opacity: 0.5;
+  cursor: pointer;
 }
 
 /* Completion marker, top-right corner (white dot on the accent fill). */
