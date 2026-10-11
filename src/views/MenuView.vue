@@ -99,7 +99,7 @@ function openSondage() {
 .top {
   width: fit-content;
 }
-/* Title as a row of keyboard tiles (see LetterKeyboard .key). */
+/* Title as a row of keyboard tiles. */
 .brand {
   margin: 0;
   display: flex;

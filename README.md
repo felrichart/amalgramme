@@ -1,22 +1,27 @@
 # Amalgramme 😎
 
 Jeu de mots quotidien. Chaque défi cache un **secret** à deviner et 4 **mots**
-qui lui sont liés. Chaque mot se reconstitue en reliant les lettres de sa roue ;
-les lettres trouvées alimentent le clavier qui sert à taper le secret.
+qui lui sont liés, chacun sur une pièce de puzzle. Chaque mot se reconstitue à
+partir de ses lettres mélangées ; une fois les pièces assemblées autour du mot du
+milieu, leurs lettres servent à taper le secret.
 
 **Jouer en ligne : https://felrichart.github.io/amalgramme/**
 
 ## Règles
 
 - Le **secret** n'est pas affiché : il faut le deviner à partir des 4 mots.
-- Chaque mot a sa roue de lettres. Pour saisir un mot : garder le doigt appuyé
-  et tracer une ligne de lettre en lettre. La roue tremble si le mot est faux.
-- Un appui au centre de la roue mélange les lettres.
-- Les lettres des mots trouvés forment le stock de lettres pour taper le secret.
-- Un mot peut contenir un espace (réponse en deux mots) : l'espace est absent de
-  la roue mais affiché comme un blanc dans les cases de la réponse.
-- Sur ordinateur : taper au clavier, **Backspace** pour effacer, **Échap** pour
-  tout annuler, **Espace** pour mélanger.
+- Le plateau montre les 4 pièces et le mot du milieu ; toucher une pièce l'ouvre
+  en grand dessous : toucher ses lettres pour remplir les cases. Le mot est
+  vérifié dès que toutes les cases sont remplies (la pièce tremble s'il est faux).
+- Toucher une case y place le curseur ; **⌫** efface une lettre, **Effacer** tout
+  le mot, **Mélanger** rebat les lettres.
+- Toucher le mot du milieu assemble les pièces autour de lui : les lettres des 4
+  mots (dans l'ordre pour les mots trouvés) servent à taper le secret. Toucher
+  une pièce du bloc revient à ce mot.
+- Un mot peut contenir un espace (réponse en deux mots) : affiché comme un blanc
+  dans les cases de la réponse.
+- Sur ordinateur : taper au clavier, **Backspace** pour effacer, **← →** pour
+  déplacer le curseur, **Espace** pour mélanger, **Échap** pour fermer.
 - Un **défi quotidien** par jour ; les défis passés restent rejouables.
 - La progression est sauvegardée par défi (localStorage).
 

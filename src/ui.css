@@ -87,6 +87,25 @@
   background: var(--lime);
 }
 
+/* Small rounded secondary action (edit bars: shuffle, clear, backspace). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.95rem;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pill:active {
+  transform: translateY(1px);
+}
+
 /* Full-width primary action pinned in a page footer. */
 .foot {
   flex: none;

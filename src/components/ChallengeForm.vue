@@ -8,7 +8,7 @@
  */
 import { ref, reactive, computed } from 'vue';
 import { validateChallenge, MAX_LETTERS, MIN_LETTERS, MAX_SEPARATOR } from '../game/word.js';
-import { WHEEL_TINTS } from '../palette.js';
+import { WORD_TINTS } from '../palette.js';
 import BaseModal from './ui/BaseModal.vue';
 
 const props = defineProps({
@@ -69,7 +69,7 @@ const confirmOpen = ref(false);
 
     <section class="section">
       <h2 class="section-title">Indices</h2>
-      <label v-for="(w, i) in words" :key="i" class="field" :style="{ '--tint': WHEEL_TINTS[i] }">
+      <label v-for="(w, i) in words" :key="i" class="field" :style="{ '--tint': WORD_TINTS[i] }">
         <span class="lab">Indice {{ i + 1 }}</span>
         <input
           v-model="words[i]"
@@ -135,7 +135,7 @@ const confirmOpen = ref(false);
           y1="50"
           :x2="pt[0]"
           :y2="pt[1]"
-          :stroke="WHEEL_TINTS[i]"
+          :stroke="WORD_TINTS[i]"
           stroke-width="2.5"
           stroke-linecap="round"
           opacity="0.8"
@@ -145,7 +145,7 @@ const confirmOpen = ref(false);
         v-for="(w, i) in v.normalized.words"
         :key="i"
         class="chip"
-        :style="{ gridArea: `c${i}`, '--tint': WHEEL_TINTS[i] }"
+        :style="{ gridArea: `c${i}`, '--tint': WORD_TINTS[i] }"
         >{{ w }}</span
       >
       <span class="chip center">{{ v.normalized.secret }}</span>

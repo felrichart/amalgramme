@@ -37,6 +37,16 @@ describe('useGameState', () => {
     expect(g.state.wordIndex).toBe(1);
   });
 
+  it('shakes and restarts on a full wrong word, ignoring letters it lacks', () => {
+    const g = useGameState(DATE); // word 0 = "vitre"
+    g.typeLetter('z');
+    expect(g.current.value).toBe('');
+    for (const ch of 'tirve') g.typeLetter(ch);
+    expect(g.solved[0]).toBe(false);
+    expect(g.shakeSignal.value).toBe(1);
+    expect(g.current.value).toBe('');
+  });
+
   it('persists progress under the level date key', async () => {
     const g = useGameState(DATE);
     await typeWord(g, g.words[0].text);
@@ -66,6 +76,48 @@ describe('useGameState', () => {
     expect(g.state.secretFound).toBe(true);
     expect(g.state.completed).toBe(true);
     expect(g.state.focus).toBe('none');
+  });
+});
+
+describe('useGameState cursor', () => {
+  it('types at a parked cursor, then fills the next empty cells', () => {
+    const g = useGameState(DATE); // word 0 = "vitre"
+    g.moveCursor(2);
+    g.typeLetter('t');
+    expect(g.wordChars.value).toEqual(['', '', 't', '', '']);
+    expect(g.wordCursor.value).toBe(3);
+    g.typeLetter('r');
+    g.typeLetter('e');
+    expect(g.wordCursor.value).toBe(0); // wraps to the first hole
+    g.typeLetter('v');
+    g.typeLetter('i');
+    expect(g.solved[0]).toBe(true);
+  });
+
+  it('backspaces the cursor cell, or the one before an empty cursor', () => {
+    const g = useGameState(DATE);
+    for (const ch of 'vit') g.typeLetter(ch);
+    g.backspace();
+    expect(g.current.value).toBe('vi');
+    g.moveCursor(0);
+    g.backspace();
+    expect(g.wordChars.value).toEqual(['', 'i', '', '', '']);
+    g.clearInput();
+    expect(g.current.value).toBe('');
+  });
+
+  it('places secret picks at its cursor, keeping them positional across reloads', async () => {
+    const g = useGameState(DATE);
+    for (let i = 0; i < g.words.length; i++) {
+      g.activate(i);
+      await typeWord(g, g.words[i].text);
+    }
+    g.moveCursor(4);
+    g.typeSecret('e');
+    await nextTick();
+    expect(g.secretChars.value).toEqual(['', '', '', '', 'e']);
+    const g2 = useGameState(DATE);
+    expect(g2.secretChars.value).toEqual(['', '', '', '', 'e']);
   });
 });
 
@@ -119,11 +171,11 @@ describe('useGameState help reveals', () => {
     expect(g.canRevealWord.value).toBe(false);
   });
 
-  it('pre-traces the revealed letters onto the active wheel and locks them', () => {
+  it('pre-types the revealed letters into the open word and locks them', () => {
     const g = useGameState(DATE); // focused on word 0 = "vitre"
     g.useHelp('word'); // deterministic first pick is word 0
     expect(g.revealed[0]).toBe(1);
-    /* The reveal seeds the path so the leading letter is already drawn. */
+    /* The reveal seeds the input so the leading letter is already typed. */
     expect(g.current.value).toBe('v');
     /* And can't be undone: backspace never eats the revealed prefix. */
     g.backspace();

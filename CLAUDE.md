@@ -1,8 +1,8 @@
 # Amalgramme
 
 Daily French word game. Guess a hidden **secret** from **4 linked words**; each
-word is traced on its own letter wheel, and letters from solved words feed the
-keyboard for typing the secret. Vue 3 + vue-router + Vite, no backend.
+word is a puzzle piece typed from its shuffled letters, and the pieces' letters
+feed the stock for typing the secret. Vue 3 + vue-router + Vite, no backend.
 
 **Game rules, dev commands, deploy, and how to add levels live in `README.md`** —
 this file covers the code only.
@@ -21,10 +21,11 @@ src/
   data/                        local state, synchronous: cache (factory), dailies, community, levels
                                (date → puzzle/record, slugs), progress (saves), tutorial, migrations
   services/                    network: api (request/mutate/refresh), levels (CRUD + auth), stats
-  composables/                 useGameState (ALL game logic for one level), useLevel, usePlayStats,
-                               useCoach, useBoardLinks, useShake, useRequest, useCachedList, useUsername
+  composables/                 useGameState (ALL game logic for one level), useEntry (cursor-based
+                               answer input), useLevel, usePlayStats, useCoach (paused), useShake,
+                               useRequest, useCachedList, useUsername
   views/                       one per route; GameView is the board
-  components/                  LetterWheel, LetterKeyboard, TutorialCoach, AidePopup, ChallengeForm,
+  components/                  PuzzlePiece, TutorialCoach, AidePopup, ChallengeForm,
                                LevelRow, UserBadge, UsernamePrompt; ui/ = PageHeader, BaseModal,
                                ConfirmModal, ProgressMark, BulbIcon
 shared/                        word-rules.js + constants.js (ADMIN_NAME, PIN, id length); imported
@@ -41,25 +42,30 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
 
 - **A puzzle** = `{ date, secret, words[4] }`. `date` (ISO) is its stable
   id everywhere — routes, saved progress, links. Text carries no accents (typed
-  `é` matches `e` via `normalize`). A space in a word = two-word answer: dropped
-  from the wheel, shown as a gap in the answer slots.
+  `é` matches `e` via `normalize`). A space in a word = two-word answer: no tile,
+  shown as a gap in the answer slots.
 - **`useGameState(date)`** owns everything mutable for one level: focused input
-  (`'word'` | `'secret'` | `'none'`), drawn path, secret picks, solved flags,
-  shake signals. Words commit on finger-release; the secret is typed from tiles
-  of solved words. Level completes when all words AND the secret are found.
+  (`'word'` | `'secret'` | `'none'`), the word / secret entries (`useEntry`:
+  positional cells, locked help prefix, movable cursor), solved flags, shake
+  signals. An entry auto-checks once full; the secret is typed from tiles of the
+  four words. Level completes when all words AND the secret are found.
   Auto-persists to localStorage on every change.
+- **GameView** = board on top (pieces + secret; pieces merge around the secret
+  while it's edited, via the View Transitions API) and an editor below (the
+  enlarged piece, or the secret's letter stock).
 - **Help** (`useHelp('word' | 'secret')`): the header lightbulb opens `AidePopup`,
   which always offers both reveals; each spends one of 3 reveals (`helpUsed`,
   capped at `HELP_MAX`) and is disabled once nothing's left to uncover there
   (`canRevealWord` / `canRevealSecret`). A word reveal uncovers the next leading
   letter (1st, 2nd, …) of a randomly chosen unsolved word that still hides one
-  (`revealed[]`, a per-word count, badged on the wheel tile); a secret reveal
-  uncovers the next leading letter of the énigme (`secretReveal`, shown as a
-  ghost in the boxes). The word pick is a deterministic pseudo-random spread over
+  (`revealed[]`, a per-word count, locked in its answer boxes); a secret reveal
+  uncovers the next leading letter of the énigme (`secretReveal`, locked in its
+  boxes). The word pick is a deterministic pseudo-random spread over
   `helpUsed` (no `Math.random`, per the seeded-shuffle convention).
 - **Slugs**: `/play/daily` aliases today; any other slug is a date. The most
   recent non-future date is today's daily.
-- **Coach**: an inline guided walkthrough (`TutorialCoach`) shown over the board
+- **Coach** (paused — GameView doesn't mount it until it's rewritten for the
+  puzzle board): an inline guided walkthrough (`TutorialCoach`) shown over the board
   on a player's first play. Progress lives in a single device-wide localStorage
   record (`tutorialState`/`saveTutorialState`): `done`, last-reached `step`, and
   `keyboardSeen` for the one-off secret-keyboard hint. No dedicated tutorial

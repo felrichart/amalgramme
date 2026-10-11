@@ -23,7 +23,8 @@ export function levelProgress(date) {
   const found = Array.isArray(s?.solved) ? s.solved.filter(Boolean).length : 0;
   const secretFound = !!s?.secretFound;
   const completed = !!s?.completed;
-  const partial = !completed && (found > 0 || secretFound || (s?.secretPicks?.length ?? 0) > 0);
+  const typed = (s?.secretEntry ?? s?.secretPicks ?? []).some(Boolean);
+  const partial = !completed && (found > 0 || secretFound || typed);
   return { found, secretFound, completed, partial };
 }
 
