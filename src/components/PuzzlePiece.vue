@@ -13,7 +13,7 @@ const props = defineProps({
   solved: { type: Boolean, default: false },
   /* Being edited below (highlighted on the board). */
   active: { type: Boolean, default: false },
-  /* Another piece is being edited. */
+  /* Not the piece being edited (unsolved ones then fade back). */
   dimmed: { type: Boolean, default: false },
   /* Letters in display order, as { id, ch }. */
   tiles: { type: Array, required: true },
@@ -49,8 +49,9 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
       `is-${mode}`,
       `p${index}`,
       mode === 'open' ? [] : SHAPES[index],
-      { solved, active, dimmed, opens, long: word.length > 9 },
+      { solved, active, dimmed, opens },
     ]"
+    :style="{ '--n': word.length }"
     :role="opens ? 'button' : undefined"
     :tabindex="opens ? 0 : undefined"
     :aria-label="opens ? `mot ${index + 1}` : undefined"
@@ -119,21 +120,9 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
           </button>
         </div>
       </template>
-      <span v-else-if="mode === 'merged'" class="unknown">?</span>
-      <template v-else>
-        <span class="slots">
-          <span
-            v-for="(s, i) in slots"
-            :key="i"
-            class="slot"
-            :class="{ set: s.ch, given: i < given, 'gap-after': s.gapAfter }"
-            >{{ s.ch }}</span
-          >
-        </span>
-        <span class="letters">
-          <span v-for="t in tiles" :key="t.id">{{ t.ch }}</span>
-        </span>
-      </template>
+      <span v-else class="letters">
+        <span v-for="t in tiles" :key="t.id">{{ t.ch }}</span>
+      </span>
     </div>
     <span v-if="mode !== 'open'" class="puzzle-tab" aria-hidden="true" />
   </div>
@@ -163,6 +152,8 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 }
 .body {
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -183,9 +174,12 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 .opens {
   cursor: pointer;
 }
-/* Another word is open: unsolved pieces step back so the one being solved stands out. */
+/* Unsolved and not being edited: step back so the open one (or none) stands out. */
 .dimmed:not(.solved) {
-  opacity: 0.7;
+  /* Paler fill and ink rather than opacity, which would let neighbouring tabs
+     and outlines show through where merged pieces overlap. */
+  --fill: color-mix(in srgb, var(--piece) 55%, var(--bg));
+  color: color-mix(in srgb, var(--ink) 55%, var(--bg));
 }
 .opens:active {
   --ledge: 0px;
@@ -202,7 +196,7 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 /* The editor under the board: a plain card, knobs gone. */
 .is-open .body {
   gap: 1.1rem;
-  padding: 1.3rem 1rem 1rem;
+  padding: 2rem 1rem 1rem;
 }
 
 /* Assembled: square inner corners so the four read as one block, and push the
@@ -233,8 +227,10 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 
 .word {
   font-weight: 900;
-  font-size: 1.1rem;
-  letter-spacing: 0.08em;
+  /* Shrinks with the word's length (+2 for the check) to stay on one line. */
+  font-size: clamp(0.6rem, calc(100cqi / (var(--n) + 2) / 0.8), 1.1rem);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
   text-transform: uppercase;
   text-align: center;
   animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -252,34 +248,25 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   color: var(--tint);
   background: var(--on-color);
 }
-.unknown {
-  font-weight: 900;
-  font-size: 1.6rem;
-  opacity: 0.55;
-}
 .is-open .word {
   font-size: 2rem;
 }
+.is-merged .letters {
+  font-size: clamp(0.6rem, calc(100cqi / var(--n) / 1.05), 0.95rem);
+}
 .is-merged .word {
-  font-size: 0.95rem;
+  font-size: clamp(0.6rem, calc(100cqi / (var(--n) + 2) / 0.8), 0.95rem);
 }
 
 /* Shuffled letters on the board: what the player has to work with. */
-.long .word {
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
-}
-.long .letters {
-  gap: 0.15rem 0.35rem;
-  font-size: 0.95rem;
-}
 .letters {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 0.2rem 0.55rem;
+  gap: 0.25em;
   font-weight: 900;
-  font-size: 1.15rem;
+  /* One line, shrinking with the word's length (`--n`) to fit the piece. */
+  font-size: clamp(0.6rem, calc(100cqi / var(--n) / 1.05), 1.3rem);
+  line-height: 1;
   text-transform: uppercase;
 }
 
@@ -295,7 +282,7 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 }
 .slot {
   flex: 0 1 auto;
-  width: 0.7rem;
+  width: min(0.7rem, calc(100cqi / var(--n) - 0.22rem));
   min-width: 0;
   height: 1rem;
   display: grid;
@@ -316,7 +303,7 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   gap: 0.5rem;
 }
 .is-open .slot {
-  width: 2rem;
+  width: min(2rem, calc(100cqi / var(--n) - 0.5rem));
   height: 2.6rem;
   padding: 0 0 0.2rem;
   font: inherit;

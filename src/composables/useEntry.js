@@ -10,7 +10,9 @@ export function useEntry() {
   const cells = reactive([]);
   const state = reactive({ floor: 0, cursor: 0 });
 
-  const isFull = () => cells.length > 0 && cells.every((c) => c != null);
+  /* Every unlocked cell set (locked ones may hold nothing: the secret shows its
+   * help-given letters itself). */
+  const isFull = () => cells.length > 0 && cells.every((c, i) => i < state.floor || c != null);
 
   /* First empty unlocked cell at or after `from`, wrapping; `fallback` when none. */
   function nextEmpty(from, fallback) {

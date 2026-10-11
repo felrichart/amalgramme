@@ -185,6 +185,19 @@ describe('useGameState help reveals', () => {
     expect(g.solved[0]).toBe(true);
   });
 
+  it('still solves the secret after a secret reveal', async () => {
+    const g = useGameState(DATE); // secret "verre"
+    g.useHelp('secret');
+    for (let i = 0; i < g.words.length; i++) {
+      g.activate(i);
+      await typeWord(g, g.words[i].text);
+    }
+    for (const ch of 'erre') g.typeSecret(ch);
+    await nextTick();
+    expect(g.state.secretFound).toBe(true);
+    expect(g.state.completed).toBe(true);
+  });
+
   it('pre-fills the revealed secret letters as locked input', () => {
     const g = useGameState(DATE); // secret "verre"
     g.useHelp('secret');

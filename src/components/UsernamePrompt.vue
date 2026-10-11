@@ -194,6 +194,7 @@ function logout() {
   border-radius: 0.9rem;
 }
 .tab {
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--lift-sm);
 }
 .tab:focus-visible,

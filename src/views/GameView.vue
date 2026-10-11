@@ -92,16 +92,12 @@ const tint = (i) => ({
   '--piece': `color-mix(in srgb, ${WORD_TINTS[i]} 45%, var(--panel))`,
 });
 
-/* A piece's letters and answer, live-typed while it's the one being edited. */
 function pieceProps(i) {
-  const word = g.words[i];
-  const editing = g.wordActive.value && g.state.wordIndex === i;
   return {
     index: i,
-    word,
+    word: g.words[i],
     solved: g.solved[i],
     tiles: g.shuffledTiles(i),
-    typed: editing ? g.wordChars.value : [...word.text.slice(0, g.revealed[i])],
     given: g.revealed[i],
   };
 }
@@ -150,7 +146,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         v-bind="pieceProps(i)"
         :mode="merged ? 'merged' : 'overview'"
         :active="openWord === i"
-        :dimmed="openWord != null && openWord !== i"
+        :dimmed="openWord !== i"
         :style="{ gridArea: AREAS[i], ...tint(i) }"
         @open="go(() => g.activate(i))"
       />
@@ -174,7 +170,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             :class="{
               set: s.ch && !s.given,
               given: s.given,
-              caret: merged && i === g.secretCursor.value,
+              caret: merged && !g.state.secretFound && i === g.secretCursor.value,
               'gap-after': s.gapAfter,
             }"
             :disabled="g.state.secretFound || (merged && s.given)"
@@ -212,6 +208,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :key="openWord"
           v-bind="pieceProps(openWord)"
           mode="open"
+          :typed="g.wordChars.value"
           :style="tint(openWord)"
           :cursor="g.wordCursor.value"
           :used="g.usedTiles.value"
@@ -410,11 +407,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     'w0 w1'
     'secret secret'
     'w2 w3';
-  gap: 1.6rem 1.7rem;
+  gap: 1.35rem 1.7rem;
   padding: 0.9rem 1.2rem 0.6rem;
 }
 .board > .piece {
-  min-height: 6.4rem;
+  height: 6.2rem;
 }
 /* Assembled: pieces flush in a 2×2 block, the secret in the hollow at its centre. */
 .board.merged {
@@ -424,7 +421,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   gap: 0;
 }
 .board.merged > .piece {
-  min-height: 6.2rem;
+  height: 6.2rem;
 }
 .board.merged .secret {
   grid-area: 1 / 1 / 3 / 3;
@@ -437,7 +434,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1rem 1.2rem calc(1rem + env(safe-area-inset-bottom));
+  padding: 0.8rem 1.2rem calc(0.8rem + env(safe-area-inset-bottom));
 }
 .editor {
   position: relative;
@@ -449,30 +446,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     transform: translateY(8px);
   }
 }
-/* Close: straddles the editor card's top edge, clear of its content. */
+/* Close: a quiet cross in the editor card's top-right corner. */
 .close {
   position: absolute;
-  top: -0.95rem;
-  right: 1rem;
+  top: 0.2rem;
+  right: 0.3rem;
   z-index: 1;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.6rem;
+  height: 1.6rem;
   display: grid;
   place-items: center;
   padding: 0;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--ink);
-  background: var(--panel);
-  border: var(--outline-w) solid var(--outline);
-  border-radius: 50%;
-  box-shadow: var(--lift-sm);
+  background: none;
+  opacity: 0.55;
   cursor: pointer;
 }
 .close:active {
-  transform: translateY(2px);
-  box-shadow: none;
+  opacity: 1;
 }
 .idle {
   margin: 1.5rem 0 0;
@@ -487,7 +481,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  padding: 1rem 0.8rem;
+  padding: 2rem 0.8rem 1rem;
   border: var(--outline-w) solid var(--outline);
   border-radius: 1rem;
   background: var(--panel);
@@ -568,6 +562,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--on-color);
   background: var(--accent);
   box-shadow: var(--lift-sm);
+  border: var(--outline-w) solid var(--outline);
 }
 .finish-actions {
   display: flex;

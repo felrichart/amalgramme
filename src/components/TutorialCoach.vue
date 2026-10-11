@@ -230,6 +230,7 @@ onUnmounted(() => window.removeEventListener('resize', measure));
   padding: 1.1rem 1.2rem;
   border-radius: 1.2rem;
   background: var(--panel);
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--lift-lg);
   animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

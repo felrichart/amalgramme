@@ -192,6 +192,7 @@ const confirmOpen = ref(false);
   padding: 0.9rem;
   border-radius: 1rem;
   background: var(--panel);
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--lift-sm);
 }
 .section-title,
@@ -271,6 +272,7 @@ const confirmOpen = ref(false);
   text-transform: uppercase;
   color: var(--on-color);
   background: var(--tint, var(--accent));
+  border: var(--outline-w) solid var(--outline);
   box-shadow: var(--lift-sm);
 }
 .center {

@@ -25,7 +25,7 @@ const emit = defineEmits(['close']);
   display: grid;
   place-items: center;
   padding: 1.2rem;
-  background: rgba(22, 24, 31, 0.45);
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
 }
 .modal {
   width: 100%;
@@ -34,6 +34,7 @@ const emit = defineEmits(['close']);
   flex-direction: column;
   gap: 0.9rem;
   padding: 1.6rem 1.4rem;
+  border: var(--outline-w) solid var(--outline);
   border-radius: 1.3rem;
   background: var(--panel);
   box-shadow: var(--lift-lg);
