@@ -285,6 +285,12 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   width: 1em;
   text-align: center;
 }
+/* The input stays on one line, shrinking with the word's length (`--n`). */
+.typed {
+  flex-wrap: nowrap;
+  max-width: none;
+  font-size: min(1.3rem, 100cqi / (var(--n) * 1.25 + 0.4));
+}
 .typed > span {
   height: 1.15em;
   border-bottom: 3px solid var(--ink);
