@@ -8,6 +8,9 @@ import { loadDailies, loadCommunityLevels } from './services/levels.js';
 import { recordPlay } from './services/stats.js';
 import { runMigrations } from './data/migrations.js';
 import { savedProgress } from './data/progress.js';
+import { connected } from './composables/useAccount.js';
+import { upgradeLegacyIdentity, refreshUser } from './services/account.js';
+import { startSync, afterSignIn } from './services/sync.js';
 
 /* Report every locally saved level once, so players who progressed before stats
  * existed are counted (no-op for levels already reported). */
@@ -23,5 +26,9 @@ function backfillStats() {
 Promise.all([resolveToday(), loadDailies(0), loadCommunityLevels(0)]).then(() => {
   runMigrations();
   backfillStats();
+  startSync();
   createApp(App).use(router).mount('#app');
+  // After mount: may ask the sync question, and must not delay the first paint.
+  if (connected.value) refreshUser().then(afterSignIn);
+  else upgradeLegacyIdentity();
 });

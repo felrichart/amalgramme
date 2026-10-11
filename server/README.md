@@ -57,32 +57,79 @@ wrangler d1 migrations apply amalgramme --remote
 ## Local development
 
 ```sh
-wrangler dev                                        # http://localhost:8787 (local D1)
+cp .dev.vars.example .dev.vars                      # once: dev mail mode (see below)
 wrangler d1 migrations apply amalgramme --local     # seed the local DB once
+wrangler dev                                        # http://localhost:8787 (local D1)
 npm run db:pull                                     # or: mirror the remote DB locally
 ```
 
+`.dev.vars` sets `MAIL_MODE=log`: no email is sent; the verification / reset link
+is printed in the `wrangler dev` console **and** returned as `devMail` in the JSON
+response, which the app logs to the browser console (`[dev mail]`) in dev builds.
+Never set `MAIL_MODE` in production — it would hand reset links to anyone.
+
 `db:pull` (from the repo root, `wrangler dev` stopped) exports the remote D1 and
-replaces the local one with it. Needs `wrangler login`; the dump holds plaintext
-PINs, so it's written to a temp dir and deleted after import.
+replaces the local one with it. Needs `wrangler login`; the dump holds legacy
+plaintext PINs and password hashes, so it's written to a temp dir and deleted
+after import.
 
 The app's `npm run dev` reads `.env.development`. Set
 `VITE_COMMUNITY_API=http://localhost:8787` there (while `wrangler dev` runs) to
 exercise the API locally; leave it empty to run the app offline from cache.
 
+## Accounts
+
+- **Sign-up**: username + email + password. Passwords are PBKDF2-SHA256 hashed
+  (100k iterations, WebCrypto, `crypto.js`). Signing in takes the name or email.
+- **Sessions**: `Authorization: Bearer <token>`; the DB keeps only its SHA-256.
+  180-day sliding expiry; a password reset revokes every session.
+- **Email** (`mail.js`): verification (non-blocking, the app just nags) and password
+  reset links point at `APP_URL` (`/verifier`, `/mot-de-passe`).
+- **Legacy PIN accounts** keep signing in via `POST /auth/pin` until
+  `PIN_DEADLINE` (`shared/constants.js`, 2027-01-11). The app badges them and asks
+  for an email + password (`POST /auth/secure`, same name and levels). Past the
+  deadline the daily cron deletes them; their levels stay, and a newcomer reusing
+  the name can't delete them (ownership needs `level.created_at >= user.created_at`).
+- **Progress** (`/progress`): one JSON save per (user, puzzle), merged with
+  `shared/progress.js` (most advanced wins, then newest).
+
+### Email setup (once)
+
+The sending domain must be on Cloudflare:
+
+```sh
+wrangler email sending enable <your-domain>   # needs a token with Email Sending scope
+```
+
+Then set `APP_URL` and `MAIL_FROM` under `[vars]` in `wrangler.toml` and deploy.
+
 ## API
 
-| Method | Path             | Body / auth                             | Notes                                                                      |
-| ------ | ---------------- | --------------------------------------- | -------------------------------------------------------------------------- |
-| POST   | `/auth`          | `{author, pin, mode}`                   | `connexion` verifies an existing name+PIN; `inscription` claims a new name |
-| GET    | `/levels`        | —                                       | all levels, newest first (no PINs)                                         |
-| POST   | `/levels`        | `{author, pin, secret, words[4]}`       | claims/verifies the name via PIN; rate-limited; 429 over the cap           |
-| DELETE | `/levels/:id`    | `{author, pin}`                         | owner PIN (or the `cara+` account); community levels are create-only       |
-| GET    | `/dailies`       | —                                       | all dailies (with play stats), oldest first                                |
-| POST   | `/dailies`       | `{author, pin, date, secret, words[4]}` | admin (`cara+`) only; `date` must be today or later                        |
-| PUT    | `/dailies/:date` | `{author, pin, secret, words[4]}`       | admin only; `date` must be today or later                                  |
-| DELETE | `/dailies/:date` | `{author, pin}`                         | admin only; `date` must be today or later                                  |
-| POST   | `/admin/export`  | `{author, pin}`                         | admin only; full DB dump (JSON) for a manual backup                        |
+Signed-in routes take `Authorization: Bearer <token>`; `401 unauthorized` means the
+session is gone.
+
+| Method | Path                  | Body / auth                       | Notes                                                     |
+| ------ | --------------------- | --------------------------------- | --------------------------------------------------------- |
+| POST   | `/auth/signup`        | `{username, email, password}`     | → `{token, user}`; emails a verification link             |
+| POST   | `/auth/login`         | `{login, password}`               | `login` = name or email → `{token, user}`                 |
+| POST   | `/auth/pin`           | `{username, pin}`                 | legacy accounts only, until `PIN_DEADLINE`                |
+| POST   | `/auth/logout`        | session                           | revokes this session                                      |
+| GET    | `/auth/me`            | session                           | `{username, email, emailVerified, legacy, pinDeadline}`   |
+| POST   | `/auth/secure`        | session, `{email, password}`      | legacy → secured account                                  |
+| POST   | `/auth/verify`        | `{token}`                         | from the emailed link                                     |
+| POST   | `/auth/verify/resend` | session                           |                                                           |
+| POST   | `/auth/forgot`        | `{login}`                         | always 200 (no account probing)                           |
+| POST   | `/auth/reset`         | `{token, password}`               | → `{token, user}`, other sessions revoked                 |
+| GET    | `/progress`           | session                           | `{<puzzle date>: save}`                                   |
+| POST   | `/progress`           | session, `{saves}`                | merges, returns the full merged set                       |
+| GET    | `/levels`             | —                                 | all levels, newest first                                  |
+| POST   | `/levels`             | session, `{secret, words[4]}`     | authored by the session's user; rate-limited              |
+| DELETE | `/levels/:id`         | session                           | its author (or `cara+`); community levels are create-only |
+| GET    | `/dailies`            | —                                 | all dailies (with play stats), oldest first               |
+| POST   | `/dailies`            | admin, `{date, secret, words[4]}` | `date` must be today or later                             |
+| PUT    | `/dailies/:date`      | admin, `{secret, words[4]}`       | `date` must be today or later                             |
+| DELETE | `/dailies/:date`      | admin                             | `date` must be today or later                             |
+| POST   | `/admin/export`       | admin                             | full DB dump (JSON) for a manual backup                   |
 
 ## Daily challenges
 
@@ -95,7 +142,7 @@ frozen. Play stats reuse `level_stats` (the date is the `level_id`).
 ## Backup
 
 There's no automatic backup. From the dashboard, "Télécharger la sauvegarde" calls
-`POST /admin/export` (admin PIN) and downloads the whole DB as JSON. From the CLI you
+`POST /admin/export` (admin session) and downloads the whole DB as JSON. From the CLI you
 can also `wrangler d1 export amalgramme --remote --output backup.sql`.
 
 ## Moderation
@@ -114,7 +161,7 @@ curl https://amalgramme-community.<you>.workers.dev/levels | jq '.[] | {id, auth
 ### Deleting a user (and all their levels)
 
 There is no in-app account deletion. As DB owner, do it from the CLI — levels
-reference the author by **name**, so it's two `DELETE`s keyed on the username
+reference the author by **name**, so it's `DELETE`s keyed on the username
 (drop `--remote`, or use `--local`, to rehearse on the dev DB first):
 
 ```sh
@@ -127,8 +174,10 @@ wrangler d1 execute amalgramme --remote \
 # 2. delete their levels, then the account
 wrangler d1 execute amalgramme --remote \
   --command "DELETE FROM levels WHERE author = '$NAME';"
-wrangler d1 execute amalgramme --remote \
-  --command "DELETE FROM users  WHERE username = '$NAME';"
+for t in sessions email_tokens progress users; do
+  wrangler d1 execute amalgramme --remote \
+    --command "DELETE FROM $t WHERE username = '$NAME';"
+done
 ```
 
 Inventory — who exists and how many levels each has:
@@ -141,5 +190,6 @@ wrangler d1 execute amalgramme --remote --command \
 
 ## Rate limit
 
-`wrangler.toml` caps creations to **100 per 10 s globally** (the binding's
-`period` only allows 10 or 60 s). Adjust `limit`/`period` there and redeploy.
+`wrangler.toml` caps creations to **100 per 10 s globally** (`RATE_LIMITER`), and
+credential checks / email sends to **10 per minute per IP and per targeted login**
+(`AUTH_LIMITER`). `period` only allows 10 or 60 s. Adjust there and redeploy.

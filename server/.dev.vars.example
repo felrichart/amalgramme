@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) for `wrangler dev`: emails are logged and their
+# link returned as `devMail` instead of being sent.
+MAIL_MODE=log
+APP_URL=http://localhost:5173

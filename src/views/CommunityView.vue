@@ -10,11 +10,11 @@ import {
 } from '../data/community.js';
 import { levelProgress } from '../data/progress.js';
 import { loadCommunityLevels } from '../services/levels.js';
-import { connected } from '../composables/useUsername.js';
+import { connected } from '../composables/useAccount.js';
 import { useCachedList } from '../composables/useCachedList.js';
 import PageHeader from '../components/ui/PageHeader.vue';
 import UserBadge from '../components/UserBadge.vue';
-import UsernamePrompt from '../components/UsernamePrompt.vue';
+import AccountModal from '../components/AccountModal.vue';
 
 const router = useRouter();
 
@@ -71,7 +71,7 @@ function onCreate() {
       <button class="big-btn press" type="button" @click="onCreate">Créer un défi</button>
     </footer>
 
-    <UsernamePrompt
+    <AccountModal
       :open="gateOpen"
       @close="gateOpen = false"
       @saved="router.push('/community/create')"

@@ -4,22 +4,41 @@
  * to { ok: false, error } with a French message — nothing ever throws.
  */
 import { API_URL, CACHE_MS } from '../config.js';
+import { sessionToken, clearSession } from '../composables/useAccount.js';
 
-const OFFLINE = 'Connexion impossible, réessaie plus tard.';
+export const OFFLINE = 'Connexion impossible, réessaie plus tard.';
 
 /* Messages for the Worker's error codes; callers may override per call. */
 const MESSAGES = {
-  no_pin: 'Choisis un nom et un code à 4 chiffres.',
+  unauthorized: 'Session expirée, reconnecte-toi.',
+  forbidden: 'Action non autorisée pour ce compte.',
   rate_limited: 'Trop de requêtes, réessaie dans un instant.',
 };
 
-export function request(path, { method = 'GET', body, timeout = 8000 } = {}) {
-  return fetch(API_URL + path, {
+/* Sends the session token when signed in. `keepalive` lets a request outlive the
+ * page (flushing progress on hide). */
+export async function request(path, { method = 'GET', body, timeout = 8000, keepalive } = {}) {
+  const token = sessionToken();
+  const headers = {};
+  if (body) headers['content-type'] = 'application/json';
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await fetch(API_URL + path, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
+    headers,
     body: body && JSON.stringify(body),
-    signal: AbortSignal.timeout(timeout),
+    keepalive,
+    signal: keepalive ? undefined : AbortSignal.timeout(timeout),
   });
+  // The Worker no longer knows this session (revoked, expired, PIN deadline).
+  if (res.status === 401 && token && token === sessionToken()) {
+    const code = await res
+      .clone()
+      .json()
+      .then((b) => b.error)
+      .catch(() => '');
+    if (code === 'unauthorized') clearSession();
+  }
+  return res;
 }
 
 async function errorCode(res) {
@@ -43,7 +62,10 @@ export async function mutate(path, { method = 'POST', body, timeout, messages = 
       const code = await errorCode(res);
       return { ok: false, error: messages[code] ?? MESSAGES[code] ?? fallback };
     }
-    return { ok: true, data: await res.json() };
+    const data = await res.json();
+    // Dev Worker (MAIL_MODE=log): the email it would have sent.
+    if (import.meta.env.DEV && data?.devMail) console.info('[dev mail]', data.devMail);
+    return { ok: true, data };
   } catch {
     return { ok: false, error: OFFLINE };
   }

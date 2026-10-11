@@ -1,2 +1,5 @@
 # Local wrangler / miniflare dev state — not deployed
 .wrangler/
+
+# Worker dev secrets/vars
+.dev.vars

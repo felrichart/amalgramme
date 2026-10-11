@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { todayDate } from '../data/dailies.js';
 import { hasNewCommunityLevels } from '../data/community.js';
-import { isAdmin } from '../composables/useUsername.js';
+import { isAdmin } from '../composables/useAccount.js';
 import { levelProgress } from '../data/progress.js';
 import { WORD_TINTS } from '../palette.js';
 import UserBadge from '../components/UserBadge.vue';
@@ -36,7 +36,7 @@ const showContact = ref(false);
 <template>
   <div class="menu">
     <div class="badge-corner">
-      <UserBadge />
+      <UserBadge hint />
     </div>
     <header class="top">
       <h1 class="brand" aria-label="Amalgramme">

@@ -12,3 +12,12 @@ export function formatChallengeDate(iso) {
 export function solvedBy(successes, attempts) {
   return `Réussi par ${successes} joueur${successes > 1 ? 's' : ''} sur ${attempts}`;
 }
+
+/* A day as words, e.g. "11 janvier 2027". */
+export function formatLongDate(date) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}

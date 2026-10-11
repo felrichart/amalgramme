@@ -12,11 +12,41 @@ CREATE TABLE IF NOT EXISTS levels (
 CREATE INDEX IF NOT EXISTS idx_levels_created ON levels (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_levels_author ON levels (author);
 
--- Player identities: a username claimed by a 4-digit PIN (plaintext by design).
+-- Accounts. Legacy PIN-only rows (pin set, password_hash NULL) live until
+-- PIN_DEADLINE (shared/constants.js), then the daily cron deletes them.
 CREATE TABLE IF NOT EXISTS users (
   username TEXT PRIMARY KEY,
-  pin TEXT NOT NULL,
+  pin TEXT,                          -- legacy 4-digit code, NULL once secured
+  email TEXT COLLATE NOCASE UNIQUE,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  password_hash TEXT,                -- pbkdf2-sha256$<iterations>$<salt>$<hash>
   created_at INTEGER NOT NULL
+);
+
+-- Bearer sessions; only the SHA-256 of the token is stored.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (username);
+
+-- One-shot email links (kind = 'verify' | 'reset'); token hashed like sessions.
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens (username, kind);
+
+-- Per-account saved progress: one JSON save per (user, puzzle date).
+CREATE TABLE IF NOT EXISTS progress (
+  username TEXT NOT NULL,
+  level_id TEXT NOT NULL,
+  data TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (username, level_id)
 );
 
 -- Daily challenges, keyed by ISO date (edited at runtime via the admin dashboard).

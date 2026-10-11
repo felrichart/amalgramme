@@ -1,4 +1,4 @@
-/* Backend calls for the daily bank, community levels and accounts. */
+/* Backend calls for the daily bank and community levels (writes need a session). */
 import { mutate, refresh } from './api.js';
 import { dailyCache, getDailies } from '../data/dailies.js';
 import { communityCache, getCache, isCommunityId } from '../data/community.js';
@@ -10,29 +10,14 @@ export const loadCommunityLevels = (maxAgeMs) => refresh(communityCache, '/level
 export const loadLevelsFor = (date, maxAgeMs) =>
   isCommunityId(date) ? loadCommunityLevels(maxAgeMs) : loadDailies(maxAgeMs);
 
-/* Sign in ('connexion') or claim a name ('inscription'). */
-export function authenticate({ author, pin, mode }) {
-  return mutate('/auth', {
-    body: { author, pin, mode },
-    messages: {
-      name_taken: 'Ce nom est déjà pris.',
-      unknown: 'Ce nom n’existe pas. Inscris-toi d’abord.',
-      wrong_pin: 'Code incorrect.',
-      rate_limited: 'Trop de tentatives, réessaie dans un instant.',
-    },
-    fallback: 'Connexion refusée.',
-  });
-}
-
 /* --- Community levels (create-only; owner or admin may delete) --- */
 
 const COMMUNITY_MESSAGES = {
   rate_limited: 'Trop de créations, réessaie dans un instant.',
-  name_taken: 'Ce nom est déjà pris (code incorrect).',
-  forbidden: 'Code incorrect : ce défi ne t’appartient pas.',
+  forbidden: 'Ce défi ne t’appartient pas.',
 };
 
-/* `payload` is { author, pin, secret, words }. */
+/* `payload` is { secret, words }; the author is the signed-in account. */
 export async function createCommunityLevel(payload) {
   const res = await mutate('/levels', {
     body: payload,
@@ -43,10 +28,10 @@ export async function createCommunityLevel(payload) {
   return res;
 }
 
-export async function deleteCommunityLevel(id, auth) {
+export async function deleteCommunityLevel(id) {
   const res = await mutate(`/levels/${id}`, {
     method: 'DELETE',
-    body: auth,
+    body: {},
     messages: COMMUNITY_MESSAGES,
     fallback: 'Suppression refusée.',
   });
@@ -57,7 +42,6 @@ export async function deleteCommunityLevel(id, auth) {
 /* --- Dailies (admin only, today and later) --- */
 
 const ADMIN_MESSAGES = {
-  no_pin: 'Choisis un code à 4 chiffres.',
   forbidden: 'Réservé au compte admin.',
   past_date: 'Trop tard : seuls aujourd’hui et les jours suivants sont modifiables.',
   past_locked: 'Défi passé : seule l’aide peut être modifiée, pas le puzzle.',
@@ -67,7 +51,7 @@ const ADMIN_MESSAGES = {
 };
 
 /* Create a daily (`payload.date`), or edit the one at `editDate`.
- * `payload` is { author, pin, secret, words, date? }. */
+ * `payload` is { secret, words, date? }. */
 export async function saveDaily(payload, editDate = null) {
   const res = await mutate(editDate ? `/dailies/${editDate}` : '/dailies', {
     method: editDate ? 'PUT' : 'POST',
@@ -79,10 +63,10 @@ export async function saveDaily(payload, editDate = null) {
   return res;
 }
 
-export async function deleteDaily(date, auth) {
+export async function deleteDaily(date) {
   const res = await mutate(`/dailies/${date}`, {
     method: 'DELETE',
-    body: auth,
+    body: {},
     messages: ADMIN_MESSAGES,
     fallback: 'Suppression refusée.',
   });
@@ -91,9 +75,9 @@ export async function deleteDaily(date, auth) {
 }
 
 /* Full DB dump for the admin's manual backup. */
-export function exportBackup(auth) {
+export function exportBackup() {
   return mutate('/admin/export', {
-    body: auth,
+    body: {},
     timeout: 15000,
     messages: ADMIN_MESSAGES,
     fallback: 'Export refusé.',

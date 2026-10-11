@@ -3,11 +3,11 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { createCommunityLevel } from '../services/levels.js';
-import { username, pin, connected } from '../composables/useUsername.js';
+import { username, connected } from '../composables/useAccount.js';
 import { useRequest } from '../composables/useRequest.js';
 import PageHeader from '../components/ui/PageHeader.vue';
 import ChallengeForm from '../components/ChallengeForm.vue';
-import UsernamePrompt from '../components/UsernamePrompt.vue';
+import AccountModal from '../components/AccountModal.vue';
 
 const router = useRouter();
 
@@ -15,7 +15,7 @@ const nameOpen = ref(!connected.value);
 
 const { busy, error, run } = useRequest(createCommunityLevel);
 async function submit(normalized) {
-  const res = await run({ ...normalized, pin: pin.value });
+  const res = await run(normalized);
   if (res.ok) router.push(`/community/${res.data.author}`);
 }
 </script>
@@ -26,9 +26,7 @@ async function submit(normalized) {
 
     <div class="who">
       <span class="who-name">Auteur : {{ username || 'Sans nom' }}</span>
-      <button class="switch press sm" type="button" @click="nameOpen = true">
-        Changer de compte
-      </button>
+      <button class="switch press sm" type="button" @click="nameOpen = true">Mon compte</button>
     </div>
 
     <ChallengeForm
@@ -40,7 +38,7 @@ async function submit(normalized) {
       @submit="submit"
     />
 
-    <UsernamePrompt
+    <AccountModal
       :open="nameOpen"
       @close="nameOpen = false"
       @logout="router.replace('/community')"

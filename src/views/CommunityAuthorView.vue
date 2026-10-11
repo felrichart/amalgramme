@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { challengesByAuthor, markAuthorSeen, COMMUNITY_PREFIX } from '../data/community.js';
 import { levelProgress } from '../data/progress.js';
 import { loadCommunityLevels, deleteCommunityLevel } from '../services/levels.js';
-import { username, isAdmin, credentials } from '../composables/useUsername.js';
+import { username, isAdmin } from '../composables/useAccount.js';
 import { useCachedList } from '../composables/useCachedList.js';
 import { useRequest } from '../composables/useRequest.js';
 import PageHeader from '../components/ui/PageHeader.vue';
@@ -32,11 +32,7 @@ const { items, rebuild } = useCachedList(
 );
 
 const pending = ref(null); // level id awaiting delete confirmation
-const {
-  busy: deleting,
-  error,
-  run: remove,
-} = useRequest((id) => deleteCommunityLevel(id, credentials()));
+const { busy: deleting, error, run: remove } = useRequest(deleteCommunityLevel);
 async function confirmDelete() {
   if ((await remove(pending.value)).ok) {
     pending.value = null;

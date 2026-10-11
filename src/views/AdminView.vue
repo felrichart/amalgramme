@@ -10,7 +10,6 @@ import { getToday } from '../utils/today.js';
 import { formatChallengeDate } from '../utils/format.js';
 import { getDailies } from '../data/dailies.js';
 import { loadDailies, deleteDaily, exportBackup } from '../services/levels.js';
-import { credentials } from '../composables/useUsername.js';
 import { useCachedList } from '../composables/useCachedList.js';
 import { useRequest } from '../composables/useRequest.js';
 import PageHeader from '../components/ui/PageHeader.vue';
@@ -28,11 +27,7 @@ const { items, rebuild } = useCachedList(
 );
 
 const pending = ref(null); // date awaiting delete confirmation
-const {
-  busy: deleting,
-  error: deleteError,
-  run: remove,
-} = useRequest((date) => deleteDaily(date, credentials()));
+const { busy: deleting, error: deleteError, run: remove } = useRequest(deleteDaily);
 async function confirmDelete() {
   if ((await remove(pending.value)).ok) {
     pending.value = null;
@@ -42,7 +37,7 @@ async function confirmDelete() {
 
 const { busy: exporting, error: exportError, run: runExport } = useRequest(exportBackup);
 async function downloadBackup() {
-  const res = await runExport(credentials());
+  const res = await runExport();
   if (!res.ok) return;
   const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');

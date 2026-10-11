@@ -10,7 +10,7 @@ import { addDays } from '../utils/date.js';
 import { formatChallengeDate } from '../utils/format.js';
 import { getDailies, dailyRecord } from '../data/dailies.js';
 import { saveDaily } from '../services/levels.js';
-import { username, pin } from '../composables/useUsername.js';
+import { username } from '../composables/useAccount.js';
 import { useRequest } from '../composables/useRequest.js';
 import PageHeader from '../components/ui/PageHeader.vue';
 import ChallengeForm from '../components/ChallengeForm.vue';
@@ -44,7 +44,7 @@ const dateHint = computed(() => {
 
 const { busy, error, run } = useRequest(saveDaily);
 async function submit(normalized) {
-  const payload = { ...normalized, pin: pin.value, date: editDate ? undefined : date.value };
+  const payload = { ...normalized, date: editDate ? undefined : date.value };
   if ((await run(payload, editDate)).ok) router.push('/admin');
 }
 </script>

@@ -20,18 +20,23 @@ src/
   utils/                       storage (fail-soft localStorage), date, format (French labels), today
   data/                        local state, synchronous: cache (factory), dailies, community, levels
                                (date → puzzle/record, slugs), progress (saves), tutorial, migrations
-  services/                    network: api (request/mutate/refresh), levels (CRUD + auth), stats
+  services/                    network: api (request/mutate/refresh, bearer token), levels (CRUD),
+                               account (sign-up/in, PIN legacy, email links), sync (progress ↔
+                               account), stats
   composables/                 useGameState (ALL game logic for one level), useEntry (cursor-based
                                answer input), useLevel, usePlayStats, useCoach (paused), useShake,
-                               useRequest, useCachedList, useUsername
+                               useRequest, useCachedList, useAccount (session + profile)
   views/                       one per route; GameView is the board
   components/                  PuzzlePiece, TutorialCoach, AidePopup, ChallengeForm,
-                               LevelRow, UserBadge, UsernamePrompt; ui/ = PageHeader, BaseModal,
+                               LevelRow, UserBadge, AccountModal, SyncPrompt; ui/ = PageHeader, BaseModal,
                                ConfirmModal, ProgressMark, BulbIcon
-shared/                        word-rules.js + constants.js (ADMIN_NAME, PIN, id length); imported
-                               by both the client and the Worker
-server/worker.js               Cloudflare Worker: route table over D1 (dailies, community, auth, stats)
-test/                          vitest: puzzle, word, gamestate, migration, dailies, community, worker
+shared/                        word-rules.js, constants.js (ADMIN_NAME, PIN_DEADLINE, password/email
+                               rules, id length), progress.js (save merge rule); imported by both
+                               the client and the Worker
+server/worker.js               Cloudflare Worker: route table over D1 (accounts, progress, dailies,
+                               community, stats); crypto.js (PBKDF2, tokens), mail.js (emails)
+test/                          vitest: puzzle, word, gamestate, migration, dailies, community,
+                               sync, worker (real migrations on node:sqlite, test/d1.js)
 ```
 
 > `shared/` is dependency-free and bundles for both the browser (Vite) and the
@@ -64,6 +69,12 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
   `helpUsed` (no `Math.random`, per the seeded-shuffle convention).
 - **Slugs**: `/play/daily` aliases today; any other slug is a date. The most
   recent non-future date is today's daily.
+- **Accounts**: name + email + password, bearer session (`useAccount`). Legacy
+  PIN accounts sign in until `PIN_DEADLINE`, are badged (`UserBadge` "!") and asked
+  to add email + password. Signed in, every save syncs to the account
+  (`services/sync.js`, debounced); merging never loses progress, so the only
+  question (`SyncPrompt`) is at sign-in when the device holds outside progress —
+  declining stashes it until logout.
 - **Coach** (paused — GameView doesn't mount it until it's rewritten for the
   puzzle board): an inline guided walkthrough (`TutorialCoach`) shown over the board
   on a player's first play. Progress lives in a single device-wide localStorage
