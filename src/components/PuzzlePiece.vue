@@ -120,6 +120,15 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
           </button>
         </div>
       </template>
+      <!-- Being solved below: the board piece mirrors the input. -->
+      <span v-else-if="active" class="letters typed">
+        <span
+          v-for="(s, i) in slots"
+          :key="i"
+          :class="{ given: i < given, 'gap-after': s.gapAfter }"
+          >{{ s.ch }}</span
+        >
+      </span>
       <span v-else class="letters">
         <span v-for="t in tiles" :key="t.id">{{ t.ch }}</span>
       </span>
@@ -252,7 +261,7 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
   font-size: 2rem;
 }
 .is-merged .letters {
-  font-size: clamp(0.6rem, calc(100cqi / var(--n) / 1.05), 0.95rem);
+  font-size: min(0.95rem, 100cqi / 7.4);
 }
 .is-merged .word {
   font-size: clamp(0.6rem, calc(100cqi / (var(--n) + 2) / 0.8), 0.95rem);
@@ -261,13 +270,30 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
 /* Shuffled letters on the board: what the player has to work with. */
 .letters {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 0.25em;
+  /* Fixed-width cells, at most 6 per line. */
+  max-width: calc(6 * 1em + 5 * 0.25em);
+  gap: 0.15em 0.25em;
   font-weight: 900;
-  /* One line, shrinking with the word's length (`--n`) to fit the piece. */
-  font-size: clamp(0.6rem, calc(100cqi / var(--n) / 1.05), 1.3rem);
+  /* Shrinks only as far as needed for 6 cells to fit the piece's width. */
+  font-size: min(1.3rem, 100cqi / 7.4);
   line-height: 1;
   text-transform: uppercase;
+}
+.letters > span {
+  width: 1em;
+  text-align: center;
+}
+.typed > span {
+  height: 1.15em;
+  border-bottom: 3px solid var(--ink);
+}
+.typed > .given {
+  color: color-mix(in srgb, var(--ink) 55%, var(--tint));
+}
+.typed > .gap-after {
+  margin-right: 0.4em;
 }
 
 /* Answer: one underline per letter. */

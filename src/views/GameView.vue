@@ -99,6 +99,7 @@ function pieceProps(i) {
     solved: g.solved[i],
     tiles: g.shuffledTiles(i),
     given: g.revealed[i],
+    typed: g.wordActive.value && g.state.wordIndex === i ? g.wordChars.value : [],
   };
 }
 
@@ -154,7 +155,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <div
         class="secret"
         :class="{ found: g.state.secretFound, active: merged }"
-        :role="merged ? undefined : 'button'"
+        :role="merged || g.state.secretFound ? undefined : 'button'"
         :tabindex="merged || g.state.secretFound ? undefined : 0"
         aria-label="mot énigme"
         @click="!merged && !g.state.secretFound && go(g.activateSecret)"
@@ -208,7 +209,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           :key="openWord"
           v-bind="pieceProps(openWord)"
           mode="open"
-          :typed="g.wordChars.value"
           :style="tint(openWord)"
           :cursor="g.wordCursor.value"
           :used="g.usedTiles.value"
@@ -315,7 +315,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font: inherit;
   transition: transform 0.12s ease;
 }
-.secret:active:not(:disabled) {
+.secret[role='button']:active {
   transform: translateY(3px);
   box-shadow: none;
 }

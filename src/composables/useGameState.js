@@ -196,7 +196,7 @@ export function useGameState(date) {
     shuffleSeeds[w] = (shuffleSeeds[w] * 2 + 7) % 100000 || 1;
   }
 
-  /* Full word: correct → lock it and move on; wrong → shake and empty it. */
+  /* Full word: correct → lock it and move on; wrong → shake (letters kept). */
   function checkWord() {
     const w = state.wordIndex;
     if (current.value === words[w].text) {
@@ -206,7 +206,6 @@ export function useGameState(date) {
       return;
     }
     shakeSignal.value++;
-    resetWord();
   }
 
   /* Place a tile at the cursor; already-placed tiles are ignored. */

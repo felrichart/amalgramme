@@ -37,14 +37,14 @@ describe('useGameState', () => {
     expect(g.state.wordIndex).toBe(1);
   });
 
-  it('shakes and restarts on a full wrong word, ignoring letters it lacks', () => {
+  it('shakes and keeps letters on a full wrong word, ignoring letters it lacks', () => {
     const g = useGameState(DATE); // word 0 = "vitre"
     g.typeLetter('z');
     expect(g.current.value).toBe('');
     for (const ch of 'tirve') g.typeLetter(ch);
     expect(g.solved[0]).toBe(false);
     expect(g.shakeSignal.value).toBe(1);
-    expect(g.current.value).toBe('');
+    expect(g.current.value).toBe('tirve');
   });
 
   it('persists progress under the level date key', async () => {
