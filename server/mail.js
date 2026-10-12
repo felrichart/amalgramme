@@ -1,9 +1,10 @@
 /*
- * Transactional emails (verification, password reset) through the Cloudflare
- * Email Service binding. In dev (MAIL_MODE=log in server/.dev.vars) nothing is
+ * Transactional emails (verification, password reset) through Resend's HTTP API
+ * (https://resend.com/docs/api-reference/emails/send-email); the key is the
+ * RESEND_API_KEY secret. In dev (MAIL_MODE=log in server/.dev.vars) nothing is
  * sent: the link is logged and handed back to the caller so the flows stay
  * testable end to end. Only that explicit flag exposes links — a prod Worker
- * missing its binding fails the send instead of leaking reset links.
+ * missing its key fails the send instead of leaking reset links.
  */
 const TEMPLATES = {
   verify: {
@@ -34,14 +35,23 @@ export async function sendAccountMail(env, kind, { to, username, token }) {
     console.log(`[mail:${kind}] ${to} → ${link}`);
     return link;
   }
+  if (!env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not set');
   const lead = t.lead(username);
-  await env.EMAIL.send({
-    to,
-    from: { email: env.MAIL_FROM, name: 'Amalgramme' },
-    subject: t.subject,
-    text: `${lead}\n\n${t.cta} : ${link}\n\n${t.note}`,
-    html: `<p>${escapeHtml(lead)}</p>
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `Amalgramme <${env.MAIL_FROM}>`,
+      to: [to],
+      subject: t.subject,
+      text: `${lead}\n\n${t.cta} : ${link}\n\n${t.note}`,
+      html: `<p>${escapeHtml(lead)}</p>
 <p><a href="${escapeHtml(link)}">${escapeHtml(t.cta)}</a></p>
 <p style="color:#777;font-size:13px">${escapeHtml(t.note)}</p>`,
+    }),
   });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
 }

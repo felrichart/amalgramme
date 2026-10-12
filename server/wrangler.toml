@@ -26,15 +26,13 @@ type = "ratelimit"
 namespace_id = "1002"
 simple = { limit = 10, period = 60 }
 
-# Account emails (verification, password reset) via Cloudflare Email Service.
-# The MAIL_FROM domain must be onboarded: `wrangler email sending enable <domain>`.
-[[send_email]]
-name = "EMAIL"
-
+# Account emails (verification, password reset) go through Resend (server/mail.js);
+# its key is a secret: `wrangler secret put RESEND_API_KEY`. MAIL_FROM's domain must
+# be verified in Resend.
 [vars]
 # Front-end origin used in emailed links (no trailing slash).
-APP_URL = "https://REPLACE_WITH_APP_DOMAIN"
-MAIL_FROM = "noreply@REPLACE_WITH_MAIL_DOMAIN"
+APP_URL = "https://amalgramme.com"
+MAIL_FROM = "noreply@amalgramme.com"
 
 # Daily cleanup: expired sessions/tokens, and PIN-only accounts past PIN_DEADLINE.
 [triggers]

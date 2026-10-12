@@ -106,13 +106,19 @@ exercise the API locally; leave it empty to run the app offline from cache.
 
 ### Email setup (once)
 
-The sending domain must be on Cloudflare:
+Mail goes through [Resend](https://resend.com) (free: 3,000/month, 100/day), since
+Cloudflare's own sending needs Workers Paid and Cloudflare DNS (ours is at OVH).
 
-```sh
-wrangler email sending enable <your-domain>   # needs a token with Email Sending scope
-```
+1. In Resend, add the domain `amalgramme.com` and copy the DNS records it lists
+   (DKIM `resend._domainkey`, SPF/MX on the `send` subdomain) into the OVH DNS
+   zone. They don't touch the existing OVH mailbox records. Wait for "Verified".
+2. Create an API key (sending access) and store it on the Worker:
+   ```sh
+   wrangler secret put RESEND_API_KEY
+   ```
+3. `APP_URL` / `MAIL_FROM` live under `[vars]` in `wrangler.toml`.
 
-Then set `APP_URL` and `MAIL_FROM` under `[vars]` in `wrangler.toml` and deploy.
+Send failures never block sign-up; they show as `mail failed` in `wrangler tail`.
 
 ## API
 

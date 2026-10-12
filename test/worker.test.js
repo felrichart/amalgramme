@@ -113,14 +113,25 @@ describe('accounts', () => {
     });
     expect((await dev.json()).devMail).toMatch(/^https:\/\/app\/verifier\?token=/);
     const sent = [];
-    const env = { ...fakeEnv(), MAIL_MODE: undefined, EMAIL: { send: async (m) => sent.push(m) } };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      sent.push({ url, ...JSON.parse(init.body), auth: init.headers.authorization });
+      return new Response('{"id":"x"}');
+    });
+    const env = { ...fakeEnv(), MAIL_MODE: undefined, RESEND_API_KEY: 'k', MAIL_FROM: 'no@a.fr' };
     const prod = await call(env, 'POST', '/auth/signup', {
       username: 'al',
       email: 'al@mail.test',
       password: 'hunter2!!',
     });
     expect((await prod.json()).devMail).toBeUndefined();
-    expect(sent).toHaveLength(1);
+    expect(sent).toEqual([
+      expect.objectContaining({
+        url: 'https://api.resend.com/emails',
+        auth: 'Bearer k',
+        from: 'Amalgramme <no@a.fr>',
+        to: ['al@mail.test'],
+      }),
+    ]);
   });
 
   it('refuses taken names and emails, bad emails and short passwords', async () => {
