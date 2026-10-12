@@ -40,6 +40,8 @@ const SHAPES = [
 
 const slots = computed(() => answerSlots(props.word, props.typed));
 const opens = computed(() => props.mode !== 'open' && !props.solved && !props.active);
+/* Help-given letters alone don't count as typed. */
+const hasTyped = computed(() => props.typed.some((ch, i) => ch && i >= props.given));
 </script>
 
 <template>
@@ -121,7 +123,7 @@ const opens = computed(() => props.mode !== 'open' && !props.solved && !props.ac
         </div>
       </template>
       <!-- Being solved below: the board piece mirrors the input. -->
-      <span v-else-if="active" class="letters typed">
+      <span v-else-if="active && hasTyped" class="letters typed">
         <span
           v-for="(s, i) in slots"
           :key="i"
