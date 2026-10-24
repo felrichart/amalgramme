@@ -9,12 +9,12 @@ import { loadProgress, saveProgress } from './levels.js';
  * set; a rejected one stays on screen to be corrected or retyped. Auto-saves.
  */
 export function useLexilouhette(level) {
-  const saved = loadProgress(level.date);
+  const saved = loadProgress(level.pattern);
   const state = reactive({
     found: saved.found.filter((k) => level.answers.has(k)),
     revealed: saved.revealed,
   });
-  watch(state, () => saveProgress(level.date, { ...state }), { deep: true });
+  watch(state, () => saveProgress(level.pattern, { ...state }), { deep: true });
 
   const blanks = [...level.pattern].flatMap((ch, i) => (ch === BLANK ? [i] : []));
   const cells = reactive(blanks.map(() => null));

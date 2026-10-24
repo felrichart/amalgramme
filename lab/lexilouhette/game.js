@@ -39,14 +39,14 @@ export const tierOf = (pts) =>
 
 /* A level from levels.json (`[display, freq, lemma, lemmaFreq]` per word), with
  * each answer keyed by its unaccented spelling. */
-export function buildLevel({ date, pattern, words }) {
+export function buildLevel({ pattern, words }) {
   const answers = new Map(
     words.map(([display, freq, lemma, lemmaFreq]) => {
       const key = keyOf(display);
       return [key, { key, display, freq, lemma, points: lemmaPoints(lemmaFreq) }];
     }),
   );
-  return { date, pattern, answers };
+  return { pattern, answers };
 }
 
 /* What a fully typed word gets: 'new', 'dup' (already found) or 'unknown'. */
@@ -106,7 +106,6 @@ const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 /* What the bubble over a found word says: "de" (elided) then its lemma, or the
  * lemma alone when the word is its own. `lead` comes before the lemma. */
 export function wordHint({ display, lemma }) {
-  const name = lemma.replace(/ \(verbe\)$/, '');
-  if (display === name) return { lead: '', lemma: name };
-  return { lead: VOWEL.test(name) ? 'd’' : 'de ', lemma: name };
+  if (display === lemma) return { lead: '', lemma };
+  return { lead: VOWEL.test(lemma) ? 'd’' : 'de ', lemma };
 }

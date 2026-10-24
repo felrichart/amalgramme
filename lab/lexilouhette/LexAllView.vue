@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import { WORD_TINTS } from '../../src/palette.js';
-import { ALL, loadProgress } from './levels.js';
+import { LEVELS, loadProgress } from './levels.js';
 import { buildLevel, scoreOf, maxScore, familiesOf } from './game.js';
 
 /* Every level the generator found, to pick any: filter by length or by a piece of
@@ -12,7 +12,7 @@ const router = useRouter();
 const LENGTHS = [5, 6, 7, 8];
 const PAGE = 150;
 
-const rows = ALL.map((l) => {
+const rows = LEVELS.map((l) => {
   const { found, revealed } = loadProgress(l.pattern);
   const row = {
     pattern: l.pattern,
@@ -20,7 +20,7 @@ const rows = ALL.map((l) => {
     tint: WORD_TINTS[(l.pattern.length - LENGTHS[0]) % WORD_TINTS.length],
   };
   if (!found.length && !revealed) return row;
-  const level = buildLevel({ date: l.pattern, ...l });
+  const level = buildLevel(l);
   const done = revealed || familiesOf(level, found).every((f) => f.lead);
   return { ...row, score: scoreOf(level, found), max: maxScore(level), done };
 });
@@ -40,7 +40,7 @@ function setLength(len) {
   shown.value = PAGE;
 }
 
-const play = (pattern) => router.push(`/lexilouhette/motif/${pattern}`);
+const play = (pattern) => router.push(`/lexilouhette/${pattern}`);
 function playRandom() {
   const list = filtered.value;
   if (list.length) play(list[Math.floor(Math.random() * list.length)].pattern);
@@ -49,7 +49,7 @@ function playRandom() {
 
 <template>
   <div class="page fit">
-    <PageHeader title="Tous les niveaux" back="/lexilouhette" back-label="niveaux" />
+    <PageHeader title="Lexilouhette" back="/" back-label="labo" />
     <div class="filters">
       <div class="lengths">
         <button

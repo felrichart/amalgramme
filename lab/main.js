@@ -4,26 +4,19 @@ import { createRouter, createWebHistory, RouterView, useRoute } from 'vue-router
 import '../src/style.css';
 import '../src/ui.css';
 import LabHomeView from './LabHomeView.vue';
-import LexMenuView from './lexilouhette/LexMenuView.vue';
 import LexGameView from './lexilouhette/LexGameView.vue';
 import LexAllView from './lexilouhette/LexAllView.vue';
-import { levelByDate, levelByPattern } from './lexilouhette/levels.js';
+import { levelByPattern } from './lexilouhette/levels.js';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: LabHomeView },
-    { path: '/lexilouhette', component: LexMenuView },
-    { path: '/lexilouhette/tous', component: LexAllView },
+    { path: '/lexilouhette', component: LexAllView },
     {
-      path: '/lexilouhette/motif/:pattern',
+      path: '/lexilouhette/:pattern',
       component: LexGameView,
-      beforeEnter: (to) => !!levelByPattern(to.params.pattern) || '/lexilouhette/tous',
-    },
-    {
-      path: '/lexilouhette/:date',
-      component: LexGameView,
-      beforeEnter: (to) => !!levelByDate(to.params.date) || '/lexilouhette',
+      beforeEnter: (to) => !!levelByPattern(to.params.pattern) || '/lexilouhette',
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

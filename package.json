@@ -7,7 +7,7 @@
     "dev": "vite",
     "lab": "vite --config lab/vite.config.js",
     "lab:levels": "node lab/lexilouhette/scripts/build-levels.mjs",
-    "lab:lexique": "node lab/lexilouhette/scripts/clean-lexique.mjs",
+    "lab:dico": "node lab/lexilouhette/scripts/build-dictionary.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

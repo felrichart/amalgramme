@@ -11,11 +11,10 @@ import {
   familiesOf,
   wordHint,
 } from '../lab/lexilouhette/game.js';
-import { LEVELS, ALL, levelByPattern, loadProgress } from '../lab/lexilouhette/levels.js';
+import { LEVELS, levelByPattern, loadProgress } from '../lab/lexilouhette/levels.js';
 import { useLexilouhette } from '../lab/lexilouhette/useLexilouhette.js';
 
 const level = buildLevel({
-  date: '2000-01-01',
   pattern: 'P_S_I__',
   words: [
     ['piscine', 26.3, 'piscine', 26.3],
@@ -136,14 +135,15 @@ describe('useLexilouhette', () => {
     expect(g.exhausted.value).toBe(true);
     expect(g.playing.value).toBe(false);
     await Promise.resolve();
-    expect(loadProgress(level.date).found).toHaveLength(5);
+    expect(loadProgress(level.pattern).found).toHaveLength(5);
   });
 });
 
 describe('levels', () => {
-  it('ships at least 20 levels of 10 to 25 families, each word fitting its silhouette', () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(20);
-    for (const l of LEVELS) {
+  it('ships levels of 10 to 25 families, each word fitting its silhouette', () => {
+    expect(LEVELS.length).toBeGreaterThan(1000);
+    expect(new Set(LEVELS.map((l) => l.pattern)).size).toBe(LEVELS.length);
+    for (const l of LEVELS.map(buildLevel)) {
       const blanks = [...l.pattern].filter((p) => p === '_').length;
       expect(blanks).toBeLessThanOrEqual(l.pattern.length - blanks + 1);
       expect(l.pattern.length).toBeLessThanOrEqual(8);
@@ -157,12 +157,8 @@ describe('levels', () => {
     }
   });
 
-  it('lists every candidate level, each playable by its pattern', () => {
-    expect(ALL.length).toBeGreaterThan(LEVELS.length);
-    expect(new Set(ALL.map((l) => l.pattern)).size).toBe(ALL.length);
-    const level = levelByPattern(ALL[0].pattern);
-    expect(level.date).toBe(ALL[0].pattern);
-    expect(familiesOf(level, []).length).toBeGreaterThanOrEqual(10);
+  it('plays a level by its pattern', () => {
+    expect(levelByPattern(LEVELS[0].pattern).pattern).toBe(LEVELS[0].pattern);
     expect(levelByPattern('ZZZZZ')).toBe(null);
   });
 });
@@ -173,9 +169,9 @@ describe('word hint', () => {
     return `${h.lead}${h.lemma}`;
   };
 
-  it('names the lemma, elided and without its verb mark, or the word alone', () => {
+  it('names the lemma, elided, or the word alone', () => {
     expect(hint('tomberas', 'tomber')).toBe('de tomber');
-    expect(hint('aimons', 'aimer (verbe)')).toBe('d’aimer');
+    expect(hint('aimons', 'aimer')).toBe('d’aimer');
     expect(hint('rumba', 'rumba')).toBe('rumba');
   });
 });

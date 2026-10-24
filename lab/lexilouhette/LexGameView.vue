@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
 import { useShake } from '../../src/composables/useShake.js';
-import { LEVELS, ALL, levelByDate, levelByPattern } from './levels.js';
+import { LEVELS, levelByPattern } from './levels.js';
 import { BLANK, maxScore, tierOf, wordHint } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
 import LexKeyboard from './LexKeyboard.vue';
@@ -12,21 +12,13 @@ import LexKeyboard from './LexKeyboard.vue';
 const route = useRoute();
 const router = useRouter();
 
-/* A daily level (by date), or any level from the full list (by pattern). */
-const fromAll = !!route.params.pattern;
-const level = fromAll ? levelByPattern(route.params.pattern) : levelByDate(route.params.date);
-const index = fromAll ? ALL.findIndex((l) => l.pattern === level.pattern) : LEVELS.indexOf(level);
-const nav = fromAll
-  ? {
-      title: `${index + 1} / ${ALL.length}`,
-      back: '/lexilouhette/tous',
-      next: ALL[index + 1] && `/lexilouhette/motif/${ALL[index + 1].pattern}`,
-    }
-  : {
-      title: `Niveau ${index + 1}`,
-      back: '/lexilouhette',
-      next: LEVELS[index + 1] && `/lexilouhette/${LEVELS[index + 1].date}`,
-    };
+const level = levelByPattern(route.params.pattern);
+const index = LEVELS.findIndex((l) => l.pattern === level.pattern);
+const nav = {
+  title: `${index + 1} / ${LEVELS.length}`,
+  back: '/lexilouhette',
+  next: LEVELS[index + 1] && `/lexilouhette/${LEVELS[index + 1].pattern}`,
+};
 const g = useLexilouhette(level);
 const max = maxScore(level);
 const shaking = useShake(() => g.shake.value);
