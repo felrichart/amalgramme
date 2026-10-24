@@ -3,8 +3,8 @@ import { useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import { formatChallengeDate } from '../../src/utils/format.js';
 import { WORD_TINTS } from '../../src/palette.js';
-import { LEVELS, loadProgress } from './levels.js';
-import { scoreOf, maxScore } from './game.js';
+import { LEVELS, ALL, loadProgress } from './levels.js';
+import { scoreOf, maxScore, familiesOf } from './game.js';
 
 const router = useRouter();
 
@@ -15,7 +15,7 @@ const rows = LEVELS.map((l, i) => {
     n: i + 1,
     score: scoreOf(l, found),
     max: maxScore(l),
-    done: revealed || found.length === l.answers.size,
+    done: revealed || familiesOf(l, found).every((f) => f.lead),
     tint: WORD_TINTS[i % WORD_TINTS.length],
   };
 });
@@ -25,6 +25,15 @@ const rows = LEVELS.map((l, i) => {
   <div class="page fit">
     <PageHeader title="Lexilouhette" back="/" back-label="labo" />
     <ul class="list">
+      <li>
+        <button
+          class="cta ghost press all"
+          type="button"
+          @click="router.push('/lexilouhette/tous')"
+        >
+          Tous les niveaux possibles ({{ ALL.length }})
+        </button>
+      </li>
       <li v-for="r in rows" :key="r.date">
         <button
           class="row press"
@@ -48,6 +57,9 @@ const rows = LEVELS.map((l, i) => {
 </template>
 
 <style scoped>
+.all {
+  width: 100%;
+}
 .label {
   display: flex;
   flex-direction: column;

@@ -4,17 +4,29 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
 import { useShake } from '../../src/composables/useShake.js';
-import { LEVELS, levelByDate } from './levels.js';
-import { maxScore, tierOf } from './game.js';
+import { LEVELS, ALL, levelByDate, levelByPattern } from './levels.js';
+import { BLANK, maxScore, tierOf, wordHint } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
 import LexKeyboard from './LexKeyboard.vue';
 
 const route = useRoute();
 const router = useRouter();
 
-const level = levelByDate(route.params.date);
-const index = LEVELS.indexOf(level);
-const next = LEVELS[index + 1];
+/* A daily level (by date), or any level from the full list (by pattern). */
+const fromAll = !!route.params.pattern;
+const level = fromAll ? levelByPattern(route.params.pattern) : levelByDate(route.params.date);
+const index = fromAll ? ALL.findIndex((l) => l.pattern === level.pattern) : LEVELS.indexOf(level);
+const nav = fromAll
+  ? {
+      title: `${index + 1} / ${ALL.length}`,
+      back: '/lexilouhette/tous',
+      next: ALL[index + 1] && `/lexilouhette/motif/${ALL[index + 1].pattern}`,
+    }
+  : {
+      title: `Niveau ${index + 1}`,
+      back: '/lexilouhette',
+      next: LEVELS[index + 1] && `/lexilouhette/${LEVELS[index + 1].date}`,
+    };
 const g = useLexilouhette(level);
 const max = maxScore(level);
 const shaking = useShake(() => g.shake.value);
@@ -55,20 +67,80 @@ const center = (el) => {
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 };
+const clampY = (y) => {
+  const list = listEl.value.getBoundingClientRect();
+  return Math.min(list.bottom, Math.max(list.top, y));
+};
+
+/*
+ * A word found flies out of the silhouette into its row, hidden until it lands;
+ * then its "+points", if any, springs up there and flies into the gauge.
+ */
+const silhouetteEl = ref(null);
+const landing = ref([]);
+const flights = ref([]);
+let flightId = 0;
 watch(
   () => g.feedback.value,
   async (f) => {
-    if (f?.kind !== 'new') return;
+    if (!f || f.kind === 'unknown') return;
+    const family = familyOf(f.key);
+    const isExtra = family.extras.some((w) => w.key === f.key);
+    if (f.kind === 'dup') {
+      if (isExtra) open.value = family.lemma;
+      return;
+    }
+    open.value = isExtra ? family.lemma : null;
+    landing.value.push(f.key);
     await nextTick();
-    const word = listEl.value?.querySelector(`[data-key="${f.key}"]`);
-    if (!word) return gain(f.points);
-    // A word scrolled out of the list starts from the list's nearest edge.
-    const list = listEl.value.getBoundingClientRect();
-    const { x, y } = center(word);
-    const from = { x, y: Math.min(list.bottom, Math.max(list.top, y)) };
-    floaters.value.push({ id: ++floaterId, points: f.points, tier: tierOf(f.points), ...from });
+    await refit();
+    const text = listEl.value?.querySelector(`[data-key="${f.key}"] .text`);
+    if (!text) return land(f);
+    const cell = silhouetteEl.value.querySelector('.cell');
+    const size = parseFloat(getComputedStyle(text).fontSize);
+    const { x, y } = center(text);
+    flights.value.push({
+      id: ++flightId,
+      f,
+      text: level.answers.get(f.key).display,
+      x,
+      y: clampY(y),
+      from: center(silhouetteEl.value),
+      scale: parseFloat(getComputedStyle(cell).fontSize) / size,
+      size,
+    });
   },
 );
+// Ref callback: runs once per new flight element.
+const gliding = new WeakSet();
+function glide(el, fl) {
+  if (!el || gliding.has(el)) return;
+  gliding.add(el);
+  const at = (dx, dy, scale) =>
+    `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale})`;
+  const anim = el.animate(
+    [{ transform: at(fl.from.x - fl.x, fl.from.y - fl.y, fl.scale) }, { transform: at(0, 0, 1) }],
+    { duration: 480, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)' },
+  );
+  anim.onfinish = () => {
+    flights.value = flights.value.filter((x) => x.id !== fl.id);
+    land(fl.f);
+  };
+}
+function land(f) {
+  landing.value = landing.value.filter((k) => k !== f.key);
+  if (!f.points) return;
+  const row = listEl.value?.querySelector(`[data-key="${f.key}"]`);
+  if (!row) return gain(f.points);
+  const { x, y } = center(row.querySelector('.pts') ?? row);
+  floaters.value.push({
+    id: ++floaterId,
+    points: f.points,
+    tier: tierOf(f.points),
+    x,
+    y: clampY(y),
+  });
+}
 // Ref callback: runs once per new floater element.
 const flying = new WeakSet();
 function fly(el, f) {
@@ -92,18 +164,94 @@ function fly(el, f) {
   };
 }
 
-// Family colour per 100-point tier, cool to hot: periwinkle, sage, mustard, rose, red.
+// Colour per 100-point tier, cool to hot: periwinkle, sage, mustard, rose, red.
 const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'var(--danger)'];
 
-const fresh = computed(() => (g.feedback.value?.kind === 'new' ? g.feedback.value.key : null));
+// A word still to find: the silhouette, its known letters lowercase like the words.
+const ghost = [...level.pattern].map((ch) => (ch === BLANK ? ch : ch.toLowerCase()));
+
+/*
+ * A family's later finds show under its spot only while it's open: one family at
+ * a time, the one just added to, until a word from another one is found. Tapping
+ * a family opens or closes it.
+ */
+const open = ref(null);
+const familyOf = (key) => {
+  const { lemma } = level.answers.get(key);
+  return g.families.value.find((f) => f.lemma === lemma);
+};
+function toggle(f) {
+  if (f.extras.length) open.value = open.value === f.lemma ? null : f.lemma;
+}
+watch(open, async () => {
+  await nextTick();
+  await refit();
+  placeHint();
+});
+
+/*
+ * A bubble with a found word's lemma (wordHint): on hover with a mouse, on tap
+ * otherwise. Tapping a family's spot also folds or unfolds it, but
+ * tapping one of its later finds keeps it open (folding would hide the word).
+ */
+const HINT_MARGIN = 8; // px kept from the screen edges
+const hint = ref(null);
+const hintEl = ref(null);
+let hintTarget = null;
+function showHint(el, w) {
+  hintTarget = el;
+  hint.value = { key: w.key, ...wordHint(w) };
+  placeHint();
+}
+function hideHint() {
+  hint.value = null;
+  hintTarget = null;
+}
+/* Above the word's letters, centred on them unless that spills off screen. */
+async function placeHint() {
+  if (!hint.value) return;
+  await nextTick();
+  const el = hintEl.value;
+  if (!el || !hintTarget?.isConnected) return hideHint();
+  const range = document.createRange();
+  range.selectNodeContents(hintTarget);
+  const r = range.getBoundingClientRect();
+  const x = r.left + r.width / 2;
+  const w = el.offsetWidth;
+  const left = Math.min(Math.max(HINT_MARGIN, x - w / 2), innerWidth - HINT_MARGIN - w);
+  el.style.left = `${left}px`;
+  el.style.top = `${r.top}px`;
+  el.style.setProperty('--tail', `${x - left}px`);
+}
+const hintOn = (w, extra = false) => ({
+  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, w),
+  pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
+  click: (e) => {
+    if (extra) e.stopPropagation();
+    if (e.pointerType !== 'mouse' && hint.value?.key === w.key) hideHint();
+    else showHint(e.currentTarget, w);
+  },
+});
+// A tap anywhere but on the word closes the bubble; a tap on it toggles it.
+const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
+onMounted(() => window.addEventListener('pointerdown', outsideHint));
+onUnmounted(() => window.removeEventListener('pointerdown', outsideHint));
+
 const dup = computed(() => (g.feedback.value?.kind === 'dup' ? g.feedback.value.key : null));
+const rowState = (key) =>
+  key && {
+    latest: key === g.latest.value,
+    flash: key === dup.value,
+    landing: landing.value.includes(key),
+  };
 
 const status = computed(() => {
   if (g.state.revealed) return { text: 'Solutions révélées' };
-  if (g.exhausted.value) return { text: 'Plus aucun mot à trouver, bravo !', tone: 'good' };
+  if (g.exhausted.value) return { text: 'Toutes les familles trouvées, bravo !', tone: 'good' };
   const f = g.feedback.value;
   if (f?.kind === 'new') {
-    return { text: `${level.answers.get(f.key).display} +${f.points}`, tone: 'good' };
+    const word = level.answers.get(f.key).display;
+    return { text: f.points ? `${word} +${f.points}` : `${word} · même famille`, tone: 'good' };
   }
   if (f?.kind === 'dup') return { text: 'Déjà trouvé', tone: 'bad' };
   if (f?.kind === 'unknown') return { text: 'Pas dans le dictionnaire', tone: 'bad' };
@@ -111,8 +259,63 @@ const status = computed(() => {
   return { text: '' };
 });
 
-// Keep the highlighted word in view as the alphabetical list grows.
+/*
+ * Columns: the fewest that show every spot without scrolling, as long as each
+ * stays wide enough for the level's widest word and its points; failing that,
+ * the same with smaller text, and past the smallest the list scrolls. Every word
+ * gets that width, so the points line up.
+ */
 const listEl = ref(null);
+const wordsEl = ref(null);
+const cols = ref(2);
+const textSize = ref(0);
+const scrolls = ref(false);
+const wordWidth = ref(0);
+// List text sizes to try, in rem, largest first.
+const TEXT_SIZES = [1.05, 0.95, 0.85];
+// Room a row needs besides its word, in em: points, folded count, padding, column gap.
+const ROW_EXTRA = 4.6;
+
+function widestWord(style) {
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `800 ${style.fontSize} ${style.fontFamily}`;
+  // Each gap of a word still to find is about as wide as an "n".
+  const silhouette = level.pattern.replaceAll(BLANK, 'n').toLowerCase();
+  const words = [silhouette, ...[...level.answers.values()].map((a) => a.display)];
+  const widths = words.map((w) => ctx.measureText(w).width);
+  return Math.ceil(Math.max(...widths));
+}
+
+async function fitColumns() {
+  const el = wordsEl.value;
+  if (!el) return;
+  await document.fonts.ready;
+  scrolls.value = false;
+  for (const size of TEXT_SIZES) {
+    textSize.value = size;
+    await nextTick();
+    const style = getComputedStyle(el);
+    wordWidth.value = widestWord(style);
+    const minWidth = wordWidth.value + ROW_EXTRA * parseFloat(style.fontSize);
+    for (let k = 2; k === 2 || el.clientWidth / k >= minWidth; k++) {
+      cols.value = k;
+      await nextTick();
+      if (el.scrollWidth <= el.clientWidth + 1) return;
+    }
+    cols.value = Math.max(2, cols.value - 1);
+  }
+  scrolls.value = true;
+}
+/* Refits once a family's extra word no longer fits. */
+async function refit() {
+  const el = wordsEl.value;
+  if (el && !scrolls.value && el.scrollWidth > el.clientWidth + 1) await fitColumns();
+}
+const resizes = new ResizeObserver(() => fitColumns());
+onMounted(() => resizes.observe(listEl.value));
+onUnmounted(() => resizes.disconnect());
+
+// Keep the highlighted word in view when the list scrolls.
 watch(
   () => g.latest.value,
   async (key) => {
@@ -132,6 +335,7 @@ function reveal() {
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 function onKeydown(e) {
   if (confirming.value || e.metaKey || e.ctrlKey || e.altKey) return;
+  hideHint();
   if (LETTER.test(e.key)) g.type(e.key);
   else if (e.key === 'Backspace') {
     e.preventDefault();
@@ -145,7 +349,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
 <template>
   <div class="page fit lex">
-    <PageHeader :title="`Niveau ${index + 1}`" back="/lexilouhette" back-label="niveaux" />
+    <PageHeader :title="nav.title" :back="nav.back" back-label="niveaux" />
     <div class="score-row">
       <div
         ref="gaugeEl"
@@ -157,8 +361,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         aria-valuemin="0"
         :aria-valuemax="max"
       >
-        <div class="gauge-fill" :style="{ '--rest': fill }" />
         <span class="gauge-value">{{ shown }}</span>
+        <span class="gauge-value gauge-fill" :style="{ '--rest': fill }" aria-hidden="true">
+          {{ shown }}
+        </span>
       </div>
       <span
         v-for="f in floaters"
@@ -170,40 +376,66 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         aria-hidden="true"
         >+{{ f.points }}</span
       >
+      <span
+        v-for="fl in flights"
+        :key="fl.id"
+        :ref="(el) => glide(el, fl)"
+        class="flight"
+        :style="{ left: `${fl.x}px`, top: `${fl.y}px`, fontSize: `${fl.size}px` }"
+        aria-hidden="true"
+        >{{ fl.text }}</span
+      >
     </div>
 
-    <section ref="listEl" class="found">
-      <p v-if="!g.families.value.length" class="empty">Tes mots s'afficheront ici.</p>
-      <ul class="families">
+    <section ref="listEl" class="found" :class="{ scrolls }" @scroll="hideHint">
+      <ul
+        ref="wordsEl"
+        class="words"
+        :style="{ '--cols': cols, '--word-w': `${wordWidth}px`, fontSize: `${textSize}rem` }"
+      >
         <li
           v-for="f in g.families.value"
           :key="f.lemma"
           class="family"
-          :class="{
-            missed: f.words.every((w) => !w.found),
-            fresh: f.words.some((w) => w.key === fresh),
-            flash: dup && f.words.some((w) => w.key === dup),
-          }"
-          :style="{ '--tint': TINTS[f.tier], '--rows': f.words.length }"
+          :class="{ foldable: f.extras.length }"
+          :style="{ '--tint': TINTS[f.tier] }"
+          @click="toggle(f)"
         >
+          <span class="word" :data-key="f.lead?.key" :class="rowState(f.lead?.key)">
+            <span v-if="f.lead" class="text" v-on="hintOn(f.lead)">{{ f.lead.display }}</span>
+            <span v-else-if="g.state.revealed" class="text missed" v-on="hintOn(f.main)">{{
+              f.main.display
+            }}</span>
+            <span v-else class="ghost" aria-label="mot à trouver">
+              <template v-for="(ch, j) in ghost" :key="j">
+                <span v-if="ch === BLANK" class="gap" />
+                <template v-else>{{ ch }}</template>
+              </template>
+            </span>
+            <span v-if="f.lead" class="pts">{{ f.points }}</span>
+            <span v-if="f.extras.length && open !== f.lemma" class="more">
+              +{{ f.extras.length }}
+            </span>
+          </span>
           <span
-            v-for="w in f.words"
+            v-for="w in open === f.lemma ? f.extras : []"
             :key="w.key"
             :data-key="w.key"
-            class="word"
-            :class="{ missed: !w.found, latest: w.key === g.latest.value }"
+            class="word extra"
+            :class="rowState(w.key)"
           >
-            {{ w.display }}
-            <span class="pts" :class="{ bonus: !w.lead }">{{
-              w.lead ? w.points : `+${w.points}`
-            }}</span>
+            <span class="text" v-on="hintOn(w, true)">{{ w.display }}</span>
           </span>
         </li>
       </ul>
     </section>
+    <span v-if="hint" ref="hintEl" :key="hint.key" class="hint" aria-hidden="true">
+      {{ hint.lead }}<em>{{ hint.lemma }}</em>
+    </span>
 
     <section class="play">
       <div
+        ref="silhouetteEl"
         class="silhouette"
         :class="{ shake: shaking, wrong: g.rejected.value }"
         :style="{ '--n': g.slots.value.length }"
@@ -233,15 +465,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button class="reveal" type="button" @click="confirming = true">Voir les solutions</button>
       </template>
       <div v-else class="end">
-        <button
-          v-if="next"
-          class="cta press"
-          type="button"
-          @click="router.replace(`/lexilouhette/${next.date}`)"
-        >
+        <button v-if="nav.next" class="cta press" type="button" @click="router.replace(nav.next)">
           Niveau suivant
         </button>
-        <button class="cta ghost press" type="button" @click="router.push('/lexilouhette')">
+        <button class="cta ghost press" type="button" @click="router.push(nav.back)">
           Tous les niveaux
         </button>
       </div>
@@ -263,7 +490,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   justify-content: center;
   padding: 0.1rem 1rem 0.5rem;
 }
-/* Score gauge: the full gradient, uncovered from the left as the score grows. */
+/* Score gauge: a navy fill growing from the left, over which the number turns white. */
 .gauge {
   position: relative;
   width: min(80%, 21rem);
@@ -277,14 +504,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .gauge.bump {
   animation: bump 0.45s ease;
 }
-.gauge-fill {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--violet), var(--teal), var(--gold), var(--pink));
-  clip-path: inset(0 var(--rest) 0 0);
-}
 .gauge-value {
-  position: relative;
   display: grid;
   place-items: center;
   height: 100%;
@@ -292,99 +512,140 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 1.2rem;
   color: var(--ink);
 }
+.gauge-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  color: #fff;
+  clip-path: inset(0 var(--rest) 0 0);
+}
 @keyframes bump {
   30% {
     transform: scale(1.08);
   }
 }
 
-/* Found words by family, alphabetical; scrolls once it outgrows the space. */
+/* One spot per family, alphabetical down the columns; scrolls once it outgrows
+   the space. */
 .found {
+  position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+.found.scrolls {
   overflow-y: auto;
-  padding: 0.6rem 1rem;
 }
-.empty {
-  text-align: center;
-  color: var(--muted);
-  font-weight: 700;
-  padding: 2rem 1rem;
-}
-/* Families fill a 3-column grid, each spanning one row per word; `dense` lets
-   small ones fill the gaps beside tall ones. */
-.families {
+/* Filled column by column, top to bottom; fitColumns() picks how many. Placed
+   absolutely so the columns get a fixed height to break at. */
+.words {
+  position: absolute;
+  inset: 0.6rem;
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 0.9rem;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 2.3em;
-  grid-auto-flow: dense;
-  gap: 0.35em;
+  columns: var(--cols);
+  column-fill: auto;
+  column-gap: 0.6em;
 }
-/* A family: a column in its colour, each word with the points it brought. The
-   first found tops it with the lemma's points; the others add their bonus. */
+.scrolls .words {
+  position: static;
+  margin: 0.6rem;
+  column-fill: balance;
+}
+/* A family's spot, and under it its other words once found. */
 .family {
-  grid-row: span var(--rows);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
-  padding: 0 0.15em;
-  border: var(--outline-w) solid var(--outline);
-  border-radius: 0.9em;
-  background: color-mix(in srgb, var(--tint) 45%, var(--panel));
-  box-shadow: var(--lift-sm);
+  break-inside: avoid;
+  margin-bottom: 0.1em;
 }
+/* A spot: its first word found (or the silhouette until then), then its points.
+   Every spot is as tall and its word box as wide, so the points line up. */
 .word {
-  display: flex;
+  display: grid;
+  grid-template-columns: calc(var(--word-w) + 0.3em) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.3em;
-  min-width: 0;
-  padding: 0.05em 0.1em 0.05em 0.45em;
-  border-radius: 999px;
+  column-gap: 0.15em;
+  width: fit-content;
+  height: 1.7em;
+  padding: 0 0.15em 0 0.25em;
+  border-radius: 0.5em;
   font-weight: 800;
+  line-height: 1;
   color: var(--ink);
   white-space: nowrap;
 }
-.pts {
-  padding: 0.05em 0.4em;
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* How many later finds a closed family holds. */
+.more {
+  margin-left: 0.25em;
+  padding: 0 0.35em;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
   border-radius: 999px;
-  font-size: 0.75em;
+  font-size: 0.62em;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+.family.foldable {
+  cursor: pointer;
+}
+/* A family's later finds: smaller, pointless, hanging off its spot. */
+.word.extra {
+  display: flex;
+  align-items: baseline;
+  height: 1.35em;
+  margin-top: -0.15em;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.word.extra::before {
+  content: '∟';
+  flex: none;
+  width: 0.9em;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+/* Its row stays empty while a found word flies in. */
+.word.landing {
+  visibility: hidden;
+}
+/* A word still to find: its known letters, faded, and a line on the baseline per blank. */
+.ghost {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.gap {
+  display: inline-block;
+  width: 0.5em;
+  margin: 0 0.05em;
+  border-bottom: 2px solid color-mix(in srgb, var(--ink) 40%, transparent);
+}
+/* Shown by the reveal: faded, they don't count. */
+.missed {
+  color: var(--muted);
+  font-weight: 700;
+}
+/* The word's points, in the colour of their 100-point tier. */
+.pts {
+  justify-self: start;
+  min-width: 2.2em;
+  padding: 0.15em 0.35em;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 0.7em;
   font-weight: 900;
   color: var(--on-color);
   background: var(--tint);
 }
-.pts.bonus {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--tint) 35%, var(--panel));
-}
-.family.fresh {
-  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.family.flash {
+.word.flash {
   animation: shake 0.4s ease;
 }
 /* The word just found or retyped: ringed until the next one. */
 .word.latest {
   outline: 2px solid var(--ink);
-}
-/* Shown by the reveal: faded, they don't count. */
-.word.missed {
-  color: var(--muted);
-}
-.word.missed .pts {
-  color: var(--muted);
-  background: transparent;
-  border: 1.5px dashed var(--muted);
-}
-.family.missed {
-  --tint: var(--muted);
-  border-style: dashed;
-  box-shadow: none;
-  background: transparent;
 }
 
 .play {
@@ -394,6 +655,58 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   gap: 0.8rem;
   padding: 0.8rem 0.6rem calc(1rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
+}
+
+/* The lemma bubble, placed above its word by placeHint(), its tail under the word. */
+.hint {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  padding: 0.3rem 0.6rem;
+  border: var(--outline-w) solid var(--outline);
+  border-radius: 0.7rem;
+  background: var(--panel);
+  box-shadow: var(--lift-sm);
+  top: 0;
+  left: 0;
+  font-weight: 800;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  color: var(--ink);
+  white-space: nowrap;
+  transform: translateY(calc(-100% - 0.5rem));
+  transform-origin: var(--tail) bottom;
+  animation: hint-in 0.12s ease-out;
+}
+.hint::after {
+  content: '';
+  position: absolute;
+  left: var(--tail);
+  bottom: calc(-0.3rem - var(--outline-w) / 2);
+  width: 0.55rem;
+  height: 0.55rem;
+  border: solid var(--outline);
+  border-width: 0 var(--outline-w) var(--outline-w) 0;
+  background: var(--panel);
+  transform: translateX(-50%) rotate(45deg);
+}
+@keyframes hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% - 0.2rem)) scale(0.85);
+  }
+}
+
+/* A word found, flown from the silhouette into its row by glide(). */
+.flight {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
 }
 
 /* "+points": placed on the word found, flown into the gauge by fly(). */

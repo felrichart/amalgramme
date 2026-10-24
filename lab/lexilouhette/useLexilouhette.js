@@ -25,9 +25,9 @@ export function useLexilouhette(level) {
   const rejected = computed(() => !!feedback.value && feedback.value.kind !== 'new' && isFull());
 
   const score = computed(() => scoreOf(level, state.found));
-  const exhausted = computed(() => state.found.length === level.answers.size);
+  const families = computed(() => familiesOf(level, state.found));
+  const exhausted = computed(() => families.value.every((f) => f.lead));
   const playing = computed(() => !exhausted.value && !state.revealed);
-  const families = computed(() => familiesOf(level, state.found, state.revealed));
   // The word to highlight: the one just retyped, else the last one found.
   const latest = computed(() =>
     feedback.value?.kind === 'dup' ? feedback.value.key : (state.found[0] ?? null),

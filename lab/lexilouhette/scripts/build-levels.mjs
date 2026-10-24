@@ -1,25 +1,28 @@
 /*
  * Generates lab/lexilouhette/levels.json (the game's data) and levels.report.md
- * (what each level holds, what was weeded out) from the Lexique 4 table in data/
- * (or another one: `npm run lab:levels -- path/to.tsv`, or LEXIQUE=…).
+ * (what each level holds, what was weeded out) from data/lexique.tsv, Lexique 4
+ * cleaned by clean-lexique.mjs (or another one: `npm run lab:levels -- path/to.tsv`).
  *
  * Manual settings live in levels.config.json, see lab/lexilouhette/README.md.
  * Levels already in levels.json keep their date and pattern (their words follow the
- * config); new ones are appended until `count` levels pass the thresholds. Pass
- * --fresh to start over. Seeded: same table and config, same levels.
+ * config); each run appends `batch` new ones (or `--add N`). Pass --fresh to start
+ * over. Seeded: same table and config, same levels. Every candidate level also goes
+ * to levels.all.json, to play any of them in the lab.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { keyOf, buildLevel, familiesOf, maxScore } from '../game.js';
+import prettier from 'prettier';
+import { keyOf, buildLevel, maxScore, tierOf, familiesOf, lemmaPoints } from '../game.js';
 
 const args = process.argv.slice(2);
 const fresh = args.includes('--fresh');
+const addArg = args.indexOf('--add');
 const file = (name) => fileURLToPath(new URL(`../${name}`, import.meta.url));
 const tsvPath =
-  args.find((a) => !a.startsWith('--')) ?? process.env.LEXIQUE ?? file('data/Lexique4.1.tsv');
+  args.find((a, i) => !a.startsWith('--') && i !== addArg + 1) ?? file('data/lexique.tsv');
 const config = {
   start: '2026-10-24',
-  count: 20,
+  batch: 10,
   pinned: [],
   skipped: [],
   reviewed: [],
@@ -31,67 +34,119 @@ const config = {
 const banned = new Set(config.banned);
 const reviewed = new Set(config.reviewed);
 const skipped = new Set(config.skipped);
+const add = addArg >= 0 ? Number(args[addArg + 1]) : config.batch;
 
-const LENGTHS = [4, 5, 6, 7];
-// Blanks per level: at least this many, and at most half the word (rounded down,
-// so a 5-letter word shows 3 letters for 2 blanks).
+const LENGTHS = [5, 6, 7, 8];
+// Blanks per level: at least MIN_BLANKS, and at most one more than the letters shown.
 const MIN_BLANKS = 2;
-// A word players are likely to know; levels need enough of them, across enough lemmas.
-const KNOWN_FREQ = 2;
-const MIN_KNOWN = 10;
-const MAX_KNOWN = 50;
-// Distinct lemmas (word families) per level.
-const MIN_LEMMAS = 6;
-const MAX_PLURALS = 0.4;
-const MAX_TOTAL = 70;
-// Share of known words that only exist as conjugated verbs (…ANT, …IEZ farms).
-const MAX_VERB_FORMS = 0.5;
-// Shown endings that make a conjugation farm.
-const VERB_ENDINGS = ['ANT', 'ENT', 'IEZ', 'ONS', 'AIT', 'AIS', 'ERA', 'IRA'];
-// A blank where most known words share a letter (_O_C_E → mostly _OUCHE): that
+// Shown letters in a row, at most (RE_E__, not PLA___).
+const MAX_RUN = 2;
+// Families (one spot each) per level.
+const MIN_SPOTS = 10;
+const MAX_SPOTS = 25;
+// A family is known when this share of people know its lemma (Lexique's Preval,
+// %); levels need enough of them.
+const KNOWN_PREVAL = 90;
+const MIN_KNOWN = 7;
+// Share of families that are verbs, at most (…ANT, …ENT farms).
+const MAX_VERBS = 0.5;
+// A blank where most known families share a letter (_O_C_E → mostly _OUCHE): that
 // letter should be shown instead, which is another candidate.
 const MAX_SAME_LETTER = 0.5;
-// Share of a level's words already used by picked levels.
-const MAX_OVERLAP = 0.2;
-// Levels sharing a first or last pattern char, so they don't all start with C or
-// end in a shown E. A blank edge is the natural case and gets more room.
-const MAX_SAME_EDGE = { shown: 3, blank: 13 };
 // Frequency (per million) given to words added by hand.
 const ADDED_FREQ = 1;
 
 const LETTERS = /^[a-zàâäçéèêëîïôöûùüÿ]+$/;
+// data/lexique.tsv columns, see clean-lexique.mjs.
+const [MOT, LEMME, CGRAM, INFOVER, FREQMOT, FREQLEMME, PREVAL] = [0, 1, 2, 5, 6, 8, 9];
+const isVerb = (c) => c[CGRAM].startsWith('VER') || c[CGRAM] === 'AUX';
+const isParticiple = (c) => isVerb(c) && c[INFOVER].includes('par:');
+// A reading this much rarer than a word's commonest one doesn't make it a word of
+// its own (entrait the beam, against il entrait).
+const MIN_READING_SHARE = 0.1;
 
 /*
- * One entry per unaccented spelling, shown as its most frequent form, in the
- * family of its most common reading's lemma (venez → venir, mort → mourir).
+ * One entry per unaccented spelling, shown as its most frequent form, with the
+ * lemmas that form can belong to (`options`, by reading frequency): which family
+ * it joins depends on the level, see inFamilies().
  */
 function loadDictionary(path) {
-  const byKey = new Map();
+  const forms = new Map();
   for (const line of readFileSync(path, 'utf8').split('\n').slice(1)) {
     const c = line.split('\t');
-    const form = c[0];
-    if (!form || !LETTERS.test(form) || !LENGTHS.includes(form.length)) continue;
-    const freq = Number(c[10]) || 0;
-    const lemmaFreq = Number(c[11]) || 0;
+    const form = c[MOT];
+    if (!LETTERS.test(form) || !LENGTHS.includes(form.length)) continue;
+    if (!forms.has(form)) forms.set(form, { total: 0, readings: [] });
+    const f = forms.get(form);
+    f.total += Number(c[FREQMOT]) || 0;
+    f.readings.push(c);
+  }
+  const byKey = new Map();
+  for (const [form, { total, readings }] of forms) {
     const key = keyOf(form).toLowerCase();
-    let e = byKey.get(key);
-    if (!e) {
-      e = { key, display: form, freq, lemma: null, lemmaFreq: 0, forms: new Set() };
-      e.verbForm = true;
-      byKey.set(key, e);
-    }
-    // A conjugated verb form, unless some reading is an infinitive or another class.
-    if ((!c[4].startsWith('VER') && c[4] !== 'AUX') || c[8].startsWith('inf')) e.verbForm = false;
-    if (freq > e.freq) Object.assign(e, { display: form, freq });
-    if (!e.lemma || lemmaFreq > e.lemmaFreq) Object.assign(e, { lemma: c[3], lemmaFreq });
+    if (!byKey.has(key)) byKey.set(key, { key, freq: 0, formFreq: -1, forms: new Set() });
+    const e = byKey.get(key);
+    e.freq += total;
     e.forms.add(form);
+    if (total > e.formFreq) Object.assign(e, { display: form, formFreq: total, readings });
   }
   const byLength = new Map(LENGTHS.map((len) => [len, []]));
   for (const e of byKey.values()) {
-    if (!e.lemmaFreq) Object.assign(e, { lemma: e.display, lemmaFreq: e.freq });
+    e.options = lemmaOptions(e);
+    delete e.readings;
     byLength.get(e.key.length).push(e);
   }
   return byLength;
+}
+
+/* The lemmas a dictionary entry's readings point to, commonest first. An adjective
+ * that is also a participle counts as the participle (fatigués: fatiguer). */
+function lemmaOptions(e) {
+  const participle = e.readings.some(isParticiple);
+  const byLemma = new Map();
+  for (const c of e.readings) {
+    if (participle && c[CGRAM].startsWith('ADJ')) continue;
+    const lemma = c[LEMME];
+    const o = byLemma.get(lemma) ?? {
+      lemma,
+      lemmaFreq: Number(c[FREQLEMME]) || 0,
+      preval: c[PREVAL] === '' ? null : Number(c[PREVAL]),
+      freq: 0,
+      verb: isVerb(c),
+    };
+    o.freq += Number(c[FREQMOT]) || 0;
+    byLemma.set(lemma, o);
+  }
+  const options = [...byLemma.values()].sort((a, b) => b.freq - a.freq);
+  const kept = options.filter((o) => o.freq >= options[0].freq * MIN_READING_SHARE);
+  for (const o of kept) if (!o.lemmaFreq) o.lemmaFreq = e.freq;
+  return kept;
+}
+
+/*
+ * A pattern's words, each in a family: of its lemmas, the one fewest of these
+ * words share, so a word with a reading of its own stands apart (porte, not with
+ * porter's portez); ties go to the commonest.
+ */
+function inFamilies(words) {
+  const count = new Map();
+  for (const e of words)
+    for (const o of e.options) count.set(o.lemma, (count.get(o.lemma) ?? 0) + 1);
+  return words.map((e) => {
+    const o = e.options.reduce((best, o) =>
+      count.get(o.lemma) < count.get(best.lemma) ? o : best,
+    );
+    return { ...e, lemma: o.lemma, lemmaFreq: o.lemmaFreq, verb: o.verb, preval: o.preval };
+  });
+}
+
+/* Each family's most common word. */
+function mainWords(words) {
+  const mains = new Map();
+  for (const e of words) {
+    if (!mains.has(e.lemma) || e.freq > mains.get(e.lemma).freq) mains.set(e.lemma, e);
+  }
+  return [...mains.values()];
 }
 
 function mulberry32(seed) {
@@ -109,7 +164,8 @@ function masks(len) {
   for (let bits = 0; bits < 1 << len; bits++) {
     const shown = [...Array(len).keys()].filter((i) => bits & (1 << i));
     const blanks = len - shown.length;
-    if (blanks >= MIN_BLANKS && blanks <= Math.floor(len / 2)) out.push(shown);
+    const run = shown.every((i, k) => k < MAX_RUN || shown[k - MAX_RUN] !== i - MAX_RUN);
+    if (blanks >= MIN_BLANKS && blanks <= shown.length + 1 && run) out.push(shown);
   }
   return out;
 }
@@ -125,13 +181,11 @@ function curate(pattern, words) {
     key: keyOf(w).toLowerCase(),
     display: w,
     freq: ADDED_FREQ,
-    lemma: w,
-    lemmaFreq: ADDED_FREQ,
+    options: [{ lemma: w, lemmaFreq: ADDED_FREQ, freq: ADDED_FREQ, verb: false }],
     forms: new Set([w]),
-    verbForm: false,
   }));
   return {
-    kept: [...words.filter((e) => !isOut(e)), ...added],
+    kept: inFamilies([...words.filter((e) => !isOut(e)), ...added]),
     removed: words.filter(isOut).map((e) => e.display),
   };
 }
@@ -151,7 +205,7 @@ function candidates(byLength) {
         groups.get(pattern).push(e);
       }
       for (const [pattern, group] of groups) {
-        if (skipped.has(pattern)) continue;
+        if (group.length < MIN_SPOTS || skipped.has(pattern)) continue;
         const c = evaluate(pattern, curate(pattern, group).kept);
         if (c) found.push(c);
       }
@@ -162,37 +216,18 @@ function candidates(byLength) {
 
 /* The candidate level for `pattern`, or null when it fails a threshold. */
 function evaluate(pattern, words) {
-  if (words.length > MAX_TOTAL) return null;
-  if (VERB_ENDINGS.some((end) => pattern.endsWith(end))) return null;
-  const known = words.filter((e) => e.freq >= KNOWN_FREQ);
-  if (known.length < MIN_KNOWN || known.length > MAX_KNOWN) return null;
-  const lemmas = new Set(words.map((e) => e.lemma)).size;
-  const plurals = known.filter((e) => /[sx]$/.test(e.key)).length;
-  const verbForms = known.filter((e) => e.verbForm).length;
-  if (lemmas < MIN_LEMMAS || plurals > known.length * MAX_PLURALS) return null;
-  if (verbForms > known.length * MAX_VERB_FORMS) return null;
+  const mains = mainWords(words);
+  if (mains.length < MIN_SPOTS || mains.length > MAX_SPOTS) return null;
+  const known = mains.filter((e) => e.preval >= KNOWN_PREVAL);
+  if (known.length < MIN_KNOWN) return null;
+  if (mains.filter((e) => e.verb).length > mains.length * MAX_VERBS) return null;
   for (let i = 0; i < pattern.length; i++) {
     if (pattern[i] !== '_') continue;
     const counts = {};
     for (const e of known) counts[e.key[i]] = (counts[e.key[i]] ?? 0) + 1;
     if (Math.max(...Object.values(counts)) > known.length * MAX_SAME_LETTER) return null;
   }
-  return { pattern, known: known.length, lemmas, words };
-}
-
-// Levels that play alike: same shown letters (C_N_I__ / C_N_I___) or same start
-// (BA__E / BA_A___, COU_E__ / CO_T___).
-const shownLetters = (pattern) => pattern.replaceAll('_', '');
-function alike(a, b) {
-  if (shownLetters(a) === shownLetters(b)) return true;
-  const [pa, pb] = [a.slice(0, 2), b.slice(0, 2)];
-  return a.slice(0, 3) === b.slice(0, 3) || (pa === pb && !pa.includes('_'));
-}
-
-function edgeRoom(picked, c, at) {
-  const ch = c.pattern.at(at);
-  const max = ch === '_' ? MAX_SAME_EDGE.blank : MAX_SAME_EDGE.shown;
-  return picked.filter((p) => p.pattern.at(at) === ch).length < max;
+  return { pattern, spots: mains.length, known: known.length, words };
 }
 
 /* `pattern`'s level as the config makes it, and whether it passes the thresholds. */
@@ -218,9 +253,8 @@ function addDays(iso, days) {
 }
 
 /*
- * The previous levels, then pinned patterns, then new picks until `count` levels
- * pass the thresholds. Picks rotate lengths, favour reviewed patterns, then many
- * lemmas and few obscure words, and avoid looking like a level already there.
+ * The previous levels, then pinned patterns, then `add` new candidates: reviewed
+ * ones first, then a seeded shuffle of the rest, minus the patterns already there.
  */
 function pick(byLength, cands, rand) {
   const levels = previousLevels(byLength);
@@ -229,68 +263,42 @@ function pick(byLength, cands, rand) {
     if (!levels.some((l) => l.pattern === pattern))
       levels.push(levelFor(byLength, pattern, nextDate()));
   }
-  const used = new Set(levels.flatMap((l) => l.words.map((e) => e.key)));
-  const ranked = cands
-    .map((c) => ({
-      c,
-      r:
-        (reviewed.has(c.pattern) ? 10 : 0) +
-        Math.min(1, c.lemmas / c.known) +
-        c.known / c.words.length +
-        rand() * 0.4,
-    }))
-    .sort((a, b) => b.r - a.r)
-    .map((x) => x.c);
-  const passing = () => levels.filter((l) => l.ok).length;
-  for (let turn = 0, misses = 0; passing() < config.count && misses < LENGTHS.length; turn++) {
-    const len = LENGTHS[turn % LENGTHS.length];
-    const next = ranked.find(
-      (c) =>
-        c.pattern.length === len &&
-        !levels.some((l) => alike(l.pattern, c.pattern)) &&
-        edgeRoom(levels, c, 0) &&
-        edgeRoom(levels, c, -1) &&
-        c.words.filter((e) => used.has(e.key)).length <= c.words.length * MAX_OVERLAP,
-    );
-    if (!next) {
-      misses++;
-      continue;
-    }
-    misses = 0;
-    levels.push({ date: nextDate(), pattern: next.pattern, words: next.words, ok: true });
-    for (const e of next.words) used.add(e.key);
+  const order = [...cands];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  order.sort((a, b) => reviewed.has(b.pattern) - reviewed.has(a.pattern));
+  const taken = new Set(levels.map((l) => l.pattern));
+  for (const c of order.filter((c) => !taken.has(c.pattern)).slice(0, add)) {
+    levels.push({ date: nextDate(), pattern: c.pattern, words: c.words, ok: true });
   }
   return levels;
 }
 
 const round = (f) => Number(f.toPrecision(3));
 
-/* Markdown: per level, its word families with points, the merged accent variants
- * and what the manual settings took out. */
+/* Markdown: per level, its families with points, the merged accent variants and
+ * what the manual settings took out. */
 function report(levels, byLength) {
   const out = ['# Lexilouhette — niveaux générés', ''];
   out.push('Généré par `npm run lab:levels`. Ne pas éditer : régler `levels.config.json`.', '');
-  out.push('Par famille : `lemme (points du lemme) : mot +bonus · …`.', '');
+  out.push('Par famille : `lemme (points) : mot principal · autres mots`.', '');
   for (const l of levels) {
     const level = buildLevel(l);
     const all = byLength.get(l.pattern.length).filter((e) => fits(l.pattern, e.key));
     const { removed } = curate(l.pattern, all);
     const tags = [reviewed.has(l.pattern) ? 'revu' : '**À REVOIR**'];
     if (!l.ok) tags.push('**sous les seuils**');
-    const families = familiesOf(level, [], true).length;
+    const families = familiesOf(level, []);
     out.push(
-      `## ${l.date} · \`${l.pattern}\` · ${l.words.length} mots, ${families} familles · max ${maxScore(level)} · ${tags.join(' · ')}`,
+      `## ${l.date} · \`${l.pattern}\` · ${families.length} familles, ${l.words.length} mots · max ${maxScore(level)} · ${tags.join(' · ')}`,
       '',
     );
-    const byLemma = new Map();
-    for (const a of level.answers.values()) {
-      if (!byLemma.has(a.lemma)) byLemma.set(a.lemma, []);
-      byLemma.get(a.lemma).push(a);
-    }
-    for (const [lemma, words] of byLemma) {
-      out.push(
-        `- ${lemma} (${words[0].lemmaPoints}) : ${words.map((a) => `${a.display} +${a.bonus}`).join(' · ')}`,
-      );
+    for (const f of families) {
+      const words = [...level.answers.values()].filter((a) => a.lemma === f.lemma);
+      const rest = words.filter((a) => a !== f.main).map((a) => a.display);
+      out.push(`- ${f.lemma} (${f.points}) : ${[f.main.display, ...rest].join(' · ')}`);
     }
     out.push('');
     const merged = all
@@ -306,45 +314,59 @@ function report(levels, byLength) {
 
 const byLength = loadDictionary(tsvPath);
 const rand = mulberry32(20261024);
-const levels = pick(byLength, candidates(byLength), rand).map((l) => ({
-  ...l,
-  words: [...l.words]
+const cands = candidates(byLength);
+// A level's words as levels.json stores them, most common first.
+const wordRows = (words) =>
+  [...words]
     .sort((a, b) => b.freq - a.freq)
-    .map((e) => [e.display, round(e.freq), e.lemma, round(e.lemmaFreq)]),
-}));
+    .map((e) => [e.display, round(e.freq), e.lemma, round(e.lemmaFreq)]);
+const levels = pick(byLength, cands, rand).map((l) => ({ ...l, words: wordRows(l.words) }));
 
 const data = levels.map(({ date, pattern, words }) => ({ date, pattern, words }));
-writeFileSync(file('levels.json'), JSON.stringify(data) + '\n');
+// Formatted as `npm run format` would, so regenerating doesn't churn the diff.
+const options = await prettier.resolveConfig(file('levels.json'));
+writeFileSync(
+  file('levels.json'),
+  await prettier.format(JSON.stringify(data), { ...options, parser: 'json' }),
+);
 writeFileSync(file('levels.report.md'), report(levels, byLength));
+// Every candidate, by length then pattern, one per line (too big for prettier).
+const all = [...cands]
+  .sort((a, b) => a.pattern.length - b.pattern.length || a.pattern.localeCompare(b.pattern))
+  .map((c) => JSON.stringify({ pattern: c.pattern, words: wordRows(c.words) }));
+writeFileSync(file('levels.all.json'), `[\n${all.join(',\n')}\n]\n`);
 
 const pending = levels.filter((l) => !reviewed.has(l.pattern));
+const familyCount = (l) => new Set(l.words.map((w) => w[2])).size;
 for (const l of levels) {
   const tags = [reviewed.has(l.pattern) ? 'revu' : 'À REVOIR'];
   if (!l.ok) tags.push('sous les seuils');
-  const families = new Set(l.words.map((w) => w[2])).size;
   console.log(
-    `${l.date}  ${l.pattern.padEnd(8)} ${String(l.words.length).padStart(3)} mots ${String(families).padStart(3)} familles  ${tags.join(', ')}`,
+    `${l.date}  ${l.pattern.padEnd(8)} ${String(familyCount(l)).padStart(3)} familles ${String(l.words.length).padStart(3)} mots  ${tags.join(', ')}`,
   );
 }
-for (const l of pending) console.log(`\n${l.pattern}: ${l.words.map((w) => w[0]).join(' ')}`);
-
-// Families by the points of their most common word (the one usually found
-// first), per hundred: 100s … 400s, 500 and up.
-const hundreds = [0, 0, 0, 0, 0];
-let familyCount = 0;
-for (const l of data) {
-  const seen = new Set();
-  for (const a of buildLevel(l).answers.values()) {
-    if (seen.has(a.lemma)) continue;
-    seen.add(a.lemma);
-    hundreds[Math.min(4, Math.floor((a.lemmaPoints + a.bonus) / 100) - 1)]++;
-    familyCount++;
-  }
+for (const l of pending) {
+  const families = familiesOf(buildLevel(l), []);
+  console.log(`\n${l.pattern}: ${families.map((f) => f.main.display).join(' ')}`);
 }
-const split = hundreds.map((n, i) => {
-  const label = i < 4 ? `${i + 1}xx` : '500+';
-  return `${label} ${Math.round((100 * n) / familyCount)}%`;
-});
-console.log(`\nPoints des familles : ${split.join(' · ')}`);
+
+// Families by points, per hundred (100s … 400s, 500): in these levels, and in
+// every candidate (what the points formula is tuned on).
+function split(points) {
+  const hundreds = [0, 0, 0, 0, 0];
+  for (const p of points) hundreds[tierOf(p)]++;
+  return hundreds
+    .map((n, i) => `${i < 4 ? `${i + 1}xx` : '500'} ${Math.round((100 * n) / points.length)}%`)
+    .join(' · ');
+}
+const candFreqs = cands.flatMap((c) => mainWords(c.words).map((e) => e.lemmaFreq));
+const levelPoints = data.flatMap((l) => familiesOf(buildLevel(l), []).map((f) => f.points));
+console.log(`\nPoints des familles : ${split(levelPoints)}`);
+console.log(`Sur tous les candidats : ${split(candFreqs.map(lemmaPoints))}`);
+if (process.env.DUMP_FREQS) writeFileSync(process.env.DUMP_FREQS, JSON.stringify(candFreqs));
+const perLength = {};
+for (const c of cands) perLength[c.pattern.length] = (perLength[c.pattern.length] ?? 0) + 1;
+const lengths = Object.entries(perLength).map(([len, n]) => `${n} de ${len} lettres`);
+console.log(`${cands.length} niveaux possibles : ${lengths.join(', ')}`);
 const ok = levels.filter((l) => l.ok).length;
 console.log(`${levels.length} niveaux (${ok} dans les seuils), ${pending.length} à revoir`);

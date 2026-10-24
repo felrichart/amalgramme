@@ -6,13 +6,20 @@ import '../src/ui.css';
 import LabHomeView from './LabHomeView.vue';
 import LexMenuView from './lexilouhette/LexMenuView.vue';
 import LexGameView from './lexilouhette/LexGameView.vue';
-import { levelByDate } from './lexilouhette/levels.js';
+import LexAllView from './lexilouhette/LexAllView.vue';
+import { levelByDate, levelByPattern } from './lexilouhette/levels.js';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: LabHomeView },
     { path: '/lexilouhette', component: LexMenuView },
+    { path: '/lexilouhette/tous', component: LexAllView },
+    {
+      path: '/lexilouhette/motif/:pattern',
+      component: LexGameView,
+      beforeEnter: (to) => !!levelByPattern(to.params.pattern) || '/lexilouhette/tous',
+    },
     {
       path: '/lexilouhette/:date',
       component: LexGameView,
