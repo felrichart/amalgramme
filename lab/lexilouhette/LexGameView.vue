@@ -183,40 +183,33 @@ watch(open, async () => {
 });
 
 /*
- * A bubble with a found word's lemma (wordHint) and, once fetched, its definition
- * with a link to its Wiktionnaire page: on hover with a mouse (it stays open while
- * the mouse moves onto it), on tap otherwise. Tapping a family's spot also folds or
+ * A bubble with a found word's lemma (wordHint) and, once fetched, its definition:
+ * on hover with a mouse, on tap otherwise. Tapping a family's spot also folds or
  * unfolds it, but tapping one of its later finds keeps it open (folding would
  * hide the word).
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
-const HINT_LINGER = 200; // ms the bubble waits for the mouse to reach it
 const hint = ref(null);
 const hintEl = ref(null);
 let hintTarget = null;
-let hintTimer = 0;
 function showHint(el, w) {
-  clearTimeout(hintTimer);
   if (hint.value?.key === w.key && hintTarget === el) return;
   hintTarget = el;
-  // `definition`: undefined while fetching, null when there's none.
+  // `definition`: undefined while fetching, null when there's none, false when the
+  // request failed (nothing to show then).
   hint.value = { key: w.key, ...wordHint(w), definition: undefined };
   placeHint();
-  definitionOf(hint.value.lemma).then((definition) => {
+  const settle = (definition) => {
     if (hint.value?.key !== w.key) return;
     hint.value.definition = definition;
     placeHint();
-  });
+  };
+  definitionOf(hint.value.lemma).then(settle, () => settle(false));
 }
 function hideHint() {
-  clearTimeout(hintTimer);
   hint.value = null;
   hintTarget = null;
 }
-const lingerHint = (e) => {
-  if (e.pointerType === 'mouse') hintTimer = setTimeout(hideHint, HINT_LINGER);
-};
-const keepHint = () => clearTimeout(hintTimer);
 /* Above the word's letters (below when there's no room), centred on them unless
  * that spills off screen. */
 async function placeHint() {
@@ -238,18 +231,15 @@ async function placeHint() {
 }
 const hintOn = (w, extra = false) => ({
   pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, w),
-  pointerleave: lingerHint,
+  pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
   click: (e) => {
     if (extra) e.stopPropagation();
     if (e.pointerType !== 'mouse' && hint.value?.key === w.key) hideHint();
     else showHint(e.currentTarget, w);
   },
 });
-// A tap anywhere but on the word or the bubble closes it; a tap on the word toggles it.
-const outsideHint = (e) => {
-  if (hintEl.value?.contains(e.target)) return;
-  if (e.target.closest?.('.text') !== hintTarget) hideHint();
-};
+// A tap anywhere but on the word closes the bubble; a tap on it toggles it.
+const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
 onMounted(() => window.addEventListener('pointerdown', outsideHint));
 onUnmounted(() => window.removeEventListener('pointerdown', outsideHint));
 
@@ -428,7 +418,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 <template v-else>{{ ch }}</template>
               </template>
             </span>
-            <span v-if="f.lead" class="pts">{{ f.points }}</span>
+            <span v-if="f.lead || g.state.revealed" class="pts" :class="{ unearned: !f.lead }">{{
+              f.points
+            }}</span>
             <span v-if="f.extras.length && open !== f.lemma" class="more">
               +{{ f.extras.length }}
             </span>
@@ -445,24 +437,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </li>
       </ul>
     </section>
-    <span
-      v-if="hint"
-      ref="hintEl"
-      :key="hint.key"
-      class="hint"
-      @pointerenter="keepHint"
-      @pointerleave="lingerHint"
-    >
+    <span v-if="hint" ref="hintEl" :key="hint.key" class="hint" aria-hidden="true">
       <span class="hint-lemma"
         >{{ hint.lead }}<em>{{ hint.lemma }}</em></span
       >
-      <span v-if="hint.definition === undefined" class="hint-def">…</span>
-      <span v-else-if="hint.definition" class="hint-def">
-        {{ hint.definition.sense }}
-        <a class="hint-more" :href="hint.definition.url" target="_blank" rel="noopener"
-          >en savoir plus</a
-        >
-      </span>
+      <span v-if="hint.definition === undefined" class="spinner" aria-label="chargement" />
+      <span v-else-if="hint.definition" class="hint-def">{{ hint.definition }}</span>
+      <em v-else-if="hint.definition === null" class="hint-def">définition manquante</em>
     </span>
 
     <section class="play">
@@ -672,6 +653,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--on-color);
   background: var(--tint);
 }
+/* What a word shown by the reveal would have brought. */
+.pts.unearned {
+  opacity: 0.4;
+}
 .word.flash {
   animation: shake 0.4s ease;
 }
@@ -694,10 +679,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .hint {
   position: fixed;
   z-index: 60;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  max-width: min(18rem, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
   padding: 0.3rem 0.6rem;
   border: var(--outline-w) solid var(--outline);
   border-radius: 0.7rem;
@@ -720,18 +706,34 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .hint-lemma {
   white-space: nowrap;
 }
-/* Its definition, then the link to its Wiktionnaire page. */
+/* Its definition: narrow, 3 lines at most. */
 .hint-def {
+  max-width: 32ch;
   font-weight: 600;
   font-size: 0.8rem;
   line-height: 1.25;
   color: var(--muted);
 }
-.hint-more {
-  display: block;
-  margin-top: 0.2rem;
-  font-weight: 800;
-  color: color-mix(in srgb, var(--violet) 65%, var(--ink));
+span.hint-def {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+/* Shown while the definition loads. */
+.spinner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--line);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    rotate: 1turn;
+  }
 }
 .hint::after {
   content: '';

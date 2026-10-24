@@ -1,12 +1,12 @@
 /*
- * A lemma's first French sense and its Wiktionnaire page, `{ sense, url }`, fetched
- * on demand and kept on the device. Resolves to null when there's none; a failed
- * request isn't kept, so the next one retries.
+ * A lemma's first French sense, fetched from the Wiktionnaire on demand and kept
+ * on the device. Resolves to null when there's none; rejects
+ * when the request fails, which isn't kept, so the next one retries.
  */
 import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 
 const SITE = 'https://fr.wiktionary.org';
-const KEY = 'lexilouhette:v2:definitions';
+const KEY = 'lexilouhette:v3:definitions';
 
 const saved = readJSON(KEY, {}, isObject);
 const pending = new Map();
@@ -20,7 +20,6 @@ export function definitionOf(lemma) {
         writeJSON(KEY, saved);
         return definition;
       })
-      .catch(() => null)
       .finally(() => pending.delete(lemma));
     pending.set(lemma, lookup);
   }
@@ -34,7 +33,7 @@ export const pageTitles = (lemma) =>
 async function findDefinition(lemma) {
   for (const title of pageTitles(lemma)) {
     const sense = await fetchSense(title);
-    if (sense) return { sense, url: `${SITE}/wiki/${encodeURIComponent(title)}` };
+    if (sense) return sense;
   }
   return null;
 }

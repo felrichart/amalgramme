@@ -12,8 +12,8 @@ vient de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille
 plie ou la déplie. Le niveau est fini quand toutes les cases sont remplies.
 Constantes en tête de `game.js`. Survoler (ou toucher) un mot trouvé montre son
 lemme (celui du nom ou de l'adjectif quand il est plus courant que le verbe :
-déluré, pas délurer) et son premier sens sur le Wiktionnaire, avec un lien vers la page, chargés à la demande
-(`definitions.js`, seul appel réseau du labo ; gardés ensuite sur l’appareil).
+déluré, pas délurer) et son premier sens sur le Wiktionnaire, chargé à la demande
+(`definitions.js`, seul appel réseau du labo ; gardé ensuite sur l’appareil).
 
 Un nom ou un adjectif tiré d'un participe va avec son verbe (fatigués, blessés :
 fatiguer, blesser).
