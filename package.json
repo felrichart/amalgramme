@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lab": "vite --config lab/vite.config.js",
+    "lab:levels": "node lab/lexilouhette/scripts/build-levels.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
