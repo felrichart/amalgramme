@@ -37,13 +37,15 @@ export function lemmaPoints(lemmaFreq) {
 export const tierOf = (pts) =>
   Math.min(TIERS - 1, Math.max(0, Math.floor((pts - POINTS_MIN) / TIER_STEP)));
 
-/* A level from levels.json (`[display, freq, lemma, lemmaFreq]` per word), with
- * each answer keyed by its unaccented spelling. */
+/* A level from levels.json (`[display, freq, lemma, lemmaFreq, hintLemma?]` per
+ * word, `hintLemma` for wordHint()), with each answer keyed by its unaccented
+ * spelling. */
 export function buildLevel({ pattern, words }) {
   const answers = new Map(
-    words.map(([display, freq, lemma, lemmaFreq]) => {
+    words.map(([display, freq, lemma, lemmaFreq, hintLemma]) => {
       const key = keyOf(display);
-      return [key, { key, display, freq, lemma, points: lemmaPoints(lemmaFreq) }];
+      const points = lemmaPoints(lemmaFreq);
+      return [key, { key, display, freq, lemma, hintLemma, points }];
     }),
   );
   return { pattern, answers };
@@ -104,8 +106,10 @@ export function familiesOf(level, found) {
 const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 
 /* What the bubble over a found word says: "de" (elided) then its lemma, or the
- * lemma alone when the word is its own. `lead` comes before the lemma. */
-export function wordHint({ display, lemma }) {
+ * lemma alone when the word is its own. `lead` comes before the lemma. A noun or
+ * adjective commoner than its verb names itself (déluré, not délurer). */
+export function wordHint({ display, lemma: familyLemma, hintLemma }) {
+  const lemma = hintLemma ?? familyLemma;
   if (display === lemma) return { lead: '', lemma };
   return { lead: VOWEL.test(lemma) ? 'd’' : 'de ', lemma };
 }

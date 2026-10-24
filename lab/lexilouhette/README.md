@@ -11,7 +11,9 @@ petit dessous, sans points. Une seule famille est dépliée à la fois : celle q
 vient de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille la
 plie ou la déplie. Le niveau est fini quand toutes les cases sont remplies.
 Constantes en tête de `game.js`. Survoler (ou toucher) un mot trouvé montre son
-lemme.
+lemme (celui du nom ou de l'adjectif quand il est plus courant que le verbe :
+déluré, pas délurer) et son premier sens sur le Wiktionnaire, avec un lien vers la page, chargés à la demande
+(`definitions.js`, seul appel réseau du labo ; gardés ensuite sur l’appareil).
 
 Un nom ou un adjectif tiré d'un participe va avec son verbe (fatigués, blessés :
 fatiguer, blesser).
@@ -42,17 +44,17 @@ noms propres ni les listes faites à la main.
 
 ## Fichiers
 
-| Fichier                                | Rôle                                                                       |
-| -------------------------------------- | -------------------------------------------------------------------------- |
-| `levels.config.json`                   | Réglages manuels des niveaux (ci-dessous).                                 |
-| `data/lexique-grammalecte-fr-v7.7.zip` | Le lexique Grammalecte d'origine.                                          |
-| `data/exclus-noms-propres.txt`         | Noms propres retirés, un par ligne.                                        |
-| `data/exclus-inconnus.txt`             | Mots inexistants retirés (un mot ou un lemme : toutes ses formes partent). |
-| `data/dictionnaire.tsv`                | Généré par `lab:dico` : le dictionnaire du jeu.                            |
-| `levels.json`                          | Généré : les niveaux, `[mot, fréq. mot, lemme, fréq. lemme]` par mot.      |
-| `scripts/build-dictionary.mjs`         | La réduction du lexique Grammalecte.                                       |
-| `scripts/build-levels.mjs`             | Le générateur (règles de sélection en tête de fichier).                    |
-| `game.js`                              | Règles du jeu et formule de points.                                        |
+| Fichier                                | Rôle                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `levels.config.json`                   | Réglages manuels des niveaux (ci-dessous).                                                |
+| `data/lexique-grammalecte-fr-v7.7.zip` | Le lexique Grammalecte d'origine.                                                         |
+| `data/exclus-noms-propres.txt`         | Noms propres retirés, un par ligne.                                                       |
+| `data/exclus-inconnus.txt`             | Mots inexistants retirés (un mot ou un lemme : toutes ses formes partent).                |
+| `data/dictionnaire.tsv`                | Généré par `lab:dico` : le dictionnaire du jeu.                                           |
+| `levels.json`                          | Généré : les niveaux, `[mot, fréq. mot, lemme, fréq. lemme, lemme de la bulle?]` par mot. |
+| `scripts/build-dictionary.mjs`         | La réduction du lexique Grammalecte.                                                      |
+| `scripts/build-levels.mjs`             | Le générateur (règles de sélection en tête de fichier).                                   |
+| `game.js`                              | Règles du jeu et formule de points.                                                       |
 
 ## `levels.config.json`
 

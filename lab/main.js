@@ -1,4 +1,4 @@
-/* Lab entry: experimental games, played locally, with no server calls. */
+/* Lab entry: experimental games, played locally, never calling our Worker. */
 import { createApp, h } from 'vue';
 import { createRouter, createWebHistory, RouterView, useRoute } from 'vue-router';
 import '../src/style.css';

@@ -13,6 +13,7 @@ import {
 } from '../lab/lexilouhette/game.js';
 import { LEVELS, levelByPattern, loadProgress } from '../lab/lexilouhette/levels.js';
 import { useLexilouhette } from '../lab/lexilouhette/useLexilouhette.js';
+import { pageTitles } from '../lab/lexilouhette/definitions.js';
 
 const level = buildLevel({
   pattern: 'P_S_I__',
@@ -173,5 +174,17 @@ describe('word hint', () => {
     expect(hint('tomberas', 'tomber')).toBe('de tomber');
     expect(hint('aimons', 'aimer')).toBe('d’aimer');
     expect(hint('rumba', 'rumba')).toBe('rumba');
+  });
+
+  it('names a noun or adjective commoner than its verb', () => {
+    const h = wordHint({ display: 'délurées', lemma: 'délurer', hintLemma: 'déluré' });
+    expect(`${h.lead}${h.lemma}`).toBe('de déluré');
+  });
+});
+
+describe('definitions', () => {
+  it('looks a spelled-out œ up with its ligature first', () => {
+    expect(pageTitles('soeur')).toEqual(['sœur', 'soeur']);
+    expect(pageTitles('rumba')).toEqual(['rumba']);
   });
 });

@@ -7,6 +7,7 @@ import { useShake } from '../../src/composables/useShake.js';
 import { LEVELS, levelByPattern } from './levels.js';
 import { BLANK, maxScore, tierOf, wordHint } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
+import { definitionOf } from './definitions.js';
 import LexKeyboard from './LexKeyboard.vue';
 
 const route = useRoute();
@@ -182,24 +183,42 @@ watch(open, async () => {
 });
 
 /*
- * A bubble with a found word's lemma (wordHint): on hover with a mouse, on tap
- * otherwise. Tapping a family's spot also folds or unfolds it, but
- * tapping one of its later finds keeps it open (folding would hide the word).
+ * A bubble with a found word's lemma (wordHint) and, once fetched, its definition
+ * with a link to its Wiktionnaire page: on hover with a mouse (it stays open while
+ * the mouse moves onto it), on tap otherwise. Tapping a family's spot also folds or
+ * unfolds it, but tapping one of its later finds keeps it open (folding would
+ * hide the word).
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
+const HINT_LINGER = 200; // ms the bubble waits for the mouse to reach it
 const hint = ref(null);
 const hintEl = ref(null);
 let hintTarget = null;
+let hintTimer = 0;
 function showHint(el, w) {
+  clearTimeout(hintTimer);
+  if (hint.value?.key === w.key && hintTarget === el) return;
   hintTarget = el;
-  hint.value = { key: w.key, ...wordHint(w) };
+  // `definition`: undefined while fetching, null when there's none.
+  hint.value = { key: w.key, ...wordHint(w), definition: undefined };
   placeHint();
+  definitionOf(hint.value.lemma).then((definition) => {
+    if (hint.value?.key !== w.key) return;
+    hint.value.definition = definition;
+    placeHint();
+  });
 }
 function hideHint() {
+  clearTimeout(hintTimer);
   hint.value = null;
   hintTarget = null;
 }
-/* Above the word's letters, centred on them unless that spills off screen. */
+const lingerHint = (e) => {
+  if (e.pointerType === 'mouse') hintTimer = setTimeout(hideHint, HINT_LINGER);
+};
+const keepHint = () => clearTimeout(hintTimer);
+/* Above the word's letters (below when there's no room), centred on them unless
+ * that spills off screen. */
 async function placeHint() {
   if (!hint.value) return;
   await nextTick();
@@ -211,21 +230,26 @@ async function placeHint() {
   const x = r.left + r.width / 2;
   const w = el.offsetWidth;
   const left = Math.min(Math.max(HINT_MARGIN, x - w / 2), innerWidth - HINT_MARGIN - w);
+  const below = r.top - el.offsetHeight - 2 * HINT_MARGIN < 0;
+  el.classList.toggle('below', below);
   el.style.left = `${left}px`;
-  el.style.top = `${r.top}px`;
+  el.style.top = `${below ? r.bottom : r.top}px`;
   el.style.setProperty('--tail', `${x - left}px`);
 }
 const hintOn = (w, extra = false) => ({
   pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, w),
-  pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
+  pointerleave: lingerHint,
   click: (e) => {
     if (extra) e.stopPropagation();
     if (e.pointerType !== 'mouse' && hint.value?.key === w.key) hideHint();
     else showHint(e.currentTarget, w);
   },
 });
-// A tap anywhere but on the word closes the bubble; a tap on it toggles it.
-const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
+// A tap anywhere but on the word or the bubble closes it; a tap on the word toggles it.
+const outsideHint = (e) => {
+  if (hintEl.value?.contains(e.target)) return;
+  if (e.target.closest?.('.text') !== hintTarget) hideHint();
+};
 onMounted(() => window.addEventListener('pointerdown', outsideHint));
 onUnmounted(() => window.removeEventListener('pointerdown', outsideHint));
 
@@ -421,8 +445,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </li>
       </ul>
     </section>
-    <span v-if="hint" ref="hintEl" :key="hint.key" class="hint" aria-hidden="true">
-      {{ hint.lead }}<em>{{ hint.lemma }}</em>
+    <span
+      v-if="hint"
+      ref="hintEl"
+      :key="hint.key"
+      class="hint"
+      @pointerenter="keepHint"
+      @pointerleave="lingerHint"
+    >
+      <span class="hint-lemma"
+        >{{ hint.lead }}<em>{{ hint.lemma }}</em></span
+      >
+      <span v-if="hint.definition === undefined" class="hint-def">…</span>
+      <span v-else-if="hint.definition" class="hint-def">
+        {{ hint.definition.sense }}
+        <a class="hint-more" :href="hint.definition.url" target="_blank" rel="noopener"
+          >en savoir plus</a
+        >
+      </span>
     </span>
 
     <section class="play">
@@ -649,11 +689,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-top: 1px solid var(--line);
 }
 
-/* The lemma bubble, placed above its word by placeHint(), its tail under the word. */
+/* The lemma bubble, placed above its word by placeHint() (or below it), its tail
+   pointing at the word. */
 .hint {
   position: fixed;
   z-index: 60;
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: min(18rem, calc(100vw - 16px));
   padding: 0.3rem 0.6rem;
   border: var(--outline-w) solid var(--outline);
   border-radius: 0.7rem;
@@ -665,10 +709,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-size: 0.9rem;
   line-height: 1.1;
   color: var(--ink);
-  white-space: nowrap;
   transform: translateY(calc(-100% - 0.5rem));
   transform-origin: var(--tail) bottom;
   animation: hint-in 0.12s ease-out;
+}
+.hint.below {
+  transform: translateY(0.5rem);
+  transform-origin: var(--tail) top;
+}
+.hint-lemma {
+  white-space: nowrap;
+}
+/* Its definition, then the link to its Wiktionnaire page. */
+.hint-def {
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  color: var(--muted);
+}
+.hint-more {
+  display: block;
+  margin-top: 0.2rem;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--violet) 65%, var(--ink));
 }
 .hint::after {
   content: '';
@@ -682,10 +745,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   background: var(--panel);
   transform: translateX(-50%) rotate(45deg);
 }
+.hint.below::after {
+  top: calc(-0.3rem - var(--outline-w) / 2);
+  bottom: auto;
+  transform: translateX(-50%) rotate(225deg);
+}
 @keyframes hint-in {
   from {
     opacity: 0;
-    transform: translateY(calc(-100% - 0.2rem)) scale(0.85);
+    scale: 0.85;
   }
 }
 

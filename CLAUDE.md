@@ -36,7 +36,8 @@ shared/                        word-rules.js, constants.js (ADMIN_NAME, PIN_DEAD
 server/worker.js               Cloudflare Worker: route table over D1 (accounts, progress, dailies,
                                community, stats); crypto.js (PBKDF2, tokens), mail.js (emails)
 lab/                           local-only playground for new games (`npm run lab`), never
-                               built or deployed, no server calls; lexilouhette/ (README there)
+                               built or deployed, never calls the Worker; lexilouhette/ (README
+                               there) fetches definitions from the Wiktionnaire
 test/                          vitest: puzzle, word, gamestate, migration, dailies, community,
                                sync, worker (real migrations on node:sqlite, test/d1.js)
 ```

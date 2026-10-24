@@ -91,14 +91,15 @@ function loadDictionary(path) {
 /* The lemmas a dictionary entry's readings point to, commonest first. A noun or
  * adjective made from a participle counts as the participle (fatigués, blessés:
  * fatiguer, blesser), lending the verb its frequency when more common (déluré is,
- * délurer isn't). */
+ * délurer isn't); the word's bubble then names it (`hintLemma`). */
 function lemmaOptions(e) {
   const participle = e.readings.some(isParticiple);
   const byLemma = new Map();
-  let madeFreq = 0;
+  let made = { freq: 0 };
   for (const c of e.readings) {
     if (participle && !isVerb(c) && participles.has(c[LEMME])) {
-      madeFreq = Math.max(madeFreq, Number(c[FREQLEMME]) || 0);
+      const freq = Number(c[FREQLEMME]) || 0;
+      if (freq > made.freq) made = { lemma: c[LEMME], freq };
       continue;
     }
     const lemma = c[LEMME];
@@ -111,7 +112,10 @@ function lemmaOptions(e) {
     o.freq += Number(c[FREQMOT]) || 0;
     byLemma.set(lemma, o);
   }
-  for (const o of byLemma.values()) if (o.verb) o.lemmaFreq = Math.max(o.lemmaFreq, madeFreq);
+  for (const o of byLemma.values()) {
+    if (o.verb && made.freq > o.lemmaFreq)
+      Object.assign(o, { lemmaFreq: made.freq, hintLemma: made.lemma });
+  }
   const options = [...byLemma.values()].sort((a, b) => b.freq - a.freq);
   return options.filter((o) => o.freq >= options[0].freq * MIN_READING_SHARE);
 }
@@ -130,7 +134,7 @@ function inFamilies(words) {
     const o = e.options.reduce((best, o) =>
       count.get(o.lemma) < count.get(best.lemma) ? o : best,
     );
-    return { ...e, lemma: o.lemma, lemmaFreq: o.lemmaFreq, verb: o.verb };
+    return { ...e, lemma: o.lemma, lemmaFreq: o.lemmaFreq, verb: o.verb, hintLemma: o.hintLemma };
   });
   const freqs = new Map();
   for (const e of placed) freqs.set(e.lemma, Math.max(freqs.get(e.lemma) ?? 0, e.lemmaFreq));
@@ -218,7 +222,10 @@ const round = (f) => Number(f.toPrecision(3));
 const wordRows = (words) =>
   [...words]
     .sort((a, b) => b.freq - a.freq)
-    .map((e) => [e.display, round(e.freq), e.lemma, round(e.lemmaFreq)]);
+    .map((e) => {
+      const row = [e.display, round(e.freq), e.lemma, round(e.lemmaFreq)];
+      return e.hintLemma ? [...row, e.hintLemma] : row;
+    });
 
 const levels = candidates(loadDictionary(tsvPath));
 // One level per line (too big for prettier).
