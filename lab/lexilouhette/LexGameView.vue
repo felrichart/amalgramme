@@ -5,7 +5,7 @@ import PageHeader from '../../src/components/ui/PageHeader.vue';
 import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
 import { useShake } from '../../src/composables/useShake.js';
 import { LEVELS, levelByPattern } from './levels.js';
-import { BLANK, maxScore, tierOf, wordHint } from './game.js';
+import { BLANK, maxScore, tierOf, deBefore } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
 import { definitionOf } from './definitions.js';
 import LexKeyboard from './LexKeyboard.vue';
@@ -76,14 +76,7 @@ let flightId = 0;
 watch(
   () => g.feedback.value,
   async (f) => {
-    if (!f || f.kind === 'unknown') return;
-    const family = familyOf(f.key);
-    const isExtra = family.extras.some((w) => w.key === f.key);
-    if (f.kind === 'dup') {
-      if (isExtra) open.value = family.lemma;
-      return;
-    }
-    open.value = isExtra ? family.lemma : null;
+    if (f?.kind !== 'new') return;
     landing.value.push(f.key);
     await nextTick();
     await refit();
@@ -164,17 +157,15 @@ const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'va
 const ghost = [...level.pattern].map((ch) => (ch === BLANK ? ch : ch.toLowerCase()));
 
 /*
- * A family's later finds show under its spot only while it's open: one family at
- * a time, the one just added to, until a word from another one is found. Tapping
- * a family opens or closes it.
+ * A word's other spellings (cogné under cogne) show under its spot only while
+ * it's open, one word at a time: tapping a word shown with others opens or closes
+ * it.
  */
 const open = ref(null);
-const familyOf = (key) => {
-  const { lemma } = level.answers.get(key);
-  return g.families.value.find((f) => f.lemma === lemma);
-};
-function toggle(f) {
-  if (f.extras.length) open.value = open.value === f.lemma ? null : f.lemma;
+const shows = (s) => s.found || g.state.revealed;
+const others = (s) => (shows(s) ? s.spellings.slice(1) : []);
+function toggle(s) {
+  if (others(s).length) open.value = open.value === s.key ? null : s.key;
 }
 watch(open, async () => {
   await nextTick();
@@ -183,28 +174,30 @@ watch(open, async () => {
 });
 
 /*
- * A bubble with a found word's lemma (wordHint) and, once fetched, its definition:
- * on hover with a mouse, on tap otherwise. Tapping a family's spot also folds or
- * unfolds it, but tapping one of its later finds keeps it open (folding would
- * hide the word).
+ * A bubble over a word with, once fetched, its definition, under "de X" when it's
+ * only a form of X (fatiguées: de fatigué): on hover with a mouse, on tap
+ * otherwise. Tapping a word also folds or unfolds its other spellings, but
+ * tapping one of those keeps them open (folding would hide it).
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
 const hint = ref(null);
 const hintEl = ref(null);
 let hintTarget = null;
-function showHint(el, w) {
-  if (hint.value?.key === w.key && hintTarget === el) return;
+function showHint(el, word) {
+  if (hint.value?.word === word && hintTarget === el) return;
   hintTarget = el;
   // `definition`: undefined while fetching, null when there's none, false when the
   // request failed (nothing to show then).
-  hint.value = { key: w.key, ...wordHint(w), definition: undefined };
+  hint.value = { word, lead: '', base: word, definition: undefined };
   placeHint();
-  const settle = (definition) => {
-    if (hint.value?.key !== w.key) return;
-    hint.value.definition = definition;
+  const settle = (found) => {
+    if (hint.value?.word !== word) return;
+    hint.value.definition = found === false ? false : (found?.sense ?? null);
+    if (found?.base && found.base !== word)
+      Object.assign(hint.value, { lead: deBefore(found.base), base: found.base });
     placeHint();
   };
-  definitionOf(hint.value.lemma).then(settle, () => settle(false));
+  definitionOf(word).then(settle, () => settle(false));
 }
 function hideHint() {
   hint.value = null;
@@ -229,19 +222,19 @@ async function placeHint() {
   el.style.top = `${below ? r.bottom : r.top}px`;
   el.style.setProperty('--tail', `${x - left}px`);
 }
-const hintOn = (w, extra = false) => ({
-  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, w),
+const hintOn = (word, other = false) => ({
+  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, word),
   pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
   click: (e) => {
-    if (extra) e.stopPropagation();
-    if (e.pointerType !== 'mouse' && hint.value?.key === w.key) hideHint();
-    else showHint(e.currentTarget, w);
+    if (other) e.stopPropagation();
+    if (e.pointerType !== 'mouse' && hint.value?.word === word) hideHint();
+    else showHint(e.currentTarget, word);
   },
 });
 // Fetch a word's definition as soon as it's found, so its bubble opens complete.
 watch(
   () => g.state.found[0],
-  (key) => key && definitionOf(wordHint(level.answers.get(key)).lemma).catch(() => {}),
+  (key) => key && definitionOf(level.answers.get(key).display).catch(() => {}),
 );
 // A tap anywhere but on the word closes the bubble; a tap on it toggles it.
 const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
@@ -258,11 +251,10 @@ const rowState = (key) =>
 
 const status = computed(() => {
   if (g.state.revealed) return { text: 'Solutions révélées' };
-  if (g.exhausted.value) return { text: 'Toutes les familles trouvées, bravo !', tone: 'good' };
+  if (g.exhausted.value) return { text: 'Tous les mots trouvés, bravo !', tone: 'good' };
   const f = g.feedback.value;
   if (f?.kind === 'new') {
-    const word = level.answers.get(f.key).display;
-    return { text: f.points ? `${word} +${f.points}` : `${word} · même famille`, tone: 'good' };
+    return { text: `${level.answers.get(f.key).display} +${f.points}`, tone: 'good' };
   }
   if (f?.kind === 'dup') return { text: 'Déjà trouvé', tone: 'bad' };
   if (f?.kind === 'unknown') return { text: 'Pas dans le dictionnaire', tone: 'bad' };
@@ -285,7 +277,8 @@ const wordWidth = ref(0);
 const columnWidth = ref(0);
 // List text sizes to try, in rem, largest first.
 const TEXT_SIZES = [1.05, 0.95, 0.85];
-// Room a row needs besides its word, in em: points, folded count, padding, column gap.
+// Room a row needs besides its word, in em: points, other spellings count, padding,
+// column gap.
 const ROW_EXTRA = 4.6;
 
 function widestWord(style) {
@@ -319,7 +312,7 @@ async function fitColumns() {
   }
   scrolls.value = true;
 }
-/* Refits once a family's extra word no longer fits. */
+/* Refits once a word's other spellings no longer fit. */
 async function refit() {
   const el = wordsEl.value;
   if (el && !scrolls.value && el.scrollWidth > el.clientWidth + 1) await fitColumns();
@@ -412,17 +405,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         }"
       >
         <li
-          v-for="f in g.families.value"
-          :key="f.lemma"
-          class="family"
-          :class="{ foldable: f.extras.length }"
-          :style="{ '--tint': TINTS[f.tier] }"
-          @click="toggle(f)"
+          v-for="s in g.spots.value"
+          :key="s.key"
+          class="spot"
+          :class="{ foldable: others(s).length }"
+          :style="{ '--tint': TINTS[s.tier] }"
+          @click="toggle(s)"
         >
-          <span class="word" :data-key="f.lead?.key" :class="rowState(f.lead?.key)">
-            <span v-if="f.lead" class="text" v-on="hintOn(f.lead)">{{ f.lead.display }}</span>
-            <span v-else-if="g.state.revealed" class="text missed" v-on="hintOn(f.main)">{{
-              f.main.display
+          <span class="word" :data-key="s.found ? s.key : null" :class="s.found && rowState(s.key)">
+            <span v-if="s.found" class="text" v-on="hintOn(s.display)">{{ s.display }}</span>
+            <span v-else-if="g.state.revealed" class="text missed" v-on="hintOn(s.display)">{{
+              s.display
             }}</span>
             <span v-else class="ghost" aria-label="mot à trouver">
               <template v-for="(ch, j) in ghost" :key="j">
@@ -430,28 +423,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 <template v-else>{{ ch }}</template>
               </template>
             </span>
-            <span v-if="f.lead || g.state.revealed" class="pts" :class="{ unearned: !f.lead }">{{
-              f.points
-            }}</span>
-            <span v-if="f.extras.length && open !== f.lemma" class="more">
-              +{{ f.extras.length }}
+            <span v-if="shows(s)" class="pts" :class="{ unearned: !s.found }">{{ s.points }}</span>
+            <span v-if="others(s).length && open !== s.key" class="more">
+              +{{ others(s).length }}
             </span>
           </span>
-          <span
-            v-for="w in open === f.lemma ? f.extras : []"
-            :key="w.key"
-            :data-key="w.key"
-            class="word extra"
-            :class="rowState(w.key)"
-          >
-            <span class="text" v-on="hintOn(w, true)">{{ w.display }}</span>
+          <span v-for="w in open === s.key ? others(s) : []" :key="w" class="word other">
+            <span class="text" v-on="hintOn(w, true)">{{ w }}</span>
           </span>
         </li>
       </ul>
     </section>
-    <span v-if="hint" ref="hintEl" :key="hint.key" class="hint" aria-hidden="true">
-      <span class="hint-lemma"
-        >{{ hint.lead }}<em>{{ hint.lemma }}</em></span
+    <span v-if="hint" ref="hintEl" :key="hint.word" class="hint" aria-hidden="true">
+      <span class="hint-base"
+        >{{ hint.lead }}<em>{{ hint.base }}</em></span
       >
       <span v-if="hint.definition === undefined" class="spinner" aria-label="chargement" />
       <span v-else-if="hint.definition" class="hint-def">{{ hint.definition }}</span>
@@ -550,7 +535,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   }
 }
 
-/* One spot per family, alphabetical down the columns; scrolls once it outgrows
+/* One spot per word, alphabetical down the columns; scrolls once it outgrows
    the space. */
 .found {
   position: relative;
@@ -581,12 +566,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   margin: 0.6rem;
   column-fill: balance;
 }
-/* A family's spot, and under it its other words once found. */
-.family {
+/* A word's spot, and under it its other spellings while open. */
+.spot {
   break-inside: avoid;
   margin-bottom: 0.1em;
 }
-/* A spot: its first word found (or the silhouette until then), then its points.
+/* A spot: its word once found (or the silhouette until then), then its points.
    Every spot is as tall and its word box as wide, so the points line up. */
 .word {
   display: grid;
@@ -606,7 +591,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* How many later finds a closed family holds. */
+/* How many other spellings a closed spot holds. */
 .more {
   margin-left: 0.25em;
   padding: 0 0.35em;
@@ -616,11 +601,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 800;
   color: color-mix(in srgb, var(--ink) 60%, transparent);
 }
-.family.foldable {
+.spot.foldable {
   cursor: pointer;
 }
-/* A family's later finds: smaller, pointless, hanging off its spot. */
-.word.extra {
+/* A word's other spellings: smaller, pointless, hanging off its spot. */
+.word.other {
   display: flex;
   align-items: baseline;
   height: 1.35em;
@@ -629,7 +614,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 700;
   color: color-mix(in srgb, var(--ink) 70%, transparent);
 }
-.word.extra::before {
+.word.other::before {
   content: '∟';
   flex: none;
   width: 0.9em;
@@ -689,8 +674,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   border-top: 1px solid var(--line);
 }
 
-/* The lemma bubble, placed above its word by placeHint() (or below it), its tail
-   pointing at the word. */
+/* The definition bubble, placed above its word by placeHint() (or below it), its
+   tail pointing at the word. */
 .hint {
   position: fixed;
   z-index: 60;
@@ -718,7 +703,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   transform: translateY(0.5rem);
   transform-origin: var(--tail) top;
 }
-.hint-lemma {
+.hint-base {
   white-space: nowrap;
 }
 /* Its definition: narrow, 3 lines at most. */

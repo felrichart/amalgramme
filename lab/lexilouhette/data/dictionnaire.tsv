@@ -75223,6 +75223,7 @@ prêterai	prêter	v1_it_q_zz ifut 1sg	0.142	73
 nourrissants	nourrissant	adj mas pl	0.142	0.808
 provenue	provenir	v3_i____e_ ppas adj fem sg	0.142	104
 affecteraient	affecter	v1__tnq__a cond 3pl	0.142	86.2
+oedipe	oedipe	nom mas sg	0.142	0.145
 blâmèrent	blâmer	v1__t_q_zz ipsi 3pl!	0.142	10.7
 perche	percher	v1_it_q_zz ipre spre 1sg 3sg impe 2sg	0.142	5.18
 perches	percher	v1_it_q_zz ipre spre 2sg	0.142	5.18
@@ -197809,7 +197810,7 @@ trônèrent	trôner	v1_i____zz ipsi 3pl!	0.0029	1.2
 ébruiterait	ébruiter	v1__t_q_zz cond 3sg	0.0029	0.414
 épeiches	épeiche	nom fem pl	0.0029	0.0288
 oedicnème	oedicnème	nom mas sg	0.0029	0.00388
-oedipes	oedipe	nom mas pl	0.0029	0.0029
+oedipes	oedipe	nom mas pl	0.0029	0.145
 affectasse	affecter	v1__tnq__a simp 1sg	0.0029	86.2
 arroserais	arroser	v1__t_q_zz cond 1sg 2sg	0.0029	11.1
 attifets	attifet	nom mas pl	0.0029	0.00456
@@ -231073,6 +231074,7 @@ rossions	rosser	v1__t___zz iimp spre 1pl	0.000902	0.657
 réagîmes	réagir	v2_i_n___a ipsi 1pl	0.000902	23.8
 récusasse	récuser	v1__t_q_zz simp 1sg	0.000902	5.62
 répartiriez	répartir	v2_it_q__a cond 2pl	0.000902	28.8
+sacré-coeur	sacré-coeur	nom mas sg	0.000902	0.000902
 sanctifiassent	sanctifier	v1__t___zz simp 3pl	0.000902	1.91
 schématisais	schématiser	v1_it___zz iimp 1sg 2sg	0.000902	2.25
 semtex	semtex	nom mas inv	0.000902	0.000902
@@ -426915,7 +426917,7 @@ sacrerions	sacrer	v1_it___zz cond 1pl	0	37.7
 sacrâmes	sacrer	v1_it___zz ipsi 1pl	0	37.7
 sacrâtes	sacrer	v1_it___zz ipsi 2pl	0	37.7
 sacrifiassions	sacrifier	v1__t_q_zz simp 1pl	0	24.4
-sacré-coeurs	sacré-coeur	nom mas pl	0	0
+sacré-coeurs	sacré-coeur	nom mas pl	0	0.000902
 sadico-anal	sadico-anal	adj mas sg	0	0.0000543
 sadico-anales	sadico-anal	adj fem pl	0	0.0000543
 sadico-anaux	sadico-anal	adj mas pl	0	0.0000543

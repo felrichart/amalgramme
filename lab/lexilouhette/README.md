@@ -3,32 +3,33 @@
 Jeu en test (labo local, jamais buildé ni déployé). Une silhouette (`P_S_I__`) :
 trouver le plus de mots qui rentrent dedans.
 
-Les mots d'un même lemme forment une famille (placer : placez, plaçai) qui occupe
-une seule case : le premier trouvé la remplit et rapporte les points du lemme, de
-25 à 99 selon sa rareté, en courbe en S sur le log de la fréquence (réglés pour
-environ 5/30/35/25/5 % des familles des niveaux de 5 à 7 lettres dans les
-couleurs 25, 26–49, 50–74, 75–98 et 99) ; les suivants s'ajoutent en petit
-dessous, sans points. Une seule famille est dépliée à la fois : celle qu'on vient
-de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille la
-plie ou la déplie. Le niveau est fini quand toutes les cases sont remplies.
-Constantes en tête de `game.js`. Survoler (ou toucher) un mot trouvé montre son
-lemme (celui du nom ou de l'adjectif quand il est plus courant que le verbe :
-déluré, pas délurer) et son premier sens sur le Wiktionnaire, chargé dès que
-le mot est trouvé (`definitions.js`, seul appel réseau du labo ; gardé ensuite sur
-l’appareil).
+Chaque mot occupe une case, avec ses graphies qui ne diffèrent que par les accents
+(cogne, cogné) : tapées sans accents, elles font une seule réponse, la plus
+courante en tête et les autres dépliées dessous d'un clic. Un mot rapporte de 25 à
+99 points selon la rareté de sa graphie, en courbe en S sur le log de la fréquence
+(réglés pour environ 5/30/35/25/5 % des mots des niveaux de 5 à 7 lettres dans les
+couleurs 25, 26–49, 50–74, 75–98 et 99). Le niveau est fini quand toutes les cases
+sont remplies. Constantes en tête de `game.js`.
 
-Un nom ou un adjectif tiré d'un participe va avec son verbe (fatigués, blessés :
-fatiguer, blesser).
-Des lemmes qui s'écrivent pareil ne font qu'une famille, quel que soit le sens
-(lever et levez, fiers et fiées). Sinon, un mot qui a un sens à lui dans le niveau
-sort de la famille : porte reste seul plutôt que d'aller avec portez.
+Survoler (ou toucher) un mot trouvé montre son premier sens sur le Wiktionnaire,
+chargé dès que le mot est trouvé (`definitions.js`, seul appel réseau du labo ;
+gardé ensuite sur l’appareil). Quand la page du mot n'est qu'une forme d'un autre
+(« Féminin pluriel de fatigué »), la bulle suit le lien, deux fois au plus, et
+affiche « de fatigué » avec son sens ; portée garde le sien, puisqu'il a une
+section Nom commun.
+
+Les mots jouables : tout ce qui n'est pas un verbe, les infinitifs et les
+participes passés qui s'accordent (fatigué, fatiguée ; pas dormi). Les
+conjugaisons et les participes présents sont exclus : le lexique ne sait pas
+distinguer « il cogne » d'« un cogne », et un participe présent employé comme
+adjectif a sa propre entrée (fatigant, portant). La fréquence d'une graphie compte
+tous ses emplois, conjugaisons comprises, faute de pouvoir les séparer.
 
 Les niveaux sont tous les motifs qui passent les seuils (en tête de
-`scripts/build-levels.mjs`) : 10 à 25 familles, des mots de 4 à 8 lettres, au plus
-une case vide de plus que de lettres visibles, jamais plus de 2 lettres visibles à
-la suite, au moins 7 familles connues (lemme à 1 par million ou plus), pas plus de
-moitié de verbes. Tous les lemmes comptent, même très rares, avec toutes leurs
-formes (rêvas, rêvât).
+`scripts/build-levels.mjs`) : 10 à 25 mots, de 4 à 8 lettres, au plus une case
+vide de plus que de lettres visibles, jamais plus de 3 lettres visibles à la
+suite, au moins 7 mots connus (1 par million ou plus), pas plus de moitié de
+pluriels.
 
 Le menu les range par difficulté croissante (`difficultyOf` dans `levels.js`) :
 10 × cases vides + 10 × lettres + score maximal / 250 (arrondi).
@@ -45,29 +46,29 @@ forme avec son lemme, sa nature et sa fréquence (Google Books, Wikipédia,
 Wikisource, littérature). Il est réduit une fois pour toutes dans
 `data/dictionnaire.tsv` (toutes longueurs) : graphies courantes, modernes et
 classiques (sans celles de la réforme de 1990 ni les variantes douteuses), sans les
-noms propres ni les listes faites à la main.
+noms propres.
 
 ## Fichiers
 
-| Fichier                                | Rôle                                                                                      |
-| -------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `levels.config.json`                   | Réglages manuels des niveaux (ci-dessous).                                                |
-| `data/lexique-grammalecte-fr-v7.7.zip` | Le lexique Grammalecte d'origine.                                                         |
-| `data/exclus-noms-propres.txt`         | Noms propres retirés, un par ligne.                                                       |
-| `data/exclus-inconnus.txt`             | Mots inexistants retirés (un mot ou un lemme : toutes ses formes partent).                |
-| `data/dictionnaire.tsv`                | Généré par `lab:dico` : le dictionnaire du jeu.                                           |
-| `levels.json`                          | Généré : les niveaux, `[mot, fréq. mot, lemme, fréq. lemme, lemme de la bulle?]` par mot. |
-| `scripts/build-dictionary.mjs`         | La réduction du lexique Grammalecte.                                                      |
-| `scripts/build-levels.mjs`             | Le générateur (règles de sélection en tête de fichier).                                   |
-| `game.js`                              | Règles du jeu et formule de points.                                                       |
+| Fichier                                | Rôle                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `levels.config.json`                   | Réglages manuels des niveaux (ci-dessous).                                               |
+| `data/lexique-grammalecte-fr-v7.7.zip` | Le lexique Grammalecte d'origine.                                                        |
+| `data/dictionnaire.tsv`                | Généré par `lab:dico` : le dictionnaire du jeu.                                          |
+| `levels.json`                          | Généré : les niveaux, `[fréquence, graphie la plus courante, autres graphies…]` par mot. |
+| `scripts/build-dictionary.mjs`         | La réduction du lexique Grammalecte.                                                     |
+| `scripts/build-levels.mjs`             | Le générateur (règles de sélection en tête de fichier).                                  |
+| `game.js`                              | Règles du jeu et formule de points.                                                      |
 
 ## `levels.config.json`
 
-| Clé        | Effet                                                             |
-| ---------- | ----------------------------------------------------------------- |
-| `skipped`  | Motifs à ne jamais proposer.                                      |
-| `banned`   | Mots refusés partout.                                             |
-| `rejected` | Mots refusés dans un seul niveau : `{ "PA__": ["pacs"] }`.        |
-| `added`    | Mots absents du dictionnaire à accepter : `{ "PA__": ["pacs"] }`. |
+| Clé              | Effet                                                                    |
+| ---------------- | ------------------------------------------------------------------------ |
+| `skipped`        | Motifs à ne jamais proposer.                                             |
+| `skippedEndings` | Fins de motif à ne jamais proposer : `["NT"]` écarte `__ANT`, `E____NT`. |
+| `banned`         | Mots refusés partout.                                                    |
+| `rejected`       | Mots refusés dans un seul niveau : `{ "PA__": ["pacs"] }`.               |
+| `added`          | Mots absents du dictionnaire à accepter : `{ "PA__": ["pacs"] }`.        |
 
-Les mots s'écrivent sous leur forme la plus courante, accents compris.
+Les mots s'écrivent avec leurs accents, une graphie à la fois : refuser cogné garde
+cogne.

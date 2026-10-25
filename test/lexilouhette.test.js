@@ -4,12 +4,11 @@ import {
   judge,
   keyOf,
   tierOf,
-  lemmaPoints,
-  earned,
+  wordPoints,
   scoreOf,
   maxScore,
-  familiesOf,
-  wordHint,
+  spotsOf,
+  deBefore,
 } from '../lab/lexilouhette/game.js';
 import { LEVELS, levelByPattern, loadProgress } from '../lab/lexilouhette/levels.js';
 import { useLexilouhette } from '../lab/lexilouhette/useLexilouhette.js';
@@ -18,50 +17,51 @@ import { pageTitles } from '../lab/lexilouhette/definitions.js';
 const level = buildLevel({
   pattern: 'P_S_I__',
   words: [
-    ['piscine', 26.3, 'piscine', 26.3],
-    ['passion', 20.6, 'passion', 20.6],
-    ['passive', 1.19, 'passif', 1.5],
-    ['passifs', 0.275, 'passif', 1.5],
-    ['pussiez', 0.063, 'pouvoir', 2000],
+    [26.3, 'piscine'],
+    [20.6, 'passion'],
+    [1.19, 'passive'],
+    [0.275, 'passifs'],
   ],
 });
 const typeAll = (g, letters) => [...letters].forEach((ch) => g.type(ch));
-const pts = (key) => level.answers.get(key);
+const pts = (key) => level.answers.get(key).points;
 
 describe('points', () => {
-  it('gives a lemma about 92 more points per tenfold drop, easing towards 100 when common', () => {
-    expect([20000, 2000, 200, 20, 2, 0.01].map(lemmaPoints)).toEqual([
-      100, 105, 120, 185, 270, 480,
+  it('rises on an S-curve from 25 for common words to 99 for the rarest', () => {
+    expect([1000, 66, 30, 10, 1, 0.1, 0.01, 0.0013, 0].map(wordPoints)).toEqual([
+      25, 25, 30, 38, 57, 75, 90, 99, 99,
     ]);
   });
 
-  it("credits a family's points once, to its first word found", () => {
-    const points = pts('PASSIVE').points;
-    expect(earned(level, [], 'PASSIVE')).toBe(points);
-    expect(earned(level, ['PASSIVE'], 'PASSIFS')).toBe(0);
-    expect(scoreOf(level, ['PASSIFS', 'PASSIVE'])).toBe(points);
+  it('adds up every word found', () => {
+    expect(scoreOf(level, ['PASSIFS', 'PISCINE'])).toBe(pts('PASSIFS') + pts('PISCINE'));
+    expect(scoreOf(level, ['GONE'])).toBe(0);
     expect(maxScore(level)).toBe(scoreOf(level, [...level.answers.keys()]));
-  });
-
-  it('gives each family one spot, filled by its first find', () => {
-    // Newest first: passive was found before passifs.
-    const families = familiesOf(level, ['PISCINE', 'PASSIFS', 'PASSIVE']);
-    expect(families.map((f) => f.main.display)).toEqual([
-      'passion',
-      'passive',
-      'piscine',
-      'pussiez',
-    ]);
-    const passif = families[1];
-    expect(passif.lead.key).toBe('PASSIVE');
-    expect(passif.extras.map((w) => w.key)).toEqual(['PASSIFS']);
-    expect(families[0]).toMatchObject({ lead: null, extras: [] });
   });
 });
 
 describe('tierOf', () => {
-  it('steps every 100 points, 500 and up sharing the last', () => {
-    expect([100, 199, 200, 350, 499, 500, 600].map(tierOf)).toEqual([0, 0, 1, 2, 3, 4, 4]);
+  it('splits 25, 26–49, 50–74, 75–98 and 99', () => {
+    expect([25, 26, 49, 50, 74, 75, 98, 99].map(tierOf)).toEqual([0, 1, 1, 2, 2, 3, 3, 4]);
+  });
+});
+
+describe('spots', () => {
+  it('gives each word a spot, alphabetical', () => {
+    expect(spotsOf(level).map((a) => a.display)).toEqual([
+      'passifs',
+      'passion',
+      'passive',
+      'piscine',
+    ]);
+  });
+
+  it('holds the spellings that differ by accents together, commonest first', () => {
+    const gne = buildLevel({ pattern: '__GNE', words: [[0.483, 'cogne', 'cogné']] });
+    expect(gne.answers.get('COGNE')).toMatchObject({
+      display: 'cogne',
+      spellings: ['cogne', 'cogné'],
+    });
   });
 });
 
@@ -81,7 +81,7 @@ describe('useLexilouhette', () => {
     const g = useLexilouhette(level);
     typeAll(g, 'icne');
     expect(g.state.found).toEqual(['PISCINE']);
-    expect(g.score.value).toBe(pts('PISCINE').points);
+    expect(g.score.value).toBe(pts('PISCINE'));
     expect(g.slots.value.filter((s) => !s.fixed).every((s) => s.ch == null)).toBe(true);
   });
 
@@ -119,8 +119,10 @@ describe('useLexilouhette', () => {
     const g = useLexilouhette(level);
     typeAll(g, 'icne');
     typeAll(g, 'asôn');
-    const found = g.families.value.filter((f) => f.lead);
-    expect(found.map((f) => f.lead.display)).toEqual(['passion', 'piscine']);
+    expect(g.spots.value.filter((s) => s.found).map((s) => s.display)).toEqual([
+      'passion',
+      'piscine',
+    ]);
     expect(g.latest.value).toBe('PASSION');
     typeAll(g, 'icne');
     expect(g.latest.value).toBe('PISCINE');
@@ -129,31 +131,30 @@ describe('useLexilouhette', () => {
   it('accepts accented keys and ends once every spot is filled', async () => {
     const g = useLexilouhette(level);
     for (const letters of ['ícné', 'asôn', 'asve']) typeAll(g, letters);
-    typeAll(g, 'asfs');
-    expect(g.feedback.value.points).toBe(0);
     expect(g.exhausted.value).toBe(false);
-    typeAll(g, 'usez');
+    typeAll(g, 'asfs');
+    expect(g.feedback.value.points).toBe(pts('PASSIFS'));
     expect(g.exhausted.value).toBe(true);
     expect(g.playing.value).toBe(false);
     await Promise.resolve();
-    expect(loadProgress(level.pattern).found).toHaveLength(5);
+    expect(loadProgress(level.pattern).found).toHaveLength(4);
   });
 });
 
 describe('levels', () => {
-  it('ships levels of 10 to 25 families, each word fitting its silhouette', () => {
-    expect(LEVELS.length).toBeGreaterThan(1000);
+  it('ships levels of 10 to 25 words, each fitting its silhouette', () => {
+    expect(LEVELS.length).toBeGreaterThan(500);
     expect(new Set(LEVELS.map((l) => l.pattern)).size).toBe(LEVELS.length);
     for (const l of LEVELS.map(buildLevel)) {
       const blanks = [...l.pattern].filter((p) => p === '_').length;
       expect(blanks).toBeLessThanOrEqual(l.pattern.length - blanks + 1);
       expect(l.pattern.length).toBeLessThanOrEqual(8);
-      const spots = familiesOf(l, []).length;
-      expect(spots).toBeGreaterThanOrEqual(10);
-      expect(spots).toBeLessThanOrEqual(25);
-      for (const key of l.answers.keys()) {
-        expect(key).toHaveLength(l.pattern.length);
-        expect([...l.pattern].every((p, i) => p === '_' || p === key[i])).toBe(true);
+      expect(l.answers.size).toBeGreaterThanOrEqual(10);
+      expect(l.answers.size).toBeLessThanOrEqual(25);
+      for (const a of l.answers.values()) {
+        expect(a.key).toHaveLength(l.pattern.length);
+        expect([...l.pattern].every((p, i) => p === '_' || p === a.key[i])).toBe(true);
+        expect(a.spellings.every((s) => keyOf(s) === a.key)).toBe(true);
       }
     }
   });
@@ -164,21 +165,10 @@ describe('levels', () => {
   });
 });
 
-describe('word hint', () => {
-  const hint = (display, lemma) => {
-    const h = wordHint({ display, lemma });
-    return `${h.lead}${h.lemma}`;
-  };
-
-  it('names the lemma, elided, or the word alone', () => {
-    expect(hint('tomberas', 'tomber')).toBe('de tomber');
-    expect(hint('aimons', 'aimer')).toBe('d’aimer');
-    expect(hint('rumba', 'rumba')).toBe('rumba');
-  });
-
-  it('names a noun or adjective commoner than its verb', () => {
-    const h = wordHint({ display: 'délurées', lemma: 'délurer', hintLemma: 'déluré' });
-    expect(`${h.lead}${h.lemma}`).toBe('de déluré');
+describe('deBefore', () => {
+  it('elides before a vowel', () => {
+    expect(`${deBefore('fatigué')}fatigué`).toBe('de fatigué');
+    expect(`${deBefore('aimer')}aimer`).toBe('d’aimer');
   });
 });
 

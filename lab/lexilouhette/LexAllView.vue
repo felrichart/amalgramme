@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import { WORD_TINTS } from '../../src/palette.js';
 import { LEVELS, loadProgress } from './levels.js';
-import { buildLevel, scoreOf, maxScore, familiesOf } from './game.js';
+import { buildLevel, scoreOf, maxScore } from './game.js';
 
 /* Every level the generator found, to pick any: filter by length or by a piece of
  * pattern ("RE_E", blanks typed as _ . or space), or draw one at random. */
@@ -17,12 +17,12 @@ const rows = LEVELS.map((l) => {
   const row = {
     pattern: l.pattern,
     difficulty: l.difficulty,
-    families: new Set(l.words.map((w) => w[2])).size,
+    spots: l.words.length,
     tint: WORD_TINTS[(l.pattern.length - LENGTHS[0]) % WORD_TINTS.length],
   };
   if (!found.length && !revealed) return row;
   const level = buildLevel(l);
-  const done = revealed || familiesOf(level, found).every((f) => f.lead);
+  const done = revealed || [...level.answers.keys()].every((k) => found.includes(k));
   return { ...row, score: scoreOf(level, found), max: maxScore(level), done };
 });
 
@@ -94,7 +94,7 @@ function playRandom() {
           <span v-if="r.max" class="score"
             >{{ r.score }}<span class="max">/{{ r.max }}</span></span
           >
-          <span v-else class="families">{{ r.families }} familles</span>
+          <span v-else class="spots">{{ r.spots }} mots</span>
         </button>
       </li>
       <li v-if="filtered.length > shown">
@@ -117,7 +117,7 @@ function playRandom() {
 }
 .lengths {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.4rem;
 }
 .lengths .pill {
@@ -169,11 +169,11 @@ function playRandom() {
   opacity: 0.55;
 }
 .score,
-.families {
+.spots {
   margin-left: auto;
   font-size: 0.85rem;
 }
-.families {
+.spots {
   font-weight: 800;
   opacity: 0.7;
 }
