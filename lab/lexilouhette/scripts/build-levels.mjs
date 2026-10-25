@@ -6,7 +6,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { keyOf, tierOf, tierLabel, wordPoints, TIERS } from '../game.js';
+import { keyOf, tierOf, tierLabel, wordPoints, storedWord, TIERS, RARE_POINTS } from '../game.js';
 
 const file = (name) => fileURLToPath(new URL(`../${name}`, import.meta.url));
 const tsvPath = process.argv[2] ?? file('data/dictionnaire.tsv');
@@ -24,12 +24,13 @@ const isSkipped = (pattern) =>
   skipped.has(pattern) || config.skippedEndings.some((end) => pattern.endsWith(end));
 
 const LENGTHS = [4, 5, 6, 7];
-// Blanks and shown letters per level, at least.
-const MIN_BLANKS = 2;
+// Blanks per level, by its length: 2 for 4 letters, else 3 or 4.
+const blanksFor = (len) => (len === 4 ? [2] : [3, 4]);
+// Shown letters per level, at least.
 const MIN_SHOWN = 2;
-// Families (one spot each) per level.
+// Normal families (one spot each, not rare) per level.
 const MIN_SPOTS = 10;
-const MAX_SPOTS = 30;
+const MAX_SPOTS = 25;
 // A family is known when this common (per million); levels need enough of them.
 const KNOWN_FREQ = 1;
 const MIN_KNOWN = 5;
@@ -124,7 +125,13 @@ function loadDictionary(path) {
     const [master] = all;
     byLength.get(key.length).push({
       key,
-      spellings: all.map(({ form, freq, base, label }) => ({ form, freq, base, label })),
+      spellings: all.map(({ form, freq, base, label }) => ({
+        form,
+        freq,
+        base,
+        label,
+        baseFreq: baseFreqs.get(base),
+      })),
       base: master.base,
       freq: baseFreqs.get(master.base),
       plural: isPlural(master.sense.tags),
@@ -138,7 +145,7 @@ function masks(len) {
   const out = [];
   for (let bits = 0; bits < 1 << len; bits++) {
     const shown = [...Array(len).keys()].filter((i) => bits & (1 << i));
-    if (shown.length >= MIN_SHOWN && len - shown.length >= MIN_BLANKS) out.push(shown);
+    if (shown.length >= MIN_SHOWN && blanksFor(len).includes(len - shown.length)) out.push(shown);
   }
   return out;
 }
@@ -162,6 +169,9 @@ function curate(pattern, words) {
   return [...kept, ...added];
 }
 
+// A frequency as levels.json stores it, which the game rates.
+const round = (f) => Number(f.toPrecision(3));
+
 /* A pattern's words in families, one per base: its own word first (tigre before
  * tigres), then the commonest. It's a plural when all its words are. */
 function familiesIn(words) {
@@ -180,7 +190,8 @@ function familiesIn(words) {
 /* The level for `pattern`, or null when it fails a threshold. */
 function evaluate(pattern, words) {
   const families = familiesIn(words);
-  if (families.length < MIN_SPOTS || families.length > MAX_SPOTS) return null;
+  const spots = families.filter((f) => wordPoints(round(f.freq)) < RARE_POINTS).length;
+  if (spots < MIN_SPOTS || spots > MAX_SPOTS) return null;
   if (families.filter((f) => f.freq >= KNOWN_FREQ).length < MIN_KNOWN) return null;
   if (families.filter((f) => f.plural).length > families.length * MAX_PLURALS) return null;
   return { pattern, families };
@@ -229,7 +240,6 @@ function candidates(byLength) {
   );
 }
 
-const round = (f) => Number(f.toPrecision(3));
 /* A level's families as levels.json stores them (see game.js), commonest first. */
 const familyRows = (families) =>
   [...families]
@@ -237,13 +247,12 @@ const familyRows = (families) =>
     .map(({ freq, base, words }) => [
       round(freq),
       base,
-      ...words.map(({ spellings }) => {
-        if (spellings.length === 1 && spellings[0].form === base) return base;
-        return spellings.map((s) => {
-          if (s.base !== base) return [s.form, s.label, s.base];
-          return s.label ? [s.form, s.label] : s.form;
-        });
-      }),
+      ...words.map(({ spellings }) =>
+        storedWord(
+          spellings.map((s) => ({ ...s, freq: s.baseFreq && round(s.baseFreq) })),
+          base,
+        ),
+      ),
     ]);
 
 const levels = candidates(loadDictionary(tsvPath));

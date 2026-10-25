@@ -1,0 +1,10 @@
+{
+  "levels": [
+    {"pattern":"__UI_","status":"valid","words":[[99.5,"fruit","fruit"],[84.3,"jouir","jouir"],[74.5,"bruit","bruit"],[48.8,"pluie","pluie"],[27,"seuil","seuil"],[15.3,"deuil","deuil"],[4.21,"louis","louis"],[2.49,"étui",[["étuis","plur."]]],[1.47,"truie","truie"],[0.574,"fouir","fouir",[["fouie","part. passé fém."]],[["fouis","part. passé plur."]]],[0.567,"rouir","rouir",[["rouie","part. passé fém."]],[["rouis","part. passé plur."]]],[0.556,"équin","équin"],[0.335,"inuit","inuit"],[0.144,"feuil","feuil"],[0.0622,"bruir","bruir",[["bruis","part. passé plur."]],[["bruie","part. passé fém."]]],[0.0221,"amuïr","amuïr",[["amuïe","part. passé fém."]],[["amuïs","part. passé plur."]]],[0.0205,"couic","couic"],[0.0172,"glui",[["gluis","plur."]]],[0.00678,"agui",[["aguis","plur."]]],[0.00527,"bouif","bouif"]],"rare":["bruir","amuïr","glui","agui","bouif","rouir","feuil"]},
+    {"pattern":"P__L_","status":"valid","words":[[451,"parler",[["parlé","part. passé"]]],[17.4,"poil",[["poils","plur."]]],[13.1,"perle",["perle",["perlé","part. passé","perler",1.36]]],[11.6,"piller",[["pillé","part. passé"]]],[11.6,"pouls","pouls"],[10.9,"poule","poule"],[5.3,"poêle",["poêle",["poêlé","part. passé","poêler",0.0342]]],[3.81,"pelle",["pelle",["pellé","part. passé","peller",0.221]]],[2.15,"peul",[["peule","fém."]],[["peuls","plur."]]],[1.59,"philo","philo"],[1.45,"pool",[["pools","plur."]]],[1.28,"poilu","poilu"],[0.798,"pull",[["pulls","plur."]]],[0.454,"prêle","prêle"],[0.289,"phylum",[["phyla","plur."]]],[0.0915,"prolo","prolo"],[0.0688,"palle","palle"],[0.0315,"poiler",[["poilé","part. passé"]]],[0.00656,"pible","pible"]],"rare":["palle","poiler","pible","phylum","prêle"],"banned":["poilé"]}
+  ],
+  "definitions": {
+    "peul": {"index":2,"text":"Langue parlée dans plusieurs pays de l’Afrique de l’Ouest."},
+    "prolo": {"index":1,"text":"(Très familier) Prolétaire."}
+  }
+}

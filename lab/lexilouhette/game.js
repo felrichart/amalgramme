@@ -4,15 +4,17 @@
  * A word is what's typed (without accents): its master spelling, shown, and its
  * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
  * durs) form a family holding a single spot: the first word found fills it and
- * brings the family's points, by how rare its base is; the family's later finds
- * show under it but bring nothing. The level is done once every spot is filled.
+ * counts once, the family's later finds show under it but don't count. A rare
+ * family is a bonus: its spot shows only once found. The level is done once every
+ * other spot is filled.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
 export const POINTS_MIN = 25;
 export const POINTS_MAX = 99;
-/* Family points: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
+/* A family's points, its rarity on a scale (never shown to players), which makes
+ * it rare by default from RARE_POINTS: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
  * FREQ_RARE, and in between they follow an S-curve of the word's rarity (its log
  * frequency): slow near both ends, fastest at CENTRE (0 = FREQ_COMMON, 1 =
  * FREQ_RARE), more so the higher STEEPNESS. Tuned so the families of the 5 to
@@ -22,11 +24,10 @@ const FREQ_COMMON = 66;
 const FREQ_RARE = 0.0013;
 const STEEPNESS = 3.1;
 const CENTRE = 0.36;
-// Colour tiers, by their lowest points: 25, 26–49, 50–74, 75–98, 99.
-const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, 75, POINTS_MAX];
+export const RARE_POINTS = 75;
+// Tiers the points are tuned on, by their lowest points: 25, 26–49, 50–74, 75–98, 99.
+const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, RARE_POINTS, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
-// How common a family's base is, per tier.
-export const RARITY = ['basique', 'courant', 'rare', 'exceptionnel', 'légendaire'];
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
@@ -53,27 +54,52 @@ export function tierLabel(tier) {
 }
 
 /*
- * A level from levels.json, `[freq, base, ...words]` per family, a word being its
- * spellings, master first, or `base` alone when that's its only one. A spelling is
- * `form` (the base itself), `[form, label]` (a form of the base: ["dures", "fém.
- * plur."]) or `[form, label, base]` (a homonym of another base: ["tigrés", "part.
- * passé plur.", "tigrer"]). Each answer is keyed by its unaccented spelling.
+ * A stored word (see buildLevel) of the family of `base` (as common as `freq`), as
+ * its spellings, each with its base's frequency.
  */
-export function buildLevel({ pattern, words }) {
+export function spellingsOf(word, base, freq) {
+  return (Array.isArray(word) ? word : [word]).map((sp) => {
+    const [form, label = '', of = base, ofFreq = freq] = Array.isArray(sp) ? sp : [sp];
+    return { form, label, base: of, freq: ofFreq };
+  });
+}
+
+/* Spellings as a word of the family of `base` stores them. */
+export function storedWord(spellings, base) {
+  if (spellings.length === 1 && spellings[0].form === base && !spellings[0].label) return base;
+  return spellings.map(({ form, label, base: of, freq }) => {
+    if (of !== base) return [form, label, of, freq];
+    return label ? [form, label] : form;
+  });
+}
+
+/*
+ * A level as levels.json (and official.json) stores it: `[freq, base, ...words]`
+ * per family, a word being its spellings, master first, or `base` alone when that's
+ * its only one. A spelling is `form` (the base itself), `[form, label]` (a form of
+ * the base: ["dures", "fém. plur."]) or `[form, label, base, freq]` (a homonym of
+ * another base, as common as `freq`: ["tigrés", "part. passé plur.", "tigrer",
+ * 0.05]). `rare` lists the rare families' bases; without it, a family is rare from
+ * RARE_POINTS. `banned` spellings are left out, and with them a word or family
+ * left without any. Each answer is keyed by its unaccented spelling.
+ */
+export function buildLevel({ pattern, words, rare, banned = [] }) {
   const answers = new Map();
-  const families = words.map(([freq, base, ...raw], id) => {
-    const points = wordPoints(freq);
-    const keys = raw.map((w) => {
-      const spellings = (Array.isArray(w) ? w : [w]).map((sp) => {
-        const [form, label = '', of = base] = Array.isArray(sp) ? sp : [sp];
-        return { form, label, base: of };
-      });
+  const families = [];
+  for (const [freq, base, ...raw] of words) {
+    const id = families.length;
+    const keys = raw.flatMap((w) => {
+      const spellings = spellingsOf(w, base, freq).filter((sp) => !banned.includes(sp.form));
+      if (!spellings.length) return [];
       const key = keyOf(spellings[0].form);
       answers.set(key, { key, display: spellings[0].form, spellings, family: id });
-      return key;
+      return [key];
     });
-    return { id, base, freq, points, tier: tierOf(points), keys };
-  });
+    if (!keys.length) continue;
+    const points = wordPoints(freq);
+    const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
+    families.push({ id, base, freq, points, rare: isRare, keys });
+  }
   return { pattern, answers, families };
 }
 
@@ -85,36 +111,46 @@ export function judge(level, key, found) {
 
 const familyOf = (level, key) => level.answers.get(key)?.family;
 
-/* Points `key` brings when the words in `found` are already found. */
-export function earned(level, found, key) {
+/* Whether `key` is its family's first find, the words in `found` being found. */
+export function opens(level, found, key) {
   const id = familyOf(level, key);
-  return found.some((k) => k !== key && familyOf(level, k) === id) ? 0 : level.families[id].points;
+  return !found.some((k) => k !== key && familyOf(level, k) === id);
 }
 
+/* The families found: `normal` ones and `rare` ones. */
 export function scoreOf(level, found) {
   const opened = new Set(found.map((k) => familyOf(level, k)));
-  return level.families.reduce((sum, f) => sum + (opened.has(f.id) ? f.points : 0), 0);
+  const families = level.families.filter((f) => opened.has(f.id));
+  const rare = families.filter((f) => f.rare).length;
+  return { normal: families.length - rare, rare };
 }
 
-export const maxScore = (level) => level.families.reduce((sum, f) => sum + f.points, 0);
+// The normal families, the ones to find.
+export const maxScore = (level) => level.families.filter((f) => !f.rare).length;
 
 /*
- * The level's spots, one per family, alphabetical by its first word. `rows` are
- * its words found, first find first (it brings the points), then once `revealed`
- * the others, each with whether it's found.
+ * The level's spots, alphabetical by their first word: one per normal family,
+ * numbered (`num`, from 1), and one per rare family once found or `revealed`.
+ * `rows` are its words found, first find first (the one that counts), then once
+ * `revealed` the others, each with whether it's found.
  */
 export function familiesOf(level, found, revealed = false) {
-  const families = level.families.map((f) => {
+  const first = (f) => level.answers.get(f.keys[0]).display;
+  const sorted = [...level.families].sort((a, b) => first(a).localeCompare(first(b), 'fr'));
+  let num = 0;
+  return sorted.flatMap((f) => {
     const mine = found.filter((k) => familyOf(level, k) === f.id).reverse();
+    if (f.rare && !mine.length && !revealed) return [];
     const keys = revealed ? [...mine, ...f.keys.filter((k) => !mine.includes(k))] : mine;
     const rows = keys.map((k) => ({ ...level.answers.get(k), found: mine.includes(k) }));
-    return { ...f, rows, found: mine.length > 0 };
+    return [{ ...f, num: f.rare ? null : ++num, rows, found: mine.length > 0 }];
   });
-  const first = (f) => level.answers.get(f.keys[0]).display;
-  return families.sort((a, b) => first(a).localeCompare(first(b), 'fr'));
 }
 
-export const isDone = (level, found) => familiesOf(level, found).every((f) => f.found);
+export const isDone = (level, found) => {
+  const opened = new Set(found.map((k) => familyOf(level, k)));
+  return level.families.every((f) => f.rare || opened.has(f.id));
+};
 
 const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 

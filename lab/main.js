@@ -3,20 +3,46 @@ import { createApp, h } from 'vue';
 import { createRouter, createWebHistory, RouterView, useRoute } from 'vue-router';
 import '../src/style.css';
 import '../src/ui.css';
+import './lexilouhette/lex.css';
 import LabHomeView from './LabHomeView.vue';
 import LexGameView from './lexilouhette/LexGameView.vue';
 import LexAllView from './lexilouhette/LexAllView.vue';
-import { levelByPattern } from './lexilouhette/levels.js';
+import LexEditView from './lexilouhette/LexEditView.vue';
+import { bankLevel, playableLevel } from './lexilouhette/levels.js';
+import { isAdmin, loadOfficial, officialLevel } from './lexilouhette/official.js';
+
+const adminOnly = () => isAdmin || '/lexilouhette';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: LabHomeView },
-    { path: '/lexilouhette', component: LexAllView },
+    { path: '/lexilouhette', component: LexAllView, props: { source: 'official' } },
+    {
+      path: '/lexilouhette/banque',
+      component: LexAllView,
+      props: { source: 'bank' },
+      beforeEnter: adminOnly,
+    },
+    {
+      path: '/lexilouhette/banque/:pattern',
+      component: LexGameView,
+      props: { source: 'bank' },
+      beforeEnter: (to) => (isAdmin && !!bankLevel(to.params.pattern)) || '/lexilouhette',
+    },
+    {
+      path: '/lexilouhette/editer/:pattern',
+      component: LexEditView,
+      beforeEnter: (to) => {
+        const { pattern } = to.params;
+        return (isAdmin && !!(officialLevel(pattern) || bankLevel(pattern))) || '/lexilouhette';
+      },
+    },
     {
       path: '/lexilouhette/:pattern',
       component: LexGameView,
-      beforeEnter: (to) => !!levelByPattern(to.params.pattern) || '/lexilouhette',
+      props: { source: 'official' },
+      beforeEnter: (to) => !!playableLevel(to.params.pattern) || '/lexilouhette',
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -30,4 +56,4 @@ const App = {
   },
 };
 
-createApp(App).use(router).mount('#app');
+loadOfficial().then(() => createApp(App).use(router).mount('#app'));

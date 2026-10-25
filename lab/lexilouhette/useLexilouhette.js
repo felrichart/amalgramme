@@ -1,6 +1,6 @@
 import { reactive, ref, computed, watch, onScopeDispose } from 'vue';
 import { normalizeChar } from '../../shared/word-rules.js';
-import { BLANK, judge, scoreOf, earned, familiesOf } from './game.js';
+import { BLANK, judge, scoreOf, opens, familiesOf, isDone } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
 
 // How long a found word's cheer stays, in ms.
@@ -9,7 +9,8 @@ const CHEER_MS = 2500;
 /*
  * One Lexilouhette level being played: the blanks being typed (fixed letters stay
  * put), the found words and score. A guess is checked as soon as every blank is
- * set; a rejected one stays on screen to be corrected or retyped. Auto-saves.
+ * set; a rejected one stays on screen to be corrected or retyped. The score is the
+ * families found, normal and rare. Auto-saves.
  */
 export function useLexilouhette(level) {
   const saved = loadProgress(level.pattern);
@@ -22,7 +23,7 @@ export function useLexilouhette(level) {
   const blanks = [...level.pattern].flatMap((ch, i) => (ch === BLANK ? [i] : []));
   const cells = reactive(blanks.map(() => null));
   const cursor = ref(0);
-  // The last guess's outcome: { kind: 'new' | 'dup' | 'unknown', key, points? }.
+  // The last guess's outcome: { kind: 'new' | 'dup' | 'unknown', key, opens?, rare? }.
   const feedback = ref(null);
   const shake = ref(0);
   let cheerTimer = null;
@@ -31,7 +32,7 @@ export function useLexilouhette(level) {
 
   const score = computed(() => scoreOf(level, state.found));
   const families = computed(() => familiesOf(level, state.found, state.revealed));
-  const exhausted = computed(() => families.value.every((f) => f.found));
+  const exhausted = computed(() => isDone(level, state.found));
   const playing = computed(() => !exhausted.value && !state.revealed);
   // The word to highlight: the one just retyped, else the last one found.
   const latest = computed(() =>
@@ -73,7 +74,8 @@ export function useLexilouhette(level) {
     const kind = judge(level, word, state.found);
     feedback.value = { kind, key: word };
     if (kind === 'new') {
-      feedback.value.points = earned(level, state.found, word);
+      feedback.value.opens = opens(level, state.found, word);
+      feedback.value.rare = level.families[level.answers.get(word).family].rare;
       state.found.unshift(word);
       clear();
       const cheer = feedback.value;
@@ -119,6 +121,15 @@ export function useLexilouhette(level) {
     feedback.value = null;
   }
 
+  /* Forgets the level's progress, to play it again. */
+  function reset() {
+    state.found = [];
+    state.revealed = false;
+    clear();
+    clearTimeout(cheerTimer);
+    feedback.value = null;
+  }
+
   return {
     state,
     slots,
@@ -136,5 +147,6 @@ export function useLexilouhette(level) {
     moveTo,
     step,
     reveal,
+    reset,
   };
 }

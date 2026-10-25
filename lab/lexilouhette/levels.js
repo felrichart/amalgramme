@@ -1,24 +1,27 @@
-/* The lab's levels and their saved progress (local only). */
+/* The lab's levels, the bank's and the official ones, and their saved progress
+ * (local only). */
 import raw from './levels.json';
-import { BLANK, buildLevel, maxScore } from './game.js';
+import { buildLevel } from './game.js';
+import { officialLevel, playableLevels, isAdmin } from './official.js';
 import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 
-/* A level's rating: harder with more blanks and letters, and more points to win. */
-export const difficultyOf = (l) =>
-  10 * [...l.pattern].filter((ch) => ch === BLANK).length +
-  10 * l.pattern.length +
-  Math.round(maxScore(buildLevel(l)) / 250);
+/* Every level the generator found, `{ pattern, words }`, by length then pattern,
+ * built only when played. */
+export const BANK = raw;
 
-/* Every level the generator found, `{ pattern, words, difficulty }`, easiest
- * first, built only when played. */
-export const LEVELS = raw
-  .map((l) => ({ ...l, difficulty: difficultyOf(l) }))
-  .sort((a, b) => a.difficulty - b.difficulty);
-
-export function levelByPattern(pattern) {
-  const l = LEVELS.find((x) => x.pattern === pattern);
+export function bankLevel(pattern) {
+  const l = BANK.find((x) => x.pattern === pattern);
   return l ? buildLevel(l) : null;
 }
+
+/* An official level one can play (drafts too for the admin), built. */
+export function playableLevel(pattern) {
+  const l = officialLevel(pattern);
+  return l && (isAdmin || l.status === 'valid') ? buildLevel(l) : null;
+}
+
+/* The levels of a list, `'official'` or `'bank'`, as stored. */
+export const levelsOf = (source) => (source === 'bank' ? BANK : playableLevels());
 
 const key = (pattern) => `lexilouhette:v1:level:${pattern}`;
 

@@ -4,56 +4,47 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
 import { useShake } from '../../src/composables/useShake.js';
-import { LEVELS, levelByPattern } from './levels.js';
-import { BLANK, maxScore, tierOf, deBefore, RARITY } from './game.js';
+import { bankLevel, playableLevel, levelsOf } from './levels.js';
+import { isAdmin } from './official.js';
+import { BLANK, maxScore, deBefore } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
 import { definitionOf } from './definitions.js';
 import LexKeyboard from './LexKeyboard.vue';
 
+// `source`: the list played, 'official' or 'bank'.
+const props = defineProps({ source: { type: String, required: true } });
 const route = useRoute();
 const router = useRouter();
 
-const level = levelByPattern(route.params.pattern);
-const index = LEVELS.findIndex((l) => l.pattern === level.pattern);
+const inBank = props.source === 'bank';
+const level = (inBank ? bankLevel : playableLevel)(route.params.pattern);
+const list = levelsOf(props.source);
+const index = list.findIndex((l) => l.pattern === level.pattern);
+const home = inBank ? '/lexilouhette/banque' : '/lexilouhette';
 const nav = {
-  title: `${index + 1} / ${LEVELS.length}`,
-  back: '/lexilouhette',
-  next: LEVELS[index + 1] && `/lexilouhette/${LEVELS[index + 1].pattern}`,
+  title: `${index + 1} / ${list.length}`,
+  back: home,
+  next: list[index + 1] && `${home}/${list[index + 1].pattern}`,
+  edit: isAdmin && `/lexilouhette/editer/${level.pattern}`,
 };
 const g = useLexilouhette(level);
 const max = maxScore(level);
 const shaking = useShake(() => g.shake.value);
 
 /*
- * Scoring animation: a "+points" springs up from the word just found and flies
- * into the gauge; on arrival the gauge bumps and its number climbs one by one,
- * the fill following it. `shown` lags the real score until the climb catches up.
+ * Scoring animation: a "+1" springs up from a family's first find and flies into
+ * the score; on arrival the score bumps and its count, normal or rare, goes up.
+ * `shown` lags the real score until then.
  */
-const CLIMB_RATE = 0.35; // points per ms
-const shown = ref(g.score.value);
-const fill = computed(() => `${100 - (100 * shown.value) / max}%`);
+const shown = ref({ ...g.score.value });
 const bump = ref(0);
 const bumping = useShake(() => bump.value, 450);
-let target = g.score.value;
-let climb = 0;
-let last = 0;
-function tick(now) {
-  const step = Math.max(1, Math.round((now - last) * CLIMB_RATE));
-  shown.value = Math.min(target, shown.value + step);
-  last = now;
-  climb = shown.value < target ? requestAnimationFrame(tick) : 0;
-}
-function gain(points) {
-  target += points;
+function gain(rare) {
+  shown.value[rare ? 'rare' : 'normal']++;
   bump.value++;
-  if (!climb) {
-    last = performance.now();
-    climb = requestAnimationFrame(tick);
-  }
 }
-onUnmounted(() => cancelAnimationFrame(climb));
 
-const gaugeEl = ref(null);
+const scoreEl = ref(null);
 const floaters = ref([]);
 let floaterId = 0;
 const center = (el) => {
@@ -67,7 +58,8 @@ const clampY = (y) => {
 
 /*
  * A word found flies out of the silhouette into its row, hidden until it lands;
- * then its "+points", if any, springs up there and flies into the gauge.
+ * then its "+1", if it's its family's first find, springs up there and flies into
+ * the score.
  */
 const silhouetteEl = ref(null);
 const landing = ref([]);
@@ -117,14 +109,13 @@ function glide(el, fl) {
 }
 function land(f) {
   landing.value = landing.value.filter((k) => k !== f.key);
-  if (!f.points) return;
+  if (!f.opens) return;
   const row = listEl.value?.querySelector(`[data-key="${f.key}"]`);
-  if (!row) return gain(f.points);
-  const { x, y } = center(row.querySelector('.pts') ?? row);
+  if (!row) return gain(f.rare);
+  const { x, y } = center(row.querySelector('.text') ?? row);
   floaters.value.push({
     id: ++floaterId,
-    points: f.points,
-    tier: tierOf(f.points),
+    rare: f.rare,
     x,
     y: clampY(y),
   });
@@ -134,7 +125,7 @@ const flying = new WeakSet();
 function fly(el, f) {
   if (!el || flying.has(el)) return;
   flying.add(el);
-  const to = center(gaugeEl.value);
+  const to = center(scoreEl.value);
   const at = (dx, dy, scale) =>
     `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale})`;
   const anim = el.animate(
@@ -148,12 +139,9 @@ function fly(el, f) {
   );
   anim.onfinish = () => {
     floaters.value = floaters.value.filter((x) => x.id !== f.id);
-    gain(f.points);
+    gain(f.rare);
   };
 }
-
-// Colour per points tier (see game.js), cool to hot: periwinkle, sage, mustard, rose, red.
-const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'var(--danger)'];
 
 // A word still to find: the silhouette, its known letters lowercase like the words.
 const ghost = [...level.pattern].map((ch) => (ch === BLANK ? ch : ch.toLowerCase()));
@@ -177,8 +165,8 @@ watch(open, async () => {
 /*
  * A bubble on hover with a mouse, on tap otherwise: over a spelling, its base's
  * definition once fetched, under what it is of its base when it's only a form of
- * it (portés: part. passé plur. de porter); over a family's points, how common
- * its base is.
+ * it (portés: part. passé plur. de porter); over a rare family's dot, that it's
+ * rare.
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
 const hint = ref(null);
@@ -206,8 +194,8 @@ function hideHint() {
   hint.value = null;
   hintTarget = null;
 }
-/* Above the word's letters (below when there's no room), centred on them unless
- * that spills off screen. */
+/* Above the word's letters, or the dot (below when there's no room), centred on
+ * them unless that spills off screen. */
 async function placeHint() {
   if (!hint.value) return;
   await nextTick();
@@ -215,7 +203,7 @@ async function placeHint() {
   if (!el || !hintTarget?.isConnected) return hideHint();
   const range = document.createRange();
   range.selectNodeContents(hintTarget);
-  const r = range.getBoundingClientRect();
+  const r = (hintTarget.hasChildNodes() ? range : hintTarget).getBoundingClientRect();
   const x = r.left + r.width / 2;
   const w = el.offsetWidth;
   const left = Math.min(Math.max(HINT_MARGIN, x - w / 2), innerWidth - HINT_MARGIN - w);
@@ -237,9 +225,9 @@ const hintOn = (id, show, keepOpen = false) => ({
 });
 const wordHint = (spelling, homonym = false) =>
   hintOn(spelling.form, (el) => showWord(el, spelling), homonym);
-const rarityHint = (f) => {
-  const id = `rarity:${f.id}`;
-  return hintOn(id, (el) => showHint(el, { id, text: RARITY[f.tier], tier: f.tier }), true);
+const rareHint = (f) => {
+  const id = `rare:${f.id}`;
+  return hintOn(id, (el) => showHint(el, { id, text: 'mot rare' }));
 };
 // Fetch a word's definitions as soon as it's found, so its bubbles open complete.
 watch(
@@ -250,8 +238,8 @@ watch(
     for (const base of bases) definitionOf(base).catch(() => {});
   },
 );
-// A tap anywhere but on the bubble's word or points closes it; a tap on them toggles it.
-const outsideHint = (e) => e.target.closest?.('.text, .pts') !== hintTarget && hideHint();
+// A tap anywhere but on the bubble's word or dot closes it; a tap on them toggles it.
+const outsideHint = (e) => e.target.closest?.('.text, .rare-dot') !== hintTarget && hideHint();
 onMounted(() => window.addEventListener('pointerdown', outsideHint));
 onUnmounted(() => window.removeEventListener('pointerdown', outsideHint));
 
@@ -264,11 +252,11 @@ const rowState = (key) =>
 
 const status = computed(() => {
   if (g.state.revealed) return { text: 'Solutions révélées' };
-  if (g.exhausted.value) return { text: 'Toutes les familles trouvées, bravo !', tone: 'good' };
+  if (g.exhausted.value) return { text: 'Toutes les réponses trouvées, bravo !', tone: 'good' };
   const f = g.feedback.value;
   if (f?.kind === 'new') {
     const word = level.answers.get(f.key).display;
-    return { text: f.points ? `${word} +${f.points}` : `${word} · même famille`, tone: 'good' };
+    return { text: f.opens ? word : `${word} · même famille`, tone: 'good' };
   }
   if (f?.kind === 'dup') return { text: 'Déjà trouvé', tone: 'bad' };
   if (f?.kind === 'unknown') return { text: 'Pas dans le dictionnaire', tone: 'bad' };
@@ -278,9 +266,9 @@ const status = computed(() => {
 
 /*
  * Columns: the fewest that show every spot without scrolling, as long as each
- * stays wide enough for the level's widest word and its points; failing that,
- * the same with smaller text, and past the smallest the list scrolls. Every word
- * gets that width, so the points line up, and the columns pack to the left.
+ * stays wide enough for the level's widest word and its number; failing that, the
+ * same with smaller text, and past the smallest the list scrolls. Every word gets
+ * that width, and the columns pack to the left.
  */
 const listEl = ref(null);
 const wordsEl = ref(null);
@@ -291,9 +279,11 @@ const wordWidth = ref(0);
 const columnWidth = ref(0);
 // List text sizes to try, in rem, largest first.
 const TEXT_SIZES = [1.05, 0.95, 0.85];
-// Room a row needs besides its word, in em: points, homonyms count, padding, column
+// Room a row needs besides its word, in em: number, homonyms count, padding, column
 // gap.
-const ROW_EXTRA = 4.6;
+const ROW_EXTRA = 3.9;
+
+const numberOf = (n) => String(n).padStart(2, '0');
 
 function widestWord(style) {
   const ctx = document.createElement('canvas').getContext('2d');
@@ -355,10 +345,25 @@ watch(
   },
 );
 
-const confirming = ref(false);
-function reveal() {
-  confirming.value = false;
-  g.reveal();
+// The action waiting for confirmation: 'reveal' or 'reset'.
+const confirming = ref(null);
+const CONFIRMS = {
+  reveal: { title: "Voir les solutions ? Le niveau s'arrête là.", label: 'Voir' },
+  reset: {
+    title: 'Recommencer ce niveau ? Tes mots trouvés seront effacés.',
+    label: 'Recommencer',
+  },
+};
+async function confirm() {
+  const action = confirming.value;
+  confirming.value = null;
+  hideHint();
+  g[action]();
+  if (action !== 'reset') return;
+  shown.value = { normal: 0, rare: 0 };
+  open.value = null;
+  await nextTick();
+  await fitColumns();
 }
 
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
@@ -378,32 +383,35 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
 <template>
   <div class="page fit lex">
-    <PageHeader :title="nav.title" :back="nav.back" back-label="niveaux" />
-    <div class="score-row">
-      <div
-        ref="gaugeEl"
-        class="gauge"
-        :class="{ bump: bumping }"
-        role="meter"
-        aria-label="score"
-        :aria-valuenow="g.score.value"
-        aria-valuemin="0"
-        :aria-valuemax="max"
+    <PageHeader :title="nav.title" :back="nav.back" back-label="niveaux">
+      <button
+        v-if="nav.edit"
+        class="icon-btn press sm"
+        type="button"
+        aria-label="éditer"
+        @click="router.push(nav.edit)"
       >
-        <span class="gauge-value">{{ shown }}</span>
-        <span class="gauge-value gauge-fill" :style="{ '--rest': fill }" aria-hidden="true">
-          {{ shown }}
-        </span>
-      </div>
+        ✎
+      </button>
+    </PageHeader>
+    <div class="score-row">
+      <p
+        ref="scoreEl"
+        class="score"
+        :class="{ bump: bumping }"
+        :aria-label="`${g.score.value.normal} sur ${max}, ${g.score.value.rare} rares`"
+      >
+        {{ shown.normal }}<span v-if="shown.rare" class="rare">+{{ shown.rare }}</span>
+      </p>
       <span
         v-for="f in floaters"
         :key="f.id"
         :ref="(el) => fly(el, f)"
         class="floater"
-        :class="{ big: f.tier >= 3 }"
-        :style="{ left: `${f.x}px`, top: `${f.y}px`, '--tint': TINTS[f.tier] }"
+        :class="{ rare: f.rare }"
+        :style="{ left: `${f.x}px`, top: `${f.y}px` }"
         aria-hidden="true"
-        >+{{ f.points }}</span
+        >+1</span
       >
       <span
         v-for="fl in flights"
@@ -427,15 +435,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           fontSize: `${textSize}rem`,
         }"
       >
-        <li
-          v-for="f in g.families.value"
-          :key="f.id"
-          class="spot"
-          :style="{ '--tint': TINTS[f.tier] }"
-        >
+        <li v-for="f in g.families.value" :key="f.id" class="spot">
+          <span v-if="f.rare" class="rare-dot" v-on="rareHint(f)" />
+          <span v-else class="num" aria-hidden="true">{{ numberOf(f.num) }}</span>
           <div v-if="!f.rows.length" class="entry">
             <span class="word">
-              <span class="ghost" aria-label="mot à trouver">
+              <span class="unfound" aria-label="mot à trouver">
                 <template v-for="(ch, j) in ghost" :key="j">
                   <span v-if="ch === BLANK" class="gap" />
                   <template v-else>{{ ch }}</template>
@@ -449,6 +454,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             class="entry"
             :class="{
               continues: i < f.rows.length - 1,
+              later: i > 0,
               foldable: homonyms(r).length,
               latest: r.found && r.key === g.latest.value,
             }"
@@ -461,10 +467,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             >
               <span class="text" :class="{ missed: !r.found }" v-on="wordHint(r.spellings[0])">{{
                 r.display
-              }}</span>
-              <span v-if="i" class="pts later" :class="{ unearned: !r.found }" />
-              <span v-else class="pts" :class="{ unearned: !r.found }" v-on="rarityHint(f)">{{
-                f.points
               }}</span>
               <span v-if="homonyms(r).length && open !== r.key" class="more">
                 +{{ homonyms(r).length }}
@@ -480,9 +482,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </ul>
     </section>
     <span v-if="hint" ref="hintEl" :key="hint.id" class="hint" aria-hidden="true">
-      <span v-if="hint.text" class="hint-rarity" :style="{ '--tint': TINTS[hint.tier] }"
-        ><span class="dot" />{{ hint.text }}</span
-      >
+      <span v-if="hint.text" class="hint-rarity"><span class="dot" />{{ hint.text }}</span>
       <template v-else>
         <span class="hint-base"
           >{{ hint.lead }}<em>{{ hint.base }}</em></span
@@ -525,24 +525,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
       <template v-if="g.playing.value">
         <LexKeyboard @key="g.type" @back="g.backspace" />
-        <button class="reveal" type="button" @click="confirming = true">Voir les solutions</button>
+        <button class="link" type="button" @click="confirming = 'reveal'">
+          Voir les solutions
+        </button>
       </template>
-      <div v-else class="end">
-        <button v-if="nav.next" class="cta press" type="button" @click="router.replace(nav.next)">
-          Niveau suivant
-        </button>
-        <button class="cta ghost press" type="button" @click="router.push(nav.back)">
-          Tous les niveaux
-        </button>
-      </div>
+      <template v-else>
+        <div class="end">
+          <button v-if="nav.next" class="cta press" type="button" @click="router.replace(nav.next)">
+            Niveau suivant
+          </button>
+          <button class="cta ghost press" type="button" @click="router.push(nav.back)">
+            Tous les niveaux
+          </button>
+        </div>
+        <button class="link" type="button" @click="confirming = 'reset'">Recommencer</button>
+      </template>
     </section>
 
     <ConfirmModal
       v-if="confirming"
-      title="Voir les solutions ? Le niveau s'arrête là."
-      confirm-label="Voir"
-      @cancel="confirming = false"
-      @confirm="reveal"
+      :title="CONFIRMS[confirming].title"
+      :confirm-label="CONFIRMS[confirming].label"
+      @cancel="confirming = null"
+      @confirm="confirm"
     />
   </div>
 </template>
@@ -551,36 +556,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .score-row {
   display: flex;
   justify-content: center;
-  padding: 0.1rem 1rem 0.5rem;
+  padding: 0 1rem 0.4rem;
 }
-/* Score gauge: a navy fill growing from the left, over which the number turns white. */
-.gauge {
-  position: relative;
-  width: min(80%, 21rem);
-  height: 2.3rem;
-  overflow: hidden;
-  border: var(--outline-w) solid var(--outline);
-  border-radius: 999px;
-  background: var(--panel);
-  box-shadow: var(--lift-sm);
-}
-.gauge.bump {
-  animation: bump 0.45s ease;
-}
-.gauge-value {
-  display: grid;
-  place-items: center;
-  height: 100%;
+/* Normal families found, +rare ones once there are some. */
+.score {
+  margin: 0;
   font-weight: 900;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
+  line-height: 1;
   color: var(--ink);
 }
-.gauge-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--ink);
-  color: #fff;
-  clip-path: inset(0 var(--rest) 0 0);
+.score.bump {
+  animation: bump 0.45s ease;
+}
+.score .rare {
+  font-size: 0.8em;
+  color: var(--rare);
 }
 @keyframes bump {
   30% {
@@ -619,16 +610,45 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   margin: 0.6rem;
   column-fill: balance;
 }
-/* A family's spot: its words found, first find first, each with its homonyms
-   under it. */
+/* A family's spot: its number, then its words found, first find first, each with
+   its homonyms under it. */
 .spot {
+  position: relative;
   break-inside: avoid;
   margin-bottom: 0.1em;
+  padding-left: 1.2em;
 }
-/* A later find's dot hangs off the first find's points by a line, drawn from each
-   row's points down to the next row's. The points sit after the word box
-   (--word-w) and its paddings; 0.77em is half their width. */
+/* Lined up with the spot's first row (1.7em high), like a rare family's dot. */
+.num {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 0.65em;
+  line-height: calc(1.7em / 0.65);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.rare-dot {
+  position: absolute;
+  left: 0.12em;
+  top: 0.6em;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--rare);
+}
+/* A wider target than the dot, for its bubble. */
+.rare-dot::before {
+  content: '';
+  position: absolute;
+  inset: -0.4em;
+}
+/* A family's later finds hang off a grey line in the margin, from under the
+   spot's number (0.37em from the spot's edge, the entries 1.2em in) down to each
+   of them. */
 .entry {
+  --chain: color-mix(in srgb, var(--ink) 22%, transparent);
   position: relative;
   width: fit-content;
   border-radius: 0.5em;
@@ -636,17 +656,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .entry.continues::after {
   content: '';
   position: absolute;
-  left: calc(var(--word-w) + 1.47em - 1px);
-  top: 0.85em;
-  bottom: -0.85em;
+  left: calc(0.37em - 1.2em - 1px);
+  top: 0;
+  bottom: 0;
   width: 2px;
-  background: var(--tint);
+  background: var(--chain);
 }
-/* A spot: its word once found (or the silhouette until then), then its points.
-   Every spot is as tall and its word box as wide, so the points line up. */
+.entry.continues:not(.later)::after {
+  top: 1.45em;
+}
+.entry.later::before {
+  content: '';
+  position: absolute;
+  left: calc(0.37em - 1.2em - 1px);
+  top: 0;
+  width: 0.6em;
+  height: 0.85em;
+  border: solid var(--chain);
+  border-width: 0 0 2px 2px;
+  border-bottom-left-radius: 0.3em;
+}
+/* A spot: its word once found (or the silhouette until then), then how many
+   homonyms it holds. Every spot is as tall and its word box as wide. */
 .word {
   display: grid;
-  grid-template-columns: calc(var(--word-w) + 0.3em) auto auto;
+  grid-template-columns: calc(var(--word-w) + 0.3em) auto;
   align-items: center;
   column-gap: 0.15em;
   width: fit-content;
@@ -697,7 +731,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   visibility: hidden;
 }
 /* A word still to find: its known letters, faded, and a line on the baseline per blank. */
-.ghost {
+.unfound {
   overflow: hidden;
   color: color-mix(in srgb, var(--ink) 45%, transparent);
 }
@@ -711,34 +745,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .missed {
   color: var(--muted);
   font-weight: 700;
-}
-/* The word's points, in the colour of their tier. */
-.pts {
-  position: relative;
-  z-index: 1;
-  justify-self: start;
-  min-width: 2.2em;
-  padding: 0.15em 0.35em;
-  border-radius: 999px;
-  text-align: center;
-  font-size: 0.7em;
-  font-weight: 900;
-  color: var(--on-color);
-  background: var(--tint);
-}
-/* A family's later find brings nothing: a small dot, centred where the points
-   above sit (2.2em wide), on the line hanging from them. */
-.pts.later {
-  align-self: center;
-  min-width: 0;
-  width: 0.9em;
-  height: 0.9em;
-  margin-left: 0.65em;
-  padding: 0;
-}
-/* What a word shown by the reveal would have brought. */
-.pts.unearned {
-  opacity: 0.4;
 }
 .word.flash {
   animation: shake 0.4s ease;
@@ -804,7 +810,7 @@ span.hint-def {
   line-clamp: 3;
   overflow: hidden;
 }
-/* How common a family's base is, after a dot in its points' colour. */
+/* That a family is rare, after its dot. */
 .hint-rarity {
   display: flex;
   align-items: center;
@@ -816,7 +822,7 @@ span.hint-def {
   width: 0.7em;
   height: 0.7em;
   border-radius: 50%;
-  background: var(--tint);
+  background: var(--rare);
 }
 /* Credited on its own line, so the clamp never hides it. */
 .hint-source {
@@ -876,19 +882,20 @@ span.hint-def {
   transform: translate(-50%, -50%);
 }
 
-/* "+points": placed on the word found, flown into the gauge by fly(). */
+/* "+1": placed on the word found, flown into the score by fly(). */
 .floater {
   position: fixed;
   z-index: 70;
   pointer-events: none;
   font-weight: 900;
   font-size: 1.5rem;
-  color: color-mix(in srgb, var(--tint) 75%, var(--ink));
+  color: var(--ink);
   transform: translate(-50%, -50%) scale(0.4);
   opacity: 0;
 }
-.floater.big {
+.floater.rare {
   font-size: 1.9rem;
+  color: var(--rare);
 }
 
 /* The silhouette: fixed letters as raised tiles, blanks as underlined slots. */
@@ -952,7 +959,7 @@ span.hint-def {
   color: var(--danger);
 }
 
-.reveal {
+.link {
   align-self: center;
   padding: 0.2rem 0.6rem;
   font-weight: 700;
