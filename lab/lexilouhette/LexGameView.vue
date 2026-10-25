@@ -795,7 +795,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .hint-base {
   white-space: nowrap;
 }
-/* Its definition: narrow, 3 lines at most. */
+/* Its definition: narrow, 6 lines at most. */
 .hint-def {
   max-width: 32ch;
   font-weight: 600;
@@ -806,8 +806,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 span.hint-def {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
   overflow: hidden;
 }
 /* That a family is rare, after its dot. */

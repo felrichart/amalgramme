@@ -8,7 +8,7 @@ import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 import { official } from './official.js';
 
 const SITE = 'https://fr.wiktionary.org';
-const KEY = 'lexilouhette:v7:senses';
+const KEY = 'lexilouhette:v8:senses';
 
 const saved = readJSON(KEY, {}, isObject);
 const pending = new Map();
@@ -93,17 +93,19 @@ function parseSenses(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   if (!doc.getElementById('Français')) return null;
   const senses = [];
-  let part = '';
+  // Null under the sections that aren't a part of speech (Étymologie, Références…).
+  let part = null;
   for (const el of doc.querySelectorAll('h3, ol')) {
     if (el.tagName === 'H3') {
-      part = el.id;
+      part = el.querySelector('.titredef') ? el.id : null;
       continue;
     }
     // Sub-senses: inside a sense, or already cut from one.
-    if (!el.isConnected || el.closest('li')) continue;
+    if (part === null || !el.isConnected || el.closest('li')) continue;
     for (const li of el.querySelectorAll(':scope > li')) {
       li.querySelectorAll('ol, dl, sup.reference, style').forEach((n) => n.remove());
-      li.querySelectorAll('li:has(.example)').forEach((n) => n.remove());
+      // Examples, quoted (.example) or written out with just their source.
+      li.querySelectorAll('li:has(.example, .sources)').forEach((n) => n.remove());
       const text = li.textContent.replace(/\s+/g, ' ').trim();
       if (text) senses.push({ form: part.startsWith('Forme'), text });
     }
