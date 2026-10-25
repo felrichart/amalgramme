@@ -6,7 +6,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { keyOf, tierOf, lemmaPoints, POINTS_MIN, POINTS_MAX, TIER_STEP, TIERS } from '../game.js';
+import { keyOf, tierOf, tierLabel, lemmaPoints, TIERS } from '../game.js';
 
 const file = (name) => fileURLToPath(new URL(`../${name}`, import.meta.url));
 const tsvPath = process.argv[2] ?? file('data/dictionnaire.tsv');
@@ -232,14 +232,16 @@ const levels = candidates(loadDictionary(tsvPath));
 const lines = levels.map((l) => JSON.stringify({ pattern: l.pattern, words: wordRows(l.words) }));
 writeFileSync(file('levels.json'), `[\n${lines.join(',\n')}\n]\n`);
 
-// Families by points tier (100+, 150+ … 300): what the points formula is tuned on.
-const freqs = levels.flatMap((l) => l.mains.map((e) => e.lemmaFreq));
+// Families of the 5 to 7-letter levels by points tier: what the points formula is
+// tuned on.
+const freqs = levels
+  .filter((l) => l.pattern.length >= 5 && l.pattern.length <= 7)
+  .flatMap((l) => l.mains.map((e) => e.lemmaFreq));
 if (process.env.DUMP_FREQS) writeFileSync(process.env.DUMP_FREQS, JSON.stringify(freqs));
 const tiers = Array(TIERS).fill(0);
 for (const f of freqs) tiers[tierOf(lemmaPoints(f))]++;
-const tierName = (i) => (i < TIERS - 1 ? `${POINTS_MIN + i * TIER_STEP}+` : `${POINTS_MAX}`);
 const split = tiers
-  .map((n, i) => `${tierName(i)} ${Math.round((100 * n) / freqs.length)}%`)
+  .map((n, i) => `${tierLabel(i)} ${Math.round((100 * n) / freqs.length)}%`)
   .join(' · ');
 console.log(`Points des familles : ${split}`);
 const perLength = {};

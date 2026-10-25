@@ -5,10 +5,11 @@ trouver le plus de mots qui rentrent dedans.
 
 Les mots d'un même lemme forment une famille (placer : placez, plaçai) qui occupe
 une seule case : le premier trouvé la remplit et rapporte les points du lemme, de
-100 à 300 selon sa rareté, en pente douce pour les plus courants (réglés pour
-environ 20/30/30/15/5 % des familles par palier de 50) ; les suivants s'ajoutent en
-petit dessous, sans points. Une seule famille est dépliée à la fois : celle qu'on
-vient de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille la
+25 à 99 selon sa rareté, en courbe en S sur le log de la fréquence (réglés pour
+environ 5/30/35/25/5 % des familles des niveaux de 5 à 7 lettres dans les
+couleurs 25, 26–49, 50–74, 75–98 et 99) ; les suivants s'ajoutent en petit
+dessous, sans points. Une seule famille est dépliée à la fois : celle qu'on vient
+de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille la
 plie ou la déplie. Le niveau est fini quand toutes les cases sont remplies.
 Constantes en tête de `game.js`. Survoler (ou toucher) un mot trouvé montre son
 lemme (celui du nom ou de l'adjectif quand il est plus courant que le verbe :
@@ -30,7 +31,7 @@ moitié de verbes. Tous les lemmes comptent, même très rares, avec toutes leur
 formes (rêvas, rêvât).
 
 Le menu les range par difficulté croissante (`difficultyOf` dans `levels.js`) :
-10 × cases vides + 10 × lettres + score maximal / 1000 (arrondi).
+10 × cases vides + 10 × lettres + score maximal / 250 (arrondi).
 
 ```
 npm run lab                       # http://localhost:5174/lexilouhette

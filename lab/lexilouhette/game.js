@@ -9,33 +9,45 @@
 import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
-export const POINTS_MIN = 100;
-export const POINTS_MAX = 300;
-/* Lemma points grow by POINTS_PER_DECADE each time the lemma is ten times rarer,
- * up to POINTS_MAX; above FREQ_COMMON (per million) they ease down towards
- * POINTS_MIN instead of stopping flat there. Tuned so the families of every
- * candidate level split about 20/30/30/15/5 % across the tiers (`npm run
+export const POINTS_MIN = 25;
+export const POINTS_MAX = 99;
+/* Lemma points: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
+ * FREQ_RARE, and in between they follow an S-curve of the lemma's rarity (its
+ * log frequency): slow near both ends, fastest at CENTRE (0 = FREQ_COMMON, 1 =
+ * FREQ_RARE), more so the higher STEEPNESS. Tuned so the families of the 5 to
+ * 7-letter levels split about 5/30/35/25/5 % across the tiers (`npm run
  * lab:levels` prints it). */
-const FREQ_COMMON = 140;
-const POINTS_PER_DECADE = 46;
-// Colour tiers, every TIER_STEP points from POINTS_MIN; the last holds POINTS_MAX.
-export const TIER_STEP = 50;
-export const TIERS = 5;
-
-// Points are rounded to this.
-const STEP = 5;
+const FREQ_COMMON = 158;
+const FREQ_RARE = 0.0048;
+const STEEPNESS = 3.4;
+const CENTRE = 0.49;
+// Colour tiers, by their lowest points: 25, 26–49, 50–74, 75–98, 99.
+const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, 75, POINTS_MAX];
+export const TIERS = TIER_FLOORS.length;
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
+const sigmoid = (z) => 1 / (1 + Math.exp(-z));
+// The S-curve on [0, 1], stretched to go from 0 to 1.
+const sCurve = (u) => {
+  const at = (v) => sigmoid(STEEPNESS * (v - CENTRE));
+  return (at(u) - at(0)) / (at(1) - at(0));
+};
+
 export function lemmaPoints(lemmaFreq) {
-  const decades = Math.log10(1 + FREQ_COMMON / Math.max(lemmaFreq, 1e-9));
-  const pts = Math.min(POINTS_MAX, POINTS_MIN + POINTS_PER_DECADE * decades);
-  return Math.round(pts / STEP) * STEP;
+  const rarity = Math.log10(FREQ_COMMON / Math.max(lemmaFreq, 1e-9));
+  const u = Math.min(1, Math.max(0, rarity / Math.log10(FREQ_COMMON / FREQ_RARE)));
+  return Math.round(POINTS_MIN + (POINTS_MAX - POINTS_MIN) * sCurve(u));
 }
 
-/* 0 (100–149) .. TIERS - 1 (300). */
-export const tierOf = (pts) =>
-  Math.min(TIERS - 1, Math.max(0, Math.floor((pts - POINTS_MIN) / TIER_STEP)));
+export const tierOf = (pts) => TIER_FLOORS.findLastIndex((floor) => pts >= floor);
+
+/* A tier's points, as "26–49" (or "25" for a single value). */
+export function tierLabel(tier) {
+  const low = TIER_FLOORS[tier];
+  const high = (TIER_FLOORS[tier + 1] ?? POINTS_MAX + 1) - 1;
+  return low === high ? `${low}` : `${low}–${high}`;
+}
 
 /* A level from levels.json (`[display, freq, lemma, lemmaFreq, hintLemma?]` per
  * word, `hintLemma` for wordHint()), with each answer keyed by its unaccented

@@ -7,7 +7,7 @@ import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 export const difficultyOf = (l) =>
   10 * [...l.pattern].filter((ch) => ch === BLANK).length +
   10 * l.pattern.length +
-  Math.round(maxScore(buildLevel(l)) / 1000);
+  Math.round(maxScore(buildLevel(l)) / 250);
 
 /* Every level the generator found, `{ pattern, words, difficulty }`, easiest
  * first, built only when played. */

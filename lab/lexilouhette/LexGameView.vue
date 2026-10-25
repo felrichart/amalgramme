@@ -157,7 +157,7 @@ function fly(el, f) {
   };
 }
 
-// Colour per 50-point tier, cool to hot: periwinkle, sage, mustard, rose, red.
+// Colour per points tier (see game.js), cool to hot: periwinkle, sage, mustard, rose, red.
 const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'var(--danger)'];
 
 // A word still to find: the silhouette, its known letters lowercase like the words.
@@ -656,7 +656,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--muted);
   font-weight: 700;
 }
-/* The word's points, in the colour of their 50-point tier. */
+/* The word's points, in the colour of their tier. */
 .pts {
   justify-self: start;
   min-width: 2.2em;
