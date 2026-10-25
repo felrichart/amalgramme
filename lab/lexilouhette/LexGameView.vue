@@ -5,7 +5,7 @@ import PageHeader from '../../src/components/ui/PageHeader.vue';
 import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
 import { useShake } from '../../src/composables/useShake.js';
 import { LEVELS, levelByPattern } from './levels.js';
-import { BLANK, maxScore, tierOf, deBefore } from './game.js';
+import { BLANK, maxScore, tierOf, deBefore, RARITY } from './game.js';
 import { useLexilouhette } from './useLexilouhette.js';
 import { definitionOf } from './definitions.js';
 import LexKeyboard from './LexKeyboard.vue';
@@ -175,24 +175,28 @@ watch(open, async () => {
 });
 
 /*
- * A bubble over a spelling with, once fetched, its base's definition, under what
- * it is of its base when it's only a form of it (portés: part. passé plur. de
- * porter): on hover with a mouse, on tap otherwise.
+ * A bubble on hover with a mouse, on tap otherwise: over a spelling, its base's
+ * definition once fetched, under what it is of its base when it's only a form of
+ * it (portés: part. passé plur. de porter); over a family's points, how common
+ * its base is.
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
 const hint = ref(null);
 const hintEl = ref(null);
 let hintTarget = null;
-function showHint(el, { form, label, base }) {
-  if (hint.value?.word === form && hintTarget === el) return;
+function showHint(el, content) {
+  if (hint.value?.id === content.id && hintTarget === el) return;
   hintTarget = el;
+  hint.value = content;
+  placeHint();
+}
+function showWord(el, { form, label, base }) {
   const lead = form === base ? '' : `${label} ${deBefore(base)}`;
   // `definition`: undefined while fetching, null when there's none, false when the
   // request failed (nothing to show then).
-  hint.value = { word: form, lead, base, definition: undefined };
-  placeHint();
+  showHint(el, { id: form, lead, base, definition: undefined });
   const settle = (definition) => {
-    if (hint.value?.word !== form) return;
+    if (hint.value?.id !== form) return;
     hint.value.definition = definition;
     placeHint();
   };
@@ -221,16 +225,22 @@ async function placeHint() {
   el.style.top = `${below ? r.bottom : r.top}px`;
   el.style.setProperty('--tail', `${x - left}px`);
 }
-const hintOn = (spelling, homonym = false) => ({
-  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, spelling),
+// `keepOpen`: a tap doesn't fold the word's homonyms (folding a homonym would hide it).
+const hintOn = (id, show, keepOpen = false) => ({
+  pointerenter: (e) => e.pointerType === 'mouse' && show(e.currentTarget),
   pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
   click: (e) => {
-    // Tapping a homonym keeps its list open (folding would hide it).
-    if (homonym) e.stopPropagation();
-    if (e.pointerType !== 'mouse' && hint.value?.word === spelling.form) hideHint();
-    else showHint(e.currentTarget, spelling);
+    if (keepOpen) e.stopPropagation();
+    if (e.pointerType !== 'mouse' && hint.value?.id === id) hideHint();
+    else show(e.currentTarget);
   },
 });
+const wordHint = (spelling, homonym = false) =>
+  hintOn(spelling.form, (el) => showWord(el, spelling), homonym);
+const rarityHint = (f) => {
+  const id = `rarity:${f.id}`;
+  return hintOn(id, (el) => showHint(el, { id, text: RARITY[f.tier], tier: f.tier }), true);
+};
 // Fetch a word's definitions as soon as it's found, so its bubbles open complete.
 watch(
   () => g.state.found[0],
@@ -240,15 +250,14 @@ watch(
     for (const base of bases) definitionOf(base).catch(() => {});
   },
 );
-// A tap anywhere but on the word closes the bubble; a tap on it toggles it.
-const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
+// A tap anywhere but on the bubble's word or points closes it; a tap on them toggles it.
+const outsideHint = (e) => e.target.closest?.('.text, .pts') !== hintTarget && hideHint();
 onMounted(() => window.addEventListener('pointerdown', outsideHint));
 onUnmounted(() => window.removeEventListener('pointerdown', outsideHint));
 
 const dup = computed(() => (g.feedback.value?.kind === 'dup' ? g.feedback.value.key : null));
 const rowState = (key) =>
   key && {
-    latest: key === g.latest.value,
     flash: key === dup.value,
     landing: landing.value.includes(key),
   };
@@ -438,7 +447,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             v-for="(r, i) in f.rows"
             :key="r.key"
             class="entry"
-            :class="{ continues: i < f.rows.length - 1, foldable: homonyms(r).length }"
+            :class="{
+              continues: i < f.rows.length - 1,
+              foldable: homonyms(r).length,
+              latest: r.found && r.key === g.latest.value,
+            }"
             @click="toggle(r)"
           >
             <span
@@ -446,18 +459,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
               :data-key="r.found ? r.key : null"
               :class="r.found && rowState(r.key)"
             >
-              <span class="text" :class="{ missed: !r.found }" v-on="hintOn(r.spellings[0])">{{
+              <span class="text" :class="{ missed: !r.found }" v-on="wordHint(r.spellings[0])">{{
                 r.display
               }}</span>
-              <span class="pts" :class="{ unearned: !r.found, later: i }">{{
-                i ? '' : f.points
+              <span v-if="i" class="pts later" :class="{ unearned: !r.found }" />
+              <span v-else class="pts" :class="{ unearned: !r.found }" v-on="rarityHint(f)">{{
+                f.points
               }}</span>
               <span v-if="homonyms(r).length && open !== r.key" class="more">
                 +{{ homonyms(r).length }}
               </span>
             </span>
             <span v-for="sp in open === r.key ? homonyms(r) : []" :key="sp.form" class="word other">
-              <span class="text" :class="{ missed: !r.found }" v-on="hintOn(sp, true)">{{
+              <span class="text" :class="{ missed: !r.found }" v-on="wordHint(sp, true)">{{
                 sp.form
               }}</span>
             </span>
@@ -465,13 +479,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </li>
       </ul>
     </section>
-    <span v-if="hint" ref="hintEl" :key="hint.word" class="hint" aria-hidden="true">
-      <span class="hint-base"
-        >{{ hint.lead }}<em>{{ hint.base }}</em></span
+    <span v-if="hint" ref="hintEl" :key="hint.id" class="hint" aria-hidden="true">
+      <span v-if="hint.text" class="hint-rarity" :style="{ '--tint': TINTS[hint.tier] }"
+        ><span class="dot" />{{ hint.text }}</span
       >
-      <span v-if="hint.definition === undefined" class="spinner" aria-label="chargement" />
-      <span v-else-if="hint.definition" class="hint-def">{{ hint.definition }}</span>
-      <em v-else-if="hint.definition === null" class="hint-def">définition manquante</em>
+      <template v-else>
+        <span class="hint-base"
+          >{{ hint.lead }}<em>{{ hint.base }}</em></span
+        >
+        <span v-if="hint.definition === undefined" class="spinner" aria-label="chargement" />
+        <template v-else-if="hint.definition">
+          <span class="hint-def">{{ hint.definition }}</span>
+          <span class="hint-source">Wiktionnaire</span>
+        </template>
+        <em v-else-if="hint.definition === null" class="hint-def">définition manquante</em>
+      </template>
     </span>
 
     <section class="play">
@@ -608,6 +630,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
    (--word-w) and its paddings; 0.77em is half their width. */
 .entry {
   position: relative;
+  width: fit-content;
+  border-radius: 0.5em;
 }
 .entry.continues::after {
   content: '';
@@ -719,8 +743,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .word.flash {
   animation: shake 0.4s ease;
 }
-/* The word just found or retyped: ringed until the next one. */
-.word.latest {
+/* The word just found or retyped, with its homonyms: ringed until the next one. */
+.entry.latest {
   outline: 2px solid var(--ink);
 }
 
@@ -779,6 +803,28 @@ span.hint-def {
   -webkit-line-clamp: 3;
   line-clamp: 3;
   overflow: hidden;
+}
+/* How common a family's base is, after a dot in its points' colour. */
+.hint-rarity {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+.hint-rarity .dot {
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--tint);
+}
+/* Credited on its own line, so the clamp never hides it. */
+.hint-source {
+  align-self: flex-end;
+  font-weight: 700;
+  font-size: 0.65rem;
+  font-style: italic;
+  color: var(--muted);
 }
 /* Shown while the definition loads. */
 .spinner {

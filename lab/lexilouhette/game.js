@@ -25,6 +25,8 @@ const CENTRE = 0.36;
 // Colour tiers, by their lowest points: 25, 26–49, 50–74, 75–98, 99.
 const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, 75, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
+// How common a family's base is, per tier.
+export const RARITY = ['basique', 'courant', 'rare', 'exceptionnel', 'légendaire'];
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
