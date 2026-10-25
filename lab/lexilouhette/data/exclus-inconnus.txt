@@ -1,4 +1,4 @@
-# Mots inexistants retirés du Lexique : fautes, anglais non utilisé en français, formes fabriquées.
+# Mots inexistants retirés du lexique Grammalecte : fautes, anglais non utilisé en français, formes fabriquées.
 # Un mot ou un lemme par ligne (toutes ses formes partent) ; # pour un commentaire.
 abaza
 abbat

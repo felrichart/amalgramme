@@ -5,15 +5,16 @@ trouver le plus de mots qui rentrent dedans.
 
 Les mots d'un même lemme forment une famille (placer : placez, plaçai) qui occupe
 une seule case : le premier trouvé la remplit et rapporte les points du lemme, de
-100 à 500 selon sa rareté, en pente douce pour les plus courants (réglés pour
-environ 20/30/30/15/5 % des familles par centaine) ; les suivants s'ajoutent en
+100 à 300 selon sa rareté, en pente douce pour les plus courants (réglés pour
+environ 20/30/30/15/5 % des familles par palier de 50) ; les suivants s'ajoutent en
 petit dessous, sans points. Une seule famille est dépliée à la fois : celle qu'on
 vient de compléter, jusqu'au prochain mot d'une autre ; un clic sur une famille la
 plie ou la déplie. Le niveau est fini quand toutes les cases sont remplies.
 Constantes en tête de `game.js`. Survoler (ou toucher) un mot trouvé montre son
 lemme (celui du nom ou de l'adjectif quand il est plus courant que le verbe :
-déluré, pas délurer) et son premier sens sur le Wiktionnaire, chargé à la demande
-(`definitions.js`, seul appel réseau du labo ; gardé ensuite sur l’appareil).
+déluré, pas délurer) et son premier sens sur le Wiktionnaire, chargé dès que
+le mot est trouvé (`definitions.js`, seul appel réseau du labo ; gardé ensuite sur
+l’appareil).
 
 Un nom ou un adjectif tiré d'un participe va avec son verbe (fatigués, blessés :
 fatiguer, blesser).
@@ -22,11 +23,14 @@ Des lemmes qui s'écrivent pareil ne font qu'une famille, quel que soit le sens
 sort de la famille : porte reste seul plutôt que d'aller avec portez.
 
 Les niveaux sont tous les motifs qui passent les seuils (en tête de
-`scripts/build-levels.mjs`) : 10 à 25 familles, des mots de 5 à 8 lettres, au plus
+`scripts/build-levels.mjs`) : 10 à 25 familles, des mots de 4 à 8 lettres, au plus
 une case vide de plus que de lettres visibles, jamais plus de 2 lettres visibles à
 la suite, au moins 7 familles connues (lemme à 1 par million ou plus), pas plus de
 moitié de verbes. Tous les lemmes comptent, même très rares, avec toutes leurs
 formes (rêvas, rêvât).
+
+Le menu les range par difficulté croissante (`difficultyOf` dans `levels.js`) :
+10 × cases vides + 10 × lettres + score maximal / 1000 (arrondi).
 
 ```
 npm run lab                       # http://localhost:5174/lexilouhette

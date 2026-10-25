@@ -1,7 +1,10 @@
-import { reactive, ref, computed, watch } from 'vue';
+import { reactive, ref, computed, watch, onScopeDispose } from 'vue';
 import { normalizeChar } from '../../shared/word-rules.js';
 import { BLANK, judge, scoreOf, earned, familiesOf } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
+
+// How long a found word's cheer stays, in ms.
+const CHEER_MS = 2500;
 
 /*
  * One Lexilouhette level being played: the blanks being typed (fixed letters stay
@@ -22,6 +25,8 @@ export function useLexilouhette(level) {
   // The last guess's outcome: { kind: 'new' | 'dup' | 'unknown', key, points? }.
   const feedback = ref(null);
   const shake = ref(0);
+  let cheerTimer = null;
+  onScopeDispose(() => clearTimeout(cheerTimer));
   const rejected = computed(() => !!feedback.value && feedback.value.kind !== 'new' && isFull());
 
   const score = computed(() => scoreOf(level, state.found));
@@ -56,7 +61,8 @@ export function useLexilouhette(level) {
     cursor.value = 0;
   }
 
-  /* Forget the last outcome, except a found word's (it stays as the cheer). */
+  /* Forget the last outcome, except a found word's (it stays as the cheer, for
+   * CHEER_MS). */
   function settle() {
     if (feedback.value?.kind !== 'new') feedback.value = null;
   }
@@ -70,6 +76,9 @@ export function useLexilouhette(level) {
       feedback.value.points = earned(level, state.found, word);
       state.found.unshift(word);
       clear();
+      const cheer = feedback.value;
+      clearTimeout(cheerTimer);
+      cheerTimer = setTimeout(() => feedback.value === cheer && (feedback.value = null), CHEER_MS);
     } else shake.value++;
   }
 

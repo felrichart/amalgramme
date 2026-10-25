@@ -10,16 +10,16 @@ import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
 export const POINTS_MIN = 100;
-export const POINTS_MAX = 500;
+export const POINTS_MAX = 300;
 /* Lemma points grow by POINTS_PER_DECADE each time the lemma is ten times rarer,
  * up to POINTS_MAX; above FREQ_COMMON (per million) they ease down towards
  * POINTS_MIN instead of stopping flat there. Tuned so the families of every
  * candidate level split about 20/30/30/15/5 % across the tiers (`npm run
  * lab:levels` prints it). */
 const FREQ_COMMON = 140;
-const POINTS_PER_DECADE = 92;
-// Colour tiers, every TIER_STEP points from POINTS_MIN; the last holds 500.
-const TIER_STEP = 100;
+const POINTS_PER_DECADE = 46;
+// Colour tiers, every TIER_STEP points from POINTS_MIN; the last holds POINTS_MAX.
+export const TIER_STEP = 50;
 export const TIERS = 5;
 
 // Points are rounded to this.
@@ -33,7 +33,7 @@ export function lemmaPoints(lemmaFreq) {
   return Math.round(pts / STEP) * STEP;
 }
 
-/* 0 (100–199) .. TIERS - 1 (500). */
+/* 0 (100–149) .. TIERS - 1 (300). */
 export const tierOf = (pts) =>
   Math.min(TIERS - 1, Math.max(0, Math.floor((pts - POINTS_MIN) / TIER_STEP)));
 

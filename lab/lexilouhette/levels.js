@@ -1,10 +1,19 @@
 /* The lab's levels and their saved progress (local only). */
 import raw from './levels.json';
-import { buildLevel } from './game.js';
+import { BLANK, buildLevel, maxScore } from './game.js';
 import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 
-/* Every level the generator found, `{ pattern, words }`, built only when played. */
-export const LEVELS = raw;
+/* A level's rating: harder with more blanks and letters, and more points to win. */
+export const difficultyOf = (l) =>
+  10 * [...l.pattern].filter((ch) => ch === BLANK).length +
+  10 * l.pattern.length +
+  Math.round(maxScore(buildLevel(l)) / 1000);
+
+/* Every level the generator found, `{ pattern, words, difficulty }`, easiest
+ * first, built only when played. */
+export const LEVELS = raw
+  .map((l) => ({ ...l, difficulty: difficultyOf(l) }))
+  .sort((a, b) => a.difficulty - b.difficulty);
 
 export function levelByPattern(pattern) {
   const l = LEVELS.find((x) => x.pattern === pattern);

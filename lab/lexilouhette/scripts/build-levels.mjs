@@ -6,7 +6,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { keyOf, tierOf, lemmaPoints } from '../game.js';
+import { keyOf, tierOf, lemmaPoints, POINTS_MIN, POINTS_MAX, TIER_STEP, TIERS } from '../game.js';
 
 const file = (name) => fileURLToPath(new URL(`../${name}`, import.meta.url));
 const tsvPath = process.argv[2] ?? file('data/dictionnaire.tsv');
@@ -20,7 +20,7 @@ const config = {
 const banned = new Set(config.banned);
 const skipped = new Set(config.skipped);
 
-const LENGTHS = [5, 6, 7, 8];
+const LENGTHS = [4, 5, 6, 7, 8];
 // Blanks per level: at least MIN_BLANKS, and at most one more than the letters shown.
 const MIN_BLANKS = 2;
 // Shown letters in a row, at most (RE_E__, not PLA___).
@@ -232,14 +232,14 @@ const levels = candidates(loadDictionary(tsvPath));
 const lines = levels.map((l) => JSON.stringify({ pattern: l.pattern, words: wordRows(l.words) }));
 writeFileSync(file('levels.json'), `[\n${lines.join(',\n')}\n]\n`);
 
-// Families by points, per hundred (100s … 400s, 500): what the points formula
-// is tuned on.
+// Families by points tier (100+, 150+ … 300): what the points formula is tuned on.
 const freqs = levels.flatMap((l) => l.mains.map((e) => e.lemmaFreq));
 if (process.env.DUMP_FREQS) writeFileSync(process.env.DUMP_FREQS, JSON.stringify(freqs));
-const hundreds = [0, 0, 0, 0, 0];
-for (const f of freqs) hundreds[tierOf(lemmaPoints(f))]++;
-const split = hundreds
-  .map((n, i) => `${i < 4 ? `${i + 1}xx` : '500'} ${Math.round((100 * n) / freqs.length)}%`)
+const tiers = Array(TIERS).fill(0);
+for (const f of freqs) tiers[tierOf(lemmaPoints(f))]++;
+const tierName = (i) => (i < TIERS - 1 ? `${POINTS_MIN + i * TIER_STEP}+` : `${POINTS_MAX}`);
+const split = tiers
+  .map((n, i) => `${tierName(i)} ${Math.round((100 * n) / freqs.length)}%`)
   .join(' · ');
 console.log(`Points des familles : ${split}`);
 const perLength = {};

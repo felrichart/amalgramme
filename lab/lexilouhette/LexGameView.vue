@@ -157,7 +157,7 @@ function fly(el, f) {
   };
 }
 
-// Colour per 100-point tier, cool to hot: periwinkle, sage, mustard, rose, red.
+// Colour per 50-point tier, cool to hot: periwinkle, sage, mustard, rose, red.
 const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'var(--danger)'];
 
 // A word still to find: the silhouette, its known letters lowercase like the words.
@@ -238,6 +238,11 @@ const hintOn = (w, extra = false) => ({
     else showHint(e.currentTarget, w);
   },
 });
+// Fetch a word's definition as soon as it's found, so its bubble opens complete.
+watch(
+  () => g.state.found[0],
+  (key) => key && definitionOf(wordHint(level.answers.get(key)).lemma).catch(() => {}),
+);
 // A tap anywhere but on the word closes the bubble; a tap on it toggles it.
 const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
 onMounted(() => window.addEventListener('pointerdown', outsideHint));
@@ -269,7 +274,7 @@ const status = computed(() => {
  * Columns: the fewest that show every spot without scrolling, as long as each
  * stays wide enough for the level's widest word and its points; failing that,
  * the same with smaller text, and past the smallest the list scrolls. Every word
- * gets that width, so the points line up.
+ * gets that width, so the points line up, and the columns pack to the left.
  */
 const listEl = ref(null);
 const wordsEl = ref(null);
@@ -277,6 +282,7 @@ const cols = ref(2);
 const textSize = ref(0);
 const scrolls = ref(false);
 const wordWidth = ref(0);
+const columnWidth = ref(0);
 // List text sizes to try, in rem, largest first.
 const TEXT_SIZES = [1.05, 0.95, 0.85];
 // Room a row needs besides its word, in em: points, folded count, padding, column gap.
@@ -302,8 +308,9 @@ async function fitColumns() {
     await nextTick();
     const style = getComputedStyle(el);
     wordWidth.value = widestWord(style);
-    const minWidth = wordWidth.value + ROW_EXTRA * parseFloat(style.fontSize);
-    for (let k = 2; k === 2 || el.clientWidth / k >= minWidth; k++) {
+    columnWidth.value = wordWidth.value + ROW_EXTRA * parseFloat(style.fontSize);
+    const room = listEl.value.clientWidth - 2 * parseFloat(style.left);
+    for (let k = 2; k === 2 || room / k >= columnWidth.value; k++) {
       cols.value = k;
       await nextTick();
       if (el.scrollWidth <= el.clientWidth + 1) return;
@@ -397,7 +404,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <ul
         ref="wordsEl"
         class="words"
-        :style="{ '--cols': cols, '--word-w': `${wordWidth}px`, fontSize: `${textSize}rem` }"
+        :style="{
+          '--cols': cols,
+          '--word-w': `${wordWidth}px`,
+          '--col-w': `${columnWidth}px`,
+          fontSize: `${textSize}rem`,
+        }"
       >
         <li
           v-for="f in g.families.value"
@@ -550,10 +562,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   overflow-y: auto;
 }
 /* Filled column by column, top to bottom; fitColumns() picks how many. Placed
-   absolutely so the columns get a fixed height to break at. */
+   absolutely so the columns get a fixed height to break at. Only as wide as its
+   columns (--col-w includes a gap), so they pack to the left. */
 .words {
   position: absolute;
   inset: 0.6rem;
+  width: calc(var(--cols) * var(--col-w) - 0.6em);
+  max-width: calc(100% - 1.2rem);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -641,7 +656,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   color: var(--muted);
   font-weight: 700;
 }
-/* The word's points, in the colour of their 100-point tier. */
+/* The word's points, in the colour of their 50-point tier. */
 .pts {
   justify-self: start;
   min-width: 2.2em;

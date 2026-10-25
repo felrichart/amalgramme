@@ -1,4 +1,4 @@
-# Noms propres retirés du Lexique (formes). Une par ligne ; # pour un commentaire.
+# Noms propres retirés du lexique Grammalecte (formes). Une par ligne ; # pour un commentaire.
 aba
 abadie
 abu

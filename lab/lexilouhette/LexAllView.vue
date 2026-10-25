@@ -9,13 +9,14 @@ import { buildLevel, scoreOf, maxScore, familiesOf } from './game.js';
 /* Every level the generator found, to pick any: filter by length or by a piece of
  * pattern ("RE_E", blanks typed as _ . or space), or draw one at random. */
 const router = useRouter();
-const LENGTHS = [5, 6, 7, 8];
+const LENGTHS = [4, 5, 6, 7, 8];
 const PAGE = 150;
 
 const rows = LEVELS.map((l) => {
   const { found, revealed } = loadProgress(l.pattern);
   const row = {
     pattern: l.pattern,
+    difficulty: l.difficulty,
     families: new Set(l.words.map((w) => w[2])).size,
     tint: WORD_TINTS[(l.pattern.length - LENGTHS[0]) % WORD_TINTS.length],
   };
@@ -89,6 +90,7 @@ function playRandom() {
           @click="play(r.pattern)"
         >
           <span class="pattern">{{ r.pattern.replaceAll('_', '·') }}</span>
+          <span class="difficulty" title="difficulté">{{ r.difficulty }}</span>
           <span v-if="r.max" class="score"
             >{{ r.score }}<span class="max">/{{ r.max }}</span></span
           >
@@ -160,6 +162,11 @@ function playRandom() {
 .pattern {
   font-size: 1.05rem;
   letter-spacing: 0.18em;
+}
+.difficulty {
+  font-size: 0.75rem;
+  font-weight: 800;
+  opacity: 0.55;
 }
 .score,
 .families {
