@@ -4,24 +4,26 @@ import { useRouter } from 'vue-router';
 import PageHeader from '../../src/components/ui/PageHeader.vue';
 import { WORD_TINTS } from '../../src/palette.js';
 import { LEVELS, loadProgress } from './levels.js';
-import { buildLevel, scoreOf, maxScore, isDone } from './game.js';
+import { buildLevel, scoreOf, maxScore, isDone, keyOf } from './game.js';
 
-/* Every level the generator found, to pick any: filter by length or by a piece of
- * pattern ("RE_E", blanks typed as _ . or space), or draw one at random. */
+/* Every level the generator found, to pick any: filter by length, by a piece of
+ * pattern ("RE_E", blanks typed as _ . or space) or by a word it holds (frivole,
+ * also matching its family: frivoles), or draw one at random. */
 const router = useRouter();
 const LENGTHS = [4, 5, 6, 7];
 const PAGE = 150;
 
 const rows = LEVELS.map((l) => {
   const { found, revealed } = loadProgress(l.pattern);
+  const level = buildLevel(l);
   const row = {
     pattern: l.pattern,
     difficulty: l.difficulty,
     spots: l.words.length,
     tint: WORD_TINTS[(l.pattern.length - LENGTHS[0]) % WORD_TINTS.length],
+    words: new Set([...level.answers.keys(), ...level.families.map((f) => keyOf(f.base))]),
   };
   if (!found.length && !revealed) return row;
-  const level = buildLevel(l);
   const done = revealed || isDone(level, found);
   return { ...row, score: scoreOf(level, found), max: maxScore(level), done };
 });
@@ -30,9 +32,12 @@ const length = ref(null);
 const query = ref('');
 const shown = ref(PAGE);
 const needle = computed(() => query.value.toUpperCase().replace(/[.·\s]/g, '_'));
+const word = computed(() => keyOf(query.value.trim()));
 const filtered = computed(() =>
   rows.filter(
-    (r) => (!length.value || r.pattern.length === length.value) && r.pattern.includes(needle.value),
+    (r) =>
+      (!length.value || r.pattern.length === length.value) &&
+      (r.pattern.includes(needle.value) || r.words.has(word.value)),
   ),
 );
 
@@ -69,7 +74,7 @@ function playRandom() {
           v-model="query"
           class="query"
           type="search"
-          placeholder="Motif : RE_E, BOU…"
+          placeholder="Motif ou mot : RE_E, frivole…"
           autocapitalize="characters"
           spellcheck="false"
           @input="shown = PAGE"
@@ -102,7 +107,7 @@ function playRandom() {
           Afficher plus
         </button>
       </li>
-      <li v-if="!filtered.length" class="empty">Aucun niveau ne contient ce motif.</li>
+      <li v-if="!filtered.length" class="empty">Aucun niveau ne contient ce motif ni ce mot.</li>
     </ul>
   </div>
 </template>
