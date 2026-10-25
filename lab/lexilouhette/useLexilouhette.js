@@ -1,6 +1,6 @@
 import { reactive, ref, computed, watch, onScopeDispose } from 'vue';
 import { normalizeChar } from '../../shared/word-rules.js';
-import { BLANK, judge, scoreOf, spotsOf } from './game.js';
+import { BLANK, judge, scoreOf, earned, familiesOf } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
 
 // How long a found word's cheer stays, in ms.
@@ -30,11 +30,8 @@ export function useLexilouhette(level) {
   const rejected = computed(() => !!feedback.value && feedback.value.kind !== 'new' && isFull());
 
   const score = computed(() => scoreOf(level, state.found));
-  // Every spot, alphabetical, with whether it's found.
-  const spots = computed(() =>
-    spotsOf(level).map((a) => ({ ...a, found: state.found.includes(a.key) })),
-  );
-  const exhausted = computed(() => spots.value.every((s) => s.found));
+  const families = computed(() => familiesOf(level, state.found, state.revealed));
+  const exhausted = computed(() => families.value.every((f) => f.found));
   const playing = computed(() => !exhausted.value && !state.revealed);
   // The word to highlight: the one just retyped, else the last one found.
   const latest = computed(() =>
@@ -76,7 +73,7 @@ export function useLexilouhette(level) {
     const kind = judge(level, word, state.found);
     feedback.value = { kind, key: word };
     if (kind === 'new') {
-      feedback.value.points = level.answers.get(word).points;
+      feedback.value.points = earned(level, state.found, word);
       state.found.unshift(word);
       clear();
       const cheer = feedback.value;
@@ -132,7 +129,7 @@ export function useLexilouhette(level) {
     score,
     exhausted,
     playing,
-    spots,
+    families,
     latest,
     type,
     backspace,

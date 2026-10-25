@@ -1,8 +1,8 @@
 /*
  * Writes data/dictionnaire.tsv, the words the games draw from: the Grammalecte
  * lexicon (data/lexique-grammalecte-fr-v7.7.zip, the LibreOffice spellchecker's)
- * in its common, modern and classic spellings, minus proper nouns, every length
- * kept: `npm run lab:dico`.
+ * in its common, modern and classic spellings, minus proper nouns and
+ * abbreviations, every length kept: `npm run lab:dico`.
  *
  * Columns: Mot, Lemme, Etiquettes (Grammalecte's: nature, gender, number, verb
  * form), FreqMot, FreqLemme (per million words, the lemma's summed over its
@@ -24,6 +24,9 @@ const start = lines.findIndex((l) => l.startsWith('id\tfid')) + 1;
 // Sub-dictionaries: * common, M modern, C classic; R (1990 reform), A (other
 // variants) and X (dubious) are left out. "*/R" is the lemma's, then the form's.
 const KEPT = new Set(['*', 'M', 'C']);
+// Notes left out: unit symbols (kcal) and dotted abbreviations (chap., janv.). Clipped
+// words (radio, auto) are kept.
+const SKIPPED_NOTES = new Set(['symb', 'abty']);
 const spellOut = (w) => w.replaceAll('œ', 'oe').replaceAll('æ', 'ae');
 // Grammalecte's frequency is a percentage.
 const PER_MILLION = 1e4;
@@ -32,10 +35,11 @@ const rows = new Map();
 for (const line of lines.slice(start)) {
   const c = line.split('\t');
   if (c.length < 20) continue;
-  const [form, lemma, tags, sub, freq] = [c[2], c[3], c[4], c[10], c[18]].map((x, i) =>
-    i < 2 ? spellOut(x) : x,
+  const [form, lemma, tags, notes, sub, freq] = [c[2], c[3], c[4], c[7], c[10], c[18]].map(
+    (x, i) => (i < 2 ? spellOut(x) : x),
   );
   if (!sub.split('/').every((s) => KEPT.has(s))) continue;
+  if (notes.split(' ').some((n) => SKIPPED_NOTES.has(n))) continue;
   if (tags.split(' ').includes('npr')) continue;
   // One row per form and lemma, its tags merged (porter: ipre, impe).
   const id = `${form}\t${lemma}`;

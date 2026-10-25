@@ -1,17 +1,12 @@
 /*
- * A word's first French sense, fetched from the Wiktionnaire on demand and kept on
- * the device, as `{ base, sense }`. `base` is the page the sense comes from: the
- * word's own, unless that page only lists it as a form of another word
- * (fatiguées: féminin pluriel de fatigué), which is then looked up instead.
- * Resolves to null when there's none; rejects when a request fails, which isn't
- * kept, so the next one retries.
+ * A base word's first French sense, fetched from the Wiktionnaire on demand and
+ * kept on the device. Resolves to null when there's none; rejects when a request
+ * fails, which isn't kept, so the next one retries.
  */
 import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
 
 const SITE = 'https://fr.wiktionary.org';
-const KEY = 'lexilouhette:v4:definitions';
-// Forms followed to their base word, at most (maquillées → maquillé → maquiller).
-const MAX_HOPS = 2;
+const KEY = 'lexilouhette:v5:definitions';
 
 const saved = readJSON(KEY, {}, isObject);
 const pending = new Map();
@@ -19,7 +14,7 @@ const pending = new Map();
 export function definitionOf(word) {
   if (word in saved) return Promise.resolve(saved[word]);
   if (!pending.has(word)) {
-    const lookup = lookUp(word, MAX_HOPS)
+    const lookup = lookUp(word)
       .then((definition) => {
         saved[word] = definition;
         writeJSON(KEY, saved);
@@ -35,20 +30,11 @@ export function definitionOf(word) {
 export const pageTitles = (word) =>
   word.includes('oe') ? [word.replaceAll('oe', 'œ'), word] : [word];
 
-/* A sense of the word's own (Nom commun, Adjectif…) if it has one; else, when it's
- * only a form, its base word's; else that form's ("Féminin pluriel de fatigué"). */
-async function lookUp(word, hops) {
+/* A sense of the word's own (Nom commun, Adjectif…), else its first one. */
+async function lookUp(word) {
   for (const title of pageTitles(word)) {
     const senses = await fetchSenses(title);
-    if (!senses.length) continue;
-    const own = senses.find((s) => !s.form);
-    if (own) return { base: word, sense: own.text };
-    const [form] = senses;
-    if (form.base && hops > 0) {
-      const found = await lookUp(form.base, hops - 1);
-      if (found) return found;
-    }
-    return { base: word, sense: form.text };
+    if (senses.length) return (senses.find((s) => !s.form) ?? senses[0]).text;
   }
   return null;
 }
@@ -74,7 +60,7 @@ async function fetchSenses(title) {
 /*
  * The first numbered sense under each part of speech, in page order, without its
  * sub-senses, examples and notes. `form` when the part is one of the "Forme de…"
- * ones, `base` then being the word the sense links to (fatigué).
+ * ones.
  */
 function sensesOf(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -89,10 +75,9 @@ function sensesOf(html) {
     // Sub-senses: inside a sense, or already cut from one.
     const li = !el.isConnected || el.closest('li') ? null : el.querySelector(':scope > li');
     if (!li) continue;
-    const link = [...li.querySelectorAll(':scope > a[title]')].find((a) => !a.title.includes(':'));
     li.querySelectorAll('ul, ol, dl, sup.reference, style').forEach((n) => n.remove());
     const text = li.textContent.replace(/\s+/g, ' ').trim();
-    if (text) senses.push({ form: part.startsWith('Forme'), base: link?.title, text });
+    if (text) senses.push({ form: part.startsWith('Forme'), text });
   }
   return senses;
 }

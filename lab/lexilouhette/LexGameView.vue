@@ -76,7 +76,9 @@ let flightId = 0;
 watch(
   () => g.feedback.value,
   async (f) => {
-    if (f?.kind !== 'new') return;
+    if (!f || f.kind === 'unknown') return;
+    open.value = f.key;
+    if (f.kind === 'dup') return;
     landing.value.push(f.key);
     await nextTick();
     await refit();
@@ -157,15 +159,14 @@ const TINTS = ['var(--violet)', 'var(--teal)', 'var(--gold)', 'var(--pink)', 'va
 const ghost = [...level.pattern].map((ch) => (ch === BLANK ? ch : ch.toLowerCase()));
 
 /*
- * A word's other spellings (cogné under cogne) show under its spot only while
- * it's open, one word at a time: tapping a word shown with others opens or closes
- * it.
+ * A word's homonyms (tigrés under tigres) show only while it's open: one word at a
+ * time, the one just found or retyped, until another one is. Tapping a word opens
+ * or closes it.
  */
 const open = ref(null);
-const shows = (s) => s.found || g.state.revealed;
-const others = (s) => (shows(s) ? s.spellings.slice(1) : []);
-function toggle(s) {
-  if (others(s).length) open.value = open.value === s.key ? null : s.key;
+const homonyms = (r) => r.spellings.slice(1);
+function toggle(r) {
+  if (homonyms(r).length) open.value = open.value === r.key ? null : r.key;
 }
 watch(open, async () => {
   await nextTick();
@@ -174,30 +175,28 @@ watch(open, async () => {
 });
 
 /*
- * A bubble over a word with, once fetched, its definition, under "de X" when it's
- * only a form of X (fatiguées: de fatigué): on hover with a mouse, on tap
- * otherwise. Tapping a word also folds or unfolds its other spellings, but
- * tapping one of those keeps them open (folding would hide it).
+ * A bubble over a spelling with, once fetched, its base's definition, under what
+ * it is of its base when it's only a form of it (portés: part. passé plur. de
+ * porter): on hover with a mouse, on tap otherwise.
  */
 const HINT_MARGIN = 8; // px kept from the screen edges
 const hint = ref(null);
 const hintEl = ref(null);
 let hintTarget = null;
-function showHint(el, word) {
-  if (hint.value?.word === word && hintTarget === el) return;
+function showHint(el, { form, label, base }) {
+  if (hint.value?.word === form && hintTarget === el) return;
   hintTarget = el;
+  const lead = form === base ? '' : `${label} ${deBefore(base)}`;
   // `definition`: undefined while fetching, null when there's none, false when the
   // request failed (nothing to show then).
-  hint.value = { word, lead: '', base: word, definition: undefined };
+  hint.value = { word: form, lead, base, definition: undefined };
   placeHint();
-  const settle = (found) => {
-    if (hint.value?.word !== word) return;
-    hint.value.definition = found === false ? false : (found?.sense ?? null);
-    if (found?.base && found.base !== word)
-      Object.assign(hint.value, { lead: deBefore(found.base), base: found.base });
+  const settle = (definition) => {
+    if (hint.value?.word !== form) return;
+    hint.value.definition = definition;
     placeHint();
   };
-  definitionOf(word).then(settle, () => settle(false));
+  definitionOf(base).then(settle, () => settle(false));
 }
 function hideHint() {
   hint.value = null;
@@ -222,19 +221,24 @@ async function placeHint() {
   el.style.top = `${below ? r.bottom : r.top}px`;
   el.style.setProperty('--tail', `${x - left}px`);
 }
-const hintOn = (word, other = false) => ({
-  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, word),
+const hintOn = (spelling, homonym = false) => ({
+  pointerenter: (e) => e.pointerType === 'mouse' && showHint(e.currentTarget, spelling),
   pointerleave: (e) => e.pointerType === 'mouse' && hideHint(),
   click: (e) => {
-    if (other) e.stopPropagation();
-    if (e.pointerType !== 'mouse' && hint.value?.word === word) hideHint();
-    else showHint(e.currentTarget, word);
+    // Tapping a homonym keeps its list open (folding would hide it).
+    if (homonym) e.stopPropagation();
+    if (e.pointerType !== 'mouse' && hint.value?.word === spelling.form) hideHint();
+    else showHint(e.currentTarget, spelling);
   },
 });
-// Fetch a word's definition as soon as it's found, so its bubble opens complete.
+// Fetch a word's definitions as soon as it's found, so its bubbles open complete.
 watch(
   () => g.state.found[0],
-  (key) => key && definitionOf(level.answers.get(key).display).catch(() => {}),
+  (key) => {
+    if (!key) return;
+    const bases = new Set(level.answers.get(key).spellings.map((sp) => sp.base));
+    for (const base of bases) definitionOf(base).catch(() => {});
+  },
 );
 // A tap anywhere but on the word closes the bubble; a tap on it toggles it.
 const outsideHint = (e) => e.target.closest?.('.text') !== hintTarget && hideHint();
@@ -251,10 +255,11 @@ const rowState = (key) =>
 
 const status = computed(() => {
   if (g.state.revealed) return { text: 'Solutions révélées' };
-  if (g.exhausted.value) return { text: 'Tous les mots trouvés, bravo !', tone: 'good' };
+  if (g.exhausted.value) return { text: 'Toutes les familles trouvées, bravo !', tone: 'good' };
   const f = g.feedback.value;
   if (f?.kind === 'new') {
-    return { text: `${level.answers.get(f.key).display} +${f.points}`, tone: 'good' };
+    const word = level.answers.get(f.key).display;
+    return { text: f.points ? `${word} +${f.points}` : `${word} · même famille`, tone: 'good' };
   }
   if (f?.kind === 'dup') return { text: 'Déjà trouvé', tone: 'bad' };
   if (f?.kind === 'unknown') return { text: 'Pas dans le dictionnaire', tone: 'bad' };
@@ -277,8 +282,8 @@ const wordWidth = ref(0);
 const columnWidth = ref(0);
 // List text sizes to try, in rem, largest first.
 const TEXT_SIZES = [1.05, 0.95, 0.85];
-// Room a row needs besides its word, in em: points, other spellings count, padding,
-// column gap.
+// Room a row needs besides its word, in em: points, homonyms count, padding, column
+// gap.
 const ROW_EXTRA = 4.6;
 
 function widestWord(style) {
@@ -286,7 +291,8 @@ function widestWord(style) {
   ctx.font = `800 ${style.fontSize} ${style.fontFamily}`;
   // Each gap of a word still to find is about as wide as an "n".
   const silhouette = level.pattern.replaceAll(BLANK, 'n').toLowerCase();
-  const words = [silhouette, ...[...level.answers.values()].map((a) => a.display)];
+  const forms = [...level.answers.values()].flatMap((a) => a.spellings.map((sp) => sp.form));
+  const words = [silhouette, ...forms];
   const widths = words.map((w) => ctx.measureText(w).width);
   return Math.ceil(Math.max(...widths));
 }
@@ -312,11 +318,19 @@ async function fitColumns() {
   }
   scrolls.value = true;
 }
-/* Refits once a word's other spellings no longer fit. */
+/* Refits once a found word's rows no longer fit. */
 async function refit() {
   const el = wordsEl.value;
   if (el && !scrolls.value && el.scrollWidth > el.clientWidth + 1) await fitColumns();
 }
+// The reveal adds each family's words not found yet: the columns are refitted.
+watch(
+  () => g.state.revealed,
+  async () => {
+    await nextTick();
+    await fitColumns();
+  },
+);
 const resizes = new ResizeObserver(() => fitColumns());
 onMounted(() => resizes.observe(listEl.value));
 onUnmounted(() => resizes.disconnect());
@@ -405,32 +419,49 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         }"
       >
         <li
-          v-for="s in g.spots.value"
-          :key="s.key"
+          v-for="f in g.families.value"
+          :key="f.id"
           class="spot"
-          :class="{ foldable: others(s).length }"
-          :style="{ '--tint': TINTS[s.tier] }"
-          @click="toggle(s)"
+          :style="{ '--tint': TINTS[f.tier] }"
         >
-          <span class="word" :data-key="s.found ? s.key : null" :class="s.found && rowState(s.key)">
-            <span v-if="s.found" class="text" v-on="hintOn(s.display)">{{ s.display }}</span>
-            <span v-else-if="g.state.revealed" class="text missed" v-on="hintOn(s.display)">{{
-              s.display
-            }}</span>
-            <span v-else class="ghost" aria-label="mot à trouver">
-              <template v-for="(ch, j) in ghost" :key="j">
-                <span v-if="ch === BLANK" class="gap" />
-                <template v-else>{{ ch }}</template>
-              </template>
+          <div v-if="!f.rows.length" class="entry">
+            <span class="word">
+              <span class="ghost" aria-label="mot à trouver">
+                <template v-for="(ch, j) in ghost" :key="j">
+                  <span v-if="ch === BLANK" class="gap" />
+                  <template v-else>{{ ch }}</template>
+                </template>
+              </span>
             </span>
-            <span v-if="shows(s)" class="pts" :class="{ unearned: !s.found }">{{ s.points }}</span>
-            <span v-if="others(s).length && open !== s.key" class="more">
-              +{{ others(s).length }}
+          </div>
+          <div
+            v-for="(r, i) in f.rows"
+            :key="r.key"
+            class="entry"
+            :class="{ continues: i < f.rows.length - 1, foldable: homonyms(r).length }"
+            @click="toggle(r)"
+          >
+            <span
+              class="word"
+              :data-key="r.found ? r.key : null"
+              :class="r.found && rowState(r.key)"
+            >
+              <span class="text" :class="{ missed: !r.found }" v-on="hintOn(r.spellings[0])">{{
+                r.display
+              }}</span>
+              <span class="pts" :class="{ unearned: !r.found, later: i }">{{
+                i ? '' : f.points
+              }}</span>
+              <span v-if="homonyms(r).length && open !== r.key" class="more">
+                +{{ homonyms(r).length }}
+              </span>
             </span>
-          </span>
-          <span v-for="w in open === s.key ? others(s) : []" :key="w" class="word other">
-            <span class="text" v-on="hintOn(w, true)">{{ w }}</span>
-          </span>
+            <span v-for="sp in open === r.key ? homonyms(r) : []" :key="sp.form" class="word other">
+              <span class="text" :class="{ missed: !r.found }" v-on="hintOn(sp, true)">{{
+                sp.form
+              }}</span>
+            </span>
+          </div>
         </li>
       </ul>
     </section>
@@ -566,10 +597,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   margin: 0.6rem;
   column-fill: balance;
 }
-/* A word's spot, and under it its other spellings while open. */
+/* A family's spot: its words found, first find first, each with its homonyms
+   under it. */
 .spot {
   break-inside: avoid;
   margin-bottom: 0.1em;
+}
+/* A later find's dot hangs off the first find's points by a line, drawn from each
+   row's points down to the next row's. The points sit after the word box
+   (--word-w) and its paddings; 0.77em is half their width. */
+.entry {
+  position: relative;
+}
+.entry.continues::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--word-w) + 1.47em - 1px);
+  top: 0.85em;
+  bottom: -0.85em;
+  width: 2px;
+  background: var(--tint);
 }
 /* A spot: its word once found (or the silhouette until then), then its points.
    Every spot is as tall and its word box as wide, so the points line up. */
@@ -591,7 +638,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* How many other spellings a closed spot holds. */
+/* How many homonyms a closed word holds. */
 .more {
   margin-left: 0.25em;
   padding: 0 0.35em;
@@ -601,10 +648,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 800;
   color: color-mix(in srgb, var(--ink) 60%, transparent);
 }
-.spot.foldable {
+.entry.foldable {
   cursor: pointer;
 }
-/* A word's other spellings: smaller, pointless, hanging off its spot. */
+/* A word's homonyms: smaller, pointless, hanging off it. */
 .word.other {
   display: flex;
   align-items: baseline;
@@ -643,6 +690,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 /* The word's points, in the colour of their tier. */
 .pts {
+  position: relative;
+  z-index: 1;
   justify-self: start;
   min-width: 2.2em;
   padding: 0.15em 0.35em;
@@ -652,6 +701,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   font-weight: 900;
   color: var(--on-color);
   background: var(--tint);
+}
+/* A family's later find brings nothing: a small dot, centred where the points
+   above sit (2.2em wide), on the line hanging from them. */
+.pts.later {
+  align-self: center;
+  min-width: 0;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.65em;
+  padding: 0;
 }
 /* What a word shown by the reveal would have brought. */
 .pts.unearned {

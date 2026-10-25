@@ -1,20 +1,21 @@
 /*
  * Lexilouhette rules: a silhouette (`P_S_I__`) and every word that fits it.
  *
- * Each word holds a spot, together with its spellings that differ only by their
- * accents (cogne, cogné): typed without accents, they're a single answer. A word
- * brings points by how rare its spelling is. The level is done once every spot
- * is filled.
+ * A word is what's typed (without accents): its master spelling, shown, and its
+ * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
+ * durs) form a family holding a single spot: the first word found fills it and
+ * brings the family's points, by how rare its base is; the family's later finds
+ * show under it but bring nothing. The level is done once every spot is filled.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
 export const POINTS_MIN = 25;
 export const POINTS_MAX = 99;
-/* Word points: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
+/* Family points: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
  * FREQ_RARE, and in between they follow an S-curve of the word's rarity (its log
  * frequency): slow near both ends, fastest at CENTRE (0 = FREQ_COMMON, 1 =
- * FREQ_RARE), more so the higher STEEPNESS. Tuned so the words of the 5 to
+ * FREQ_RARE), more so the higher STEEPNESS. Tuned so the families of the 5 to
  * 7-letter levels split about 5/30/35/25/5 % across the tiers (`npm run
  * lab:levels` prints it). */
 const FREQ_COMMON = 66;
@@ -49,17 +50,29 @@ export function tierLabel(tier) {
   return low === high ? `${low}` : `${low}–${high}`;
 }
 
-/* A level from levels.json (`[freq, ...spellings]` per word, commonest spelling
- * first), each answer keyed by its unaccented spelling. */
+/*
+ * A level from levels.json, `[freq, base, ...words]` per family, a word being its
+ * spellings, master first, or `base` alone when that's its only one. A spelling is
+ * `form` (the base itself), `[form, label]` (a form of the base: ["dures", "fém.
+ * plur."]) or `[form, label, base]` (a homonym of another base: ["tigrés", "part.
+ * passé plur.", "tigrer"]). Each answer is keyed by its unaccented spelling.
+ */
 export function buildLevel({ pattern, words }) {
-  const answers = new Map(
-    words.map(([freq, ...spellings]) => {
-      const key = keyOf(spellings[0]);
-      const points = wordPoints(freq);
-      return [key, { key, display: spellings[0], spellings, freq, points, tier: tierOf(points) }];
-    }),
-  );
-  return { pattern, answers };
+  const answers = new Map();
+  const families = words.map(([freq, base, ...raw], id) => {
+    const points = wordPoints(freq);
+    const keys = raw.map((w) => {
+      const spellings = (Array.isArray(w) ? w : [w]).map((sp) => {
+        const [form, label = '', of = base] = Array.isArray(sp) ? sp : [sp];
+        return { form, label, base: of };
+      });
+      const key = keyOf(spellings[0].form);
+      answers.set(key, { key, display: spellings[0].form, spellings, family: id });
+      return key;
+    });
+    return { id, base, freq, points, tier: tierOf(points), keys };
+  });
+  return { pattern, answers, families };
 }
 
 /* What a fully typed word gets: 'new', 'dup' (already found) or 'unknown'. */
@@ -68,14 +81,38 @@ export function judge(level, key, found) {
   return found.includes(key) ? 'dup' : 'new';
 }
 
-export const scoreOf = (level, found) =>
-  found.reduce((sum, key) => sum + (level.answers.get(key)?.points ?? 0), 0);
+const familyOf = (level, key) => level.answers.get(key)?.family;
 
-export const maxScore = (level) => scoreOf(level, [...level.answers.keys()]);
+/* Points `key` brings when the words in `found` are already found. */
+export function earned(level, found, key) {
+  const id = familyOf(level, key);
+  return found.some((k) => k !== key && familyOf(level, k) === id) ? 0 : level.families[id].points;
+}
 
-/* The level's answers, one per spot, alphabetical. */
-export const spotsOf = (level) =>
-  [...level.answers.values()].sort((a, b) => a.display.localeCompare(b.display, 'fr'));
+export function scoreOf(level, found) {
+  const opened = new Set(found.map((k) => familyOf(level, k)));
+  return level.families.reduce((sum, f) => sum + (opened.has(f.id) ? f.points : 0), 0);
+}
+
+export const maxScore = (level) => level.families.reduce((sum, f) => sum + f.points, 0);
+
+/*
+ * The level's spots, one per family, alphabetical by its first word. `rows` are
+ * its words found, first find first (it brings the points), then once `revealed`
+ * the others, each with whether it's found.
+ */
+export function familiesOf(level, found, revealed = false) {
+  const families = level.families.map((f) => {
+    const mine = found.filter((k) => familyOf(level, k) === f.id).reverse();
+    const keys = revealed ? [...mine, ...f.keys.filter((k) => !mine.includes(k))] : mine;
+    const rows = keys.map((k) => ({ ...level.answers.get(k), found: mine.includes(k) }));
+    return { ...f, rows, found: mine.length > 0 };
+  });
+  const first = (f) => level.answers.get(f.keys[0]).display;
+  return families.sort((a, b) => first(a).localeCompare(first(b), 'fr'));
+}
+
+export const isDone = (level, found) => familiesOf(level, found).every((f) => f.found);
 
 const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 

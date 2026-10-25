@@ -6,8 +6,9 @@ import {
   tierOf,
   wordPoints,
   scoreOf,
+  earned,
   maxScore,
-  spotsOf,
+  familiesOf,
   deBefore,
 } from '../lab/lexilouhette/game.js';
 import { LEVELS, levelByPattern, loadProgress } from '../lab/lexilouhette/levels.js';
@@ -17,14 +18,13 @@ import { pageTitles } from '../lab/lexilouhette/definitions.js';
 const level = buildLevel({
   pattern: 'P_S_I__',
   words: [
-    [26.3, 'piscine'],
-    [20.6, 'passion'],
-    [1.19, 'passive'],
-    [0.275, 'passifs'],
+    [26.3, 'piscine', 'piscine'],
+    [20.6, 'passion', 'passion'],
+    [1.19, 'passif', [['passive', 'fém.']], [['passifs', 'plur.']]],
   ],
 });
 const typeAll = (g, letters) => [...letters].forEach((ch) => g.type(ch));
-const pts = (key) => level.answers.get(key).points;
+const pts = (key) => level.families[level.answers.get(key).family].points;
 
 describe('points', () => {
   it('rises on an S-curve from 25 for common words to 99 for the rarest', () => {
@@ -33,10 +33,15 @@ describe('points', () => {
     ]);
   });
 
-  it('adds up every word found', () => {
-    expect(scoreOf(level, ['PASSIFS', 'PISCINE'])).toBe(pts('PASSIFS') + pts('PISCINE'));
+  it('counts each family once', () => {
+    expect(scoreOf(level, ['PASSIFS', 'PASSIVE', 'PISCINE'])).toBe(pts('PASSIFS') + pts('PISCINE'));
     expect(scoreOf(level, ['GONE'])).toBe(0);
     expect(maxScore(level)).toBe(scoreOf(level, [...level.answers.keys()]));
+  });
+
+  it('gives nothing for a later find of a family', () => {
+    expect(earned(level, ['PISCINE'], 'PASSIVE')).toBe(pts('PASSIVE'));
+    expect(earned(level, ['PASSIFS'], 'PASSIVE')).toBe(0);
   });
 });
 
@@ -46,21 +51,46 @@ describe('tierOf', () => {
   });
 });
 
-describe('spots', () => {
-  it('gives each word a spot, alphabetical', () => {
-    expect(spotsOf(level).map((a) => a.display)).toEqual([
-      'passifs',
-      'passion',
-      'passive',
-      'piscine',
+describe('families', () => {
+  const rows = (f) => f.rows.map((r) => r.display);
+
+  it('gives each family a spot, alphabetical, its finds first find first', () => {
+    expect(familiesOf(level, []).map((f) => f.rows.length)).toEqual([0, 0, 0]);
+    const [, passif] = familiesOf(level, ['PASSIFS', 'PISCINE', 'PASSIVE']);
+    expect(rows(passif)).toEqual(['passive', 'passifs']);
+    expect(passif.found).toBe(true);
+  });
+
+  it('lists every word once revealed, the found ones first', () => {
+    const [, passif] = familiesOf(level, ['PASSIFS'], true);
+    expect(passif.rows.map((r) => [r.display, r.found])).toEqual([
+      ['passifs', true],
+      ['passive', false],
     ]);
   });
 
-  it('holds the spellings that differ by accents together, commonest first', () => {
-    const gne = buildLevel({ pattern: '__GNE', words: [[0.483, 'cogne', 'cogné']] });
-    expect(gne.answers.get('COGNE')).toMatchObject({
-      display: 'cogne',
-      spellings: ['cogne', 'cogné'],
+  it('reads a word with its homonyms and their bases', () => {
+    const gre = buildLevel({
+      pattern: '__GRE_',
+      words: [
+        [
+          3.32,
+          'tigre',
+          [
+            ['tigres', 'plur.'],
+            ['tigrés', 'part. passé plur.', 'tigrer'],
+          ],
+        ],
+      ],
+    });
+    expect(gre.answers.get('TIGRES')).toEqual({
+      key: 'TIGRES',
+      display: 'tigres',
+      family: 0,
+      spellings: [
+        { form: 'tigres', label: 'plur.', base: 'tigre' },
+        { form: 'tigrés', label: 'part. passé plur.', base: 'tigrer' },
+      ],
     });
   });
 });
@@ -119,7 +149,7 @@ describe('useLexilouhette', () => {
     const g = useLexilouhette(level);
     typeAll(g, 'icne');
     typeAll(g, 'asôn');
-    expect(g.spots.value.filter((s) => s.found).map((s) => s.display)).toEqual([
+    expect(g.families.value.filter((f) => f.found).map((f) => f.rows[0].display)).toEqual([
       'passion',
       'piscine',
     ]);
@@ -128,12 +158,14 @@ describe('useLexilouhette', () => {
     expect(g.latest.value).toBe('PISCINE');
   });
 
-  it('accepts accented keys and ends once every spot is filled', async () => {
+  it('scores a family once and ends once every spot is filled', async () => {
     const g = useLexilouhette(level);
-    for (const letters of ['ícné', 'asôn', 'asve']) typeAll(g, letters);
-    expect(g.exhausted.value).toBe(false);
-    typeAll(g, 'asfs');
+    for (const letters of ['ícné', 'asfs']) typeAll(g, letters);
     expect(g.feedback.value.points).toBe(pts('PASSIFS'));
+    typeAll(g, 'asve');
+    expect(g.feedback.value.points).toBe(0);
+    expect(g.exhausted.value).toBe(false);
+    typeAll(g, 'asôn');
     expect(g.exhausted.value).toBe(true);
     expect(g.playing.value).toBe(false);
     await Promise.resolve();
@@ -142,19 +174,20 @@ describe('useLexilouhette', () => {
 });
 
 describe('levels', () => {
-  it('ships levels of 10 to 25 words, each fitting its silhouette', () => {
+  it('ships levels of 10 to 30 families, each word fitting its silhouette', () => {
     expect(LEVELS.length).toBeGreaterThan(500);
     expect(new Set(LEVELS.map((l) => l.pattern)).size).toBe(LEVELS.length);
     for (const l of LEVELS.map(buildLevel)) {
       const blanks = [...l.pattern].filter((p) => p === '_').length;
-      expect(blanks).toBeLessThanOrEqual(l.pattern.length - blanks + 1);
-      expect(l.pattern.length).toBeLessThanOrEqual(8);
-      expect(l.answers.size).toBeGreaterThanOrEqual(10);
-      expect(l.answers.size).toBeLessThanOrEqual(25);
+      expect(blanks).toBeGreaterThanOrEqual(2);
+      expect(l.pattern.length - blanks).toBeGreaterThanOrEqual(2);
+      expect(l.pattern.length).toBeLessThanOrEqual(7);
+      expect(l.families.length).toBeGreaterThanOrEqual(10);
+      expect(l.families.length).toBeLessThanOrEqual(30);
       for (const a of l.answers.values()) {
         expect(a.key).toHaveLength(l.pattern.length);
         expect([...l.pattern].every((p, i) => p === '_' || p === a.key[i])).toBe(true);
-        expect(a.spellings.every((s) => keyOf(s) === a.key)).toBe(true);
+        expect(a.spellings.every((s) => keyOf(s.form) === a.key)).toBe(true);
       }
     }
   });
