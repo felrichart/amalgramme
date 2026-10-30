@@ -183,6 +183,9 @@ function worthOf(row, spelling) {
   return null;
 }
 
+// A past participle is only playable as an adjective: say so first.
+const natureOf = (label) => (label.startsWith('part. passé') ? `adj., ${label}` : label);
+
 const tipText = computed(() => {
   if (!tip.value) return null;
   const { form, label, base } = tip.value.spelling;
@@ -191,7 +194,7 @@ const tipText = computed(() => {
   return {
     worth: worthOf(row, tip.value.spelling),
     word: cap(form),
-    nature: form === base ? label : `${label} ${deBefore(base)}${base}`.trim(),
+    nature: form === base ? label : `${natureOf(label)} ${deBefore(base)}${base}`.trim(),
     loading: definition === undefined,
     definition:
       definition === undefined

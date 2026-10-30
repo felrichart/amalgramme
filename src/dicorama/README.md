@@ -56,10 +56,10 @@ fréquence, réglée pour environ 5/30/35/25/5 % des familles des niveaux de 5 �
 lettres dans les tranches 25, 26–49, 50–74, 75–98 et 99. Constantes en tête de
 `game.js`.
 
-Survoler (ou toucher) un mot trouvé montre ce qu'il est de sa base (« part. passé
-fém. plur. de fatiguer ») et le sens de la base sur le Wiktionnaire : celui choisi
-par l'admin, sinon le premier qui lui est propre (`definitions.js` ; les sens sont
-gardés ensuite sur l’appareil). Toucher un mot qui a d'autres graphies (pêche :
+Survoler (ou toucher) un mot trouvé montre ce qu'il est de sa base (« adj., part.
+passé fém. plur. de fatiguer », rien pour un infinitif) et le sens de la base sur
+le Wiktionnaire : celui choisi par l'admin, sinon le premier qui lui est propre
+(`definitions.js` ; les sens sont gardés ensuite sur l’appareil). Toucher un mot qui a d'autres graphies (pêche :
 péché, pêché) les déplie dessous, un mot ouvert à la fois.
 
 Les mots jouables : tout ce qui n'est pas un verbe, les infinitifs et les
