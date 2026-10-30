@@ -91,16 +91,26 @@ async function placeTip(el) {
   if (box && box.y + h > bottom) box.y = Math.max(board.scrollTop + TIP_MARGIN, bottom - h);
 }
 
-function showTip(r, spelling, el) {
-  tip.value = { id: r.id, spelling, box: null };
-  if (el) placeTip(el);
-  const { base } = spelling;
+function loadDefinition(base) {
   if (base in definitions) return;
   definitions[base] = undefined;
   definitionOf(base).then(
     (text) => (definitions[base] = text),
     () => (definitions[base] = false),
   );
+}
+
+// Fetched as soon as a word is found, not when its bubble opens: the Wiktionnaire is slow.
+watch(
+  () => props.rows.filter((r) => r.found).flatMap((r) => r.answer.spellings.map((sp) => sp.base)),
+  (bases) => bases.forEach(loadDefinition),
+  { immediate: true },
+);
+
+function showTip(r, spelling, el) {
+  tip.value = { id: r.id, spelling, box: null };
+  if (el) placeTip(el);
+  loadDefinition(spelling.base);
 }
 const hideTip = () => (tip.value = null);
 
@@ -166,9 +176,10 @@ const tipText = computed(() => {
     worth: worthOf(row, tip.value.spelling),
     word: cap(form),
     nature: form === base ? label : `${label} ${deBefore(base)}${base}`.trim(),
+    loading: definition === undefined,
     definition:
       definition === undefined
-        ? '…'
+        ? 'Chargement…'
         : definition === null
           ? 'Définition manquante.'
           : definition === false
@@ -272,7 +283,7 @@ const cardKey = (r) =>
         <span class="tip-word">{{ tipText.word }}</span>
         <span v-if="tipText.nature" class="tip-nature">{{ tipText.nature }}</span>
       </div>
-      <div class="tip-def">{{ tipText.definition }}</div>
+      <div class="tip-def" :class="{ loading: tipText.loading }">{{ tipText.definition }}</div>
       <span v-if="tipText.worth" class="worth" :class="{ bonus: tipText.worth.bonus }">{{
         tipText.worth.text
       }}</span>
@@ -533,6 +544,9 @@ const cardKey = (r) =>
   -webkit-line-clamp: 7;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.tip-def.loading {
+  font-style: italic;
 }
 /* What the word is worth, at the foot of its bubble: the rare bonus stands out. */
 .worth {
