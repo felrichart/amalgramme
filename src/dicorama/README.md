@@ -20,28 +20,30 @@ Trois niveaux de regroupement :
   suivantes rejoignent sa sous-liste, après ses homonymes, sans compter (la
   sous-liste s'ouvre à leur arrivée).
 
-Chaque famille trouvée compte, de deux sortes. Les familles **courantes** forment
-la liste : une place numérotée chacune (01, 02…), vide au départ, dans l'ordre
-alphabétique, qui aide à les chercher. Une famille **rare** n'a pas de place : sa
-ligne apparaît une fois trouvée, marquée d'une petite étoile à quatre branches.
+Les familles **courantes** forment la liste : une place numérotée chacune (01,
+02…), vide au départ, dans l'ordre alphabétique, toutes visibles d'emblée en 2
+colonnes, la première remplie d'abord (lignes plus serrées si l'écran est court, défilement en dernier recours), lues de haut
+en bas. Sous elles, la place de la plus longue sous-liste du niveau est gardée,
+pour qu'en ouvrir une ne déplace rien. Le score, en haut à droite, est X/N : les
+familles de la liste trouvées, sur leur nombre.
 
-Trois étoiles, rien d'affiché avant la première : **une** à 10 familles trouvées,
-rares comprises (« Bravo, vous avez trouvé 10 mots ») ; **deux** quand toute la
-liste est trouvée (les rares n'y comptent pas) ; **trois** quand les rares le sont
-aussi. Chacune a sa fenêtre de félicitations. Le score, à gauche des mots, est le
-nombre de familles trouvées : sur 10 jusqu'à la première étoile ; puis sur la liste
-plus les rares trouvés (15/17, un rare : 16/18) ; sur « ? » de la deuxième étoile à
-la troisième ; sur le total une fois tout trouvé. Il change une fois la fenêtre de
-l'étoile fermée. Sous la saisie, jusqu'au premier mot tapé en entier (trouvé ou non), le
-prochain but : « trouve 10 mots », « trouve tous les mots de la liste », « trouve
-tous les mots rares », ou « tous les mots ont déjà été trouvés ».
+Les familles **rares** sont à part, marquées d'un livre ouvert : la dernière
+place de la liste est leur boîte, vide jusqu'au premier rare trouvé, puis un petit
+bouton « 📖 3 » qui ouvre leur fenêtre (qui dit quand tous sont trouvés). Un mot
+rare trouvé y rentre : le bouton s'élargit en case noire, la carte du mot sort, se
+montre et rentre, puis la case redevient le petit bouton. Ils ne comptent pas dans
+le score.
 
-Il n'y a pas d'accueil : `/dicorama` mène au niveau du jour (`/dicorama/<date>`, le
-dernier jour joué). La date du jour, en petit, est en haut à droite ; les mots
-prennent toute la hauteur à droite ; à gauche, le score en grand, les étoiles, puis
-« niveaux passés » et le ⋯ du niveau (remettre à zéro). « Niveaux passés » (`/dicorama/jours`) liste
-les jours joués, du plus récent au plus ancien, avec leur score et leurs étoiles ; en
-toucher un le rouvre.
+Trois étoiles, chacune avec sa fenêtre : **une** au tiers de la liste (⌈N/3⌉),
+**deux** aux deux tiers (⌈2N/3⌉), **trois** avec toute la liste. Un quatrième
+badge, le **livre doré**, quand tous les rares sont trouvés (s'il y en a). Les
+badges s'affichent près du score une fois leur fenêtre fermée. Sous la saisie,
+jusqu'au premier mot tapé en entier (trouvé ou non), le prochain but : « trouve 4
+mots », « trouve 8 mots », « trouve tous les mots de la liste ».
+
+L'accueil (`/dicorama`) montre le motif du jour en grand, Jouer, puis les jours
+passés avec leur score et leurs badges ; en toucher un l'ouvre
+(`/dicorama/<date>`).
 
 La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
 dernière. Un mot complet est vérifié tout de suite, sans bouton ; refusé, il reste

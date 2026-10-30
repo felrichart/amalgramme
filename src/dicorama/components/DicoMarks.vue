@@ -1,20 +1,38 @@
 <script setup>
 /*
- * A level's stars, 1em high, none until the first is won: one at 10 words, two
- * once the list is found, three once the rare words are too. Hovering a star, or
- * tapping it (which then doesn't reach a row it sits in), shows what it's won
- * for in a bubble above it. `pop` animates the star just won on mount.
+ * A level's badges, 1em high, none until the first is won: a star at a third of
+ * the list, two at two thirds, three with all of it, then the golden book once
+ * every rare word is found. Hovering a badge, or tapping it (which then doesn't reach a
+ * row it sits in), shows what it's won for in a bubble above it. `pop` animates
+ * the last one on mount.
  */
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import DicoStar from './DicoStar.vue';
-import { GOAL } from '../game.js';
+import DicoBook from './DicoBook.vue';
 
-defineProps({
+const props = defineProps({
   stars: { type: Number, required: true },
+  book: { type: Boolean, default: false },
+  // The list words found to win each star (see progressOf).
+  steps: { type: Array, required: true },
   pop: { type: Boolean, default: false },
 });
-const LABELS = ['aucune étoile', '1 étoile', '2 étoiles', '3 étoiles'];
-const TIPS = [`${GOAL} mots trouvés`, 'Toute la liste trouvée', 'Tous les mots rares trouvés'];
+const BOOK_TIP = 'Tous les mots rares';
+
+const badges = computed(() => [
+  ...[`${props.steps[0]} mots trouvés`, `${props.steps[1]} mots trouvés`, 'Toute la liste']
+    .slice(0, props.stars)
+    .map((tip) => ({ tip, book: false })),
+  ...(props.book ? [{ tip: BOOK_TIP, book: true }] : []),
+]);
+const label = computed(() =>
+  [
+    props.stars ? `${props.stars} étoile${props.stars > 1 ? 's' : ''}` : '',
+    props.book ? 'tous les mots rares' : '',
+  ]
+    .filter(Boolean)
+    .join(', '),
+);
 
 // The star whose bubble shows.
 const tip = ref(null);
@@ -45,29 +63,31 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
 
 <template>
   <span
-    v-if="stars"
+    v-if="badges.length"
     ref="root"
     class="marks"
     :class="{ pop }"
     role="img"
-    :aria-label="LABELS[stars]"
+    :aria-label="label"
   >
     <span
-      v-for="i in stars"
+      v-for="(b, i) in badges"
       :key="i"
       class="slot"
+      :class="{ apart: b.book }"
       @pointerenter="hover(i)($event)"
       @pointerleave="unhover"
       @click.stop.prevent="tap(i)"
     >
-      <DicoStar class="mark" :class="{ fresh: i === stars }" />
+      <DicoBook v-if="b.book" gold class="mark" :class="{ fresh: i === badges.length - 1 }" />
+      <DicoStar v-else class="mark" :class="{ fresh: i === badges.length - 1 }" />
       <span
         v-if="tip === i"
         :ref="setBubble"
         class="bubble"
         role="tooltip"
         :style="{ '--shift': `${shift}px` }"
-        >{{ TIPS[i - 1] }}</span
+        >{{ b.tip }}</span
       >
     </span>
   </span>
@@ -83,6 +103,9 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
   position: relative;
   display: block;
   cursor: default;
+}
+.slot.apart {
+  margin-left: 0.12em;
 }
 .mark {
   color: var(--dc-yellow);

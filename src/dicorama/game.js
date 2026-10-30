@@ -4,10 +4,10 @@
  * A word is what's typed (without accents): its master spelling, shown, and its
  * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
  * durs) form a family: its first find counts once, its later ones join it
- * without counting. Every family found counts, of two kinds: the common ones
- * are the list, a numbered spot each; a rare one shows only once found. A level
- * wins a star at GOAL families found (rare ones too), two once the list is
- * found, three once every family is.
+ * without counting. The common families are the list, a numbered spot each,
+ * the score counting them; the rare ones are kept apart, found as a bonus. A
+ * level wins a star at a third of the list, two at two thirds, three with all
+ * of it, and the golden book once every rare family is found.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
@@ -30,9 +30,8 @@ export const RARE_POINTS = 75;
 const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, RARE_POINTS, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
 
-// Families to find for the first star; the list holds more, for the second.
-export const GOAL = 10;
-export const LIST_MIN = GOAL + 1;
+// The fewest families a list can hold, so its stars come one at a time.
+export const LIST_MIN = 11;
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
@@ -140,34 +139,45 @@ export function opens(level, found, key) {
   return !found.some((k) => k !== key && familyOf(level, k) === id);
 }
 
+/* The list words found to win each star, out of `total`. */
+export const starSteps = (total) => [Math.ceil(total / 3), Math.ceil((total * 2) / 3), total];
+
 /*
- * Where a player stands, the words in `found` being found: `score`, the families
- * found, `rare` of them rare (out of `rareTotal`), the others of the list (`listed`
- * of `listTotal`); `goal`, the score of the first star; `stars`, 0 to 3.
+ * Where a player stands, the words in `found` being found: `score`, the list's
+ * families found, out of `total`; `rare` families found, out of `rareTotal`;
+ * `steps`, the score of each star; `stars`, 0 to 3; `book`, every rare family
+ * found (there being some).
  */
 export function progressOf(level, found) {
   const opened = new Set(found.map((k) => familyOf(level, k)));
   const families = level.families.filter((f) => opened.has(f.id));
-  const score = families.length;
   const rare = families.filter((f) => f.rare).length;
-  const listTotal = level.families.filter((f) => !f.rare).length;
-  const goal = Math.min(GOAL, listTotal);
-  const stars =
-    score === level.families.length ? 3 : score - rare === listTotal ? 2 : score >= goal ? 1 : 0;
+  const score = families.length - rare;
+  const total = level.families.filter((f) => !f.rare).length;
+  const rareTotal = level.families.length - total;
+  const steps = starSteps(total);
   return {
     score,
+    total,
     rare,
-    rareTotal: level.families.length - listTotal,
-    listed: score - rare,
-    listTotal,
-    goal,
-    stars,
+    rareTotal,
+    steps,
+    stars: steps.filter((s) => score >= s).length,
+    book: rareTotal > 0 && rare === rareTotal,
   };
+}
+
+/* The most sub-words a spot of the list may show: its family's every spelling
+ * but the one filling it. */
+export function kidsMax(level) {
+  const spellings = (f) => f.keys.reduce((n, k) => n + level.answers.get(k).spellings.length, 0);
+  return Math.max(0, ...level.families.filter((f) => !f.rare).map((f) => spellings(f) - 1));
 }
 
 /*
  * The level's list, alphabetical: a numbered spot per family of the list
- * ('main'), filled by its first find, and a row per rare family found ('rare').
+ * ('main'), filled by its first find, and a row per rare family found ('rare'),
+ * shown apart.
  * A row's `kids` are its word's homonyms then its family's later finds
  * (`variant`, with their own homonyms), oldest first; `keys`, every word it
  * shows.
@@ -220,13 +230,3 @@ const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 
 /* "de" before a word, elided before a vowel (d’aimer). */
 export const deBefore = (word) => (VOWEL.test(word) ? 'd’' : 'de ');
-
-/*
- * The score as shown, `stars` being won (or greeted): over the goal; then over
- * the list plus the rare words found (15/17, a rare one: 16/18); then over "?"
- * while rare ones hide; then over every word.
- */
-export function scoreOf(p, stars = p.stars) {
-  const max = [p.goal, p.listTotal + p.rare, '?', p.score][stars];
-  return { value: p.score, max };
-}

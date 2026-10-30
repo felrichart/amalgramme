@@ -9,7 +9,7 @@ import '../theme.js';
 import { getToday } from '../../utils/today.js';
 import { bank, loadProgress } from '../levels.js';
 import { officialLevel } from '../store.js';
-import { buildLevel, progressOf, scoreOf, keyOf } from '../game.js';
+import { buildLevel, progressOf, keyOf } from '../game.js';
 import { dayColor } from '../days.js';
 
 const router = useRouter();
@@ -28,7 +28,11 @@ const rows = bank().map((l) => {
   };
   if (!found.length) return row;
   const progress = progressOf(level, found);
-  return { ...row, score: scoreOf(progress), done: progress.stars >= 2 };
+  return {
+    ...row,
+    score: { value: progress.score, max: progress.total },
+    done: progress.stars === 3,
+  };
 });
 
 const length = ref(null);

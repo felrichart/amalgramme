@@ -24,25 +24,26 @@ const back = props.source === 'bank' ? '/dicorama/banque' : '/dicorama/a-venir';
 <template>
   <div class="dico game" :style="{ '--day': color }">
     <div class="screen">
-      <header class="bar">
-        <button class="dc-icon" type="button" aria-label="retour" @click="router.push(back)">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </button>
-        <h1 class="title">{{ level.pattern.replaceAll('_', '·') }}</h1>
-      </header>
-      <DicoBoard :level="level" />
+      <DicoBoard :level="level">
+        <template #lead>
+          <button class="dc-icon" type="button" aria-label="retour" @click="router.push(back)">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+          <h1 class="title">{{ level.pattern.replaceAll('_', '·') }}</h1>
+        </template>
+      </DicoBoard>
     </div>
   </div>
 </template>
@@ -59,12 +60,6 @@ const back = props.source === 'bank' ? '/dicorama/banque' : '/dicorama/a-venir';
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: max(10px, env(safe-area-inset-top)) 8px 8px 10px;
 }
 .title {
   margin: 0;

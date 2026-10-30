@@ -1,8 +1,9 @@
 <script setup>
 /*
- * The level's words, a slot each (see listOf), in one column filling its parent
- * (the cream board), scrolling once they outgrow it: fades show there's more
- * above or below. Left of a slot: its number for the list, a sparkle for a rare
+ * The level's words, a slot each (see listOf), in its parent (the cream board),
+ * scrolling once they outgrow it: fades show there's more above or below. `fit`
+ * spreads them over two columns, read down, the rare words' box last (see
+ * DicoRareBox). Left of a slot: its number for the list, a book for a rare
  * word. A found word is a light card in
  * its slot; tapping it shows its definition, and opens its sub-list (homonyms,
  * then its family's later finds) when it has one, one at a time; its bubble opens
@@ -12,7 +13,8 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { deBefore } from '../game.js';
 import { definitionOf } from '../definitions.js';
-import DicoSparkle from './DicoSparkle.vue';
+import DicoBook from './DicoBook.vue';
+import DicoRareBox from './DicoRareBox.vue';
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -22,12 +24,24 @@ const props = defineProps({
   arrival: { type: String, default: null },
   // `{ key, n }`: the word typed again, nudged on each retry.
   nudge: { type: Object, default: null },
+  // The rare words found (rows too), for their box after the list; null: no box.
+  rares: { type: Array, default: null },
+  /* Two columns, the first filled first, keeping room under them, when there's
+   * some, for `reserve` sub-words (the longest sub-list), so none opening scrolls. */
+  fit: { type: Boolean, default: false },
+  reserve: { type: Number, default: 0 },
 });
+const emit = defineEmits(['rares']);
 
-// Sizes in px: row, sub-word and the gap between sub-words (as in the CSS).
-const ROW = 34;
+// Sizes in px (as in the CSS): sub-word, the gap between sub-words, the board's
+// vertical padding, and each row size's row and gap between rows.
 const KID = 22;
 const KID_GAP = 4;
+const PAD_Y = 28;
+const SIZES = { roomy: { row: 34, gap: 8 }, compact: { row: 28, gap: 5 } };
+// Two columns at most: three would leave words too narrow to read on a phone.
+const COLUMNS = 2;
+const kidsHeight = (n) => (n ? n * (KID + KID_GAP) + 2 : 0);
 
 const boardEl = ref(null);
 const rowsEl = ref(null);
@@ -35,9 +49,11 @@ const rowsEl = ref(null);
  * board or its content resizes (a word landing, a sub-list opening). */
 const above = ref(false);
 const below = ref(false);
+const room = ref(Infinity);
 function measure() {
   const el = boardEl.value;
   if (!el) return;
+  room.value = el.clientHeight - PAD_Y;
   above.value = el.scrollTop > 4;
   below.value = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
 }
@@ -207,8 +223,48 @@ const tipText = computed(() => {
   };
 });
 
-const slotHeight = (r) => (open.value === r.id ? ROW + r.kids.length * (KID + KID_GAP) + 2 : ROW);
-const kidTop = (i) => ROW + i * (KID + KID_GAP);
+const cells = computed(() => [...props.rows, ...(props.rares ? [{ id: 'rares', box: true }] : [])]);
+/* How many rows the first column takes, and their size. Fitting, it's filled
+ * first: roomy rows and room for the longest sub-list, else roomy rows alone (a
+ * sub-list opening then scrolls), else compact ones. Past that, the words
+ * split in halves and scroll. */
+const layout = computed(() => {
+  const n = cells.value.length;
+  if (!props.fit) return { size: 'roomy', first: n };
+  const lines = (size, reserve) => {
+    const { row, gap } = SIZES[size];
+    return Math.floor((room.value - kidsHeight(reserve) + gap) / (row + gap));
+  };
+  const tries = [
+    ['roomy', props.reserve],
+    ['roomy', 0],
+    ['compact', 0],
+  ];
+  for (const [size, reserve] of tries) {
+    const fit = lines(size, reserve);
+    if (fit * COLUMNS >= n) return { size, first: Math.min(fit, n) };
+  }
+  return { size: 'compact', first: Math.ceil(n / COLUMNS) };
+});
+const columns = computed(() => {
+  const { first } = layout.value;
+  // Two columns wide even when the first holds them all.
+  return props.fit ? [cells.value.slice(0, first), cells.value.slice(first)] : [cells.value];
+});
+const ROW = computed(() => SIZES[layout.value.size].row);
+const slotHeight = (r) => ROW.value + (open.value === r.id ? kidsHeight(r.kids.length) : 0);
+const kidTop = (i) => ROW.value + i * (KID + KID_GAP);
+
+// The rare words' box: the word landing in it, pointed at or nudged there.
+const inRares = (key) => props.rares?.find((r) => r.keys.includes(key));
+const rareArrival = computed(() => {
+  const r = props.arrival && inRares(props.arrival);
+  if (!r) return null;
+  const fresh = r.answer.key === props.arrival;
+  const word = fresh ? r.answer.display : r.kids.find((k) => k.key === props.arrival).spelling.form;
+  return { word: cap(word), fresh };
+});
+const rareNudge = computed(() => (props.nudge && inRares(props.nudge.key) ? props.nudge.n : null));
 
 // Remade on each retry, so the nudge replays.
 const nudgeKey = (key) => key + (props.nudge?.key === key ? `-${props.nudge.n}` : '');
@@ -218,67 +274,80 @@ const nudged = (key) => props.nudge?.key === key;
 <template>
   <section ref="boardEl" class="board" @scroll="onScroll">
     <div class="less" :class="{ shown: above }" aria-hidden="true" />
-    <div ref="rowsEl" class="rows">
-      <div v-for="r in rows" :key="r.id" class="line">
-        <span class="mark" aria-hidden="true">
-          <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
-            pad(r.num)
-          }}</span>
-          <DicoSparkle v-else class="sparkle" />
-        </span>
-        <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
-          <template v-if="r.answer">
-            <button
-              v-for="(kid, i) in r.kids"
-              :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
-              class="word kid"
-              type="button"
-              :tabindex="open === r.id ? 0 : -1"
-              :class="{
-                shown: open === r.id,
-                variant: kid.kind === 'variant',
-                arrive: kid.kind === 'variant' && kid.key === arrival,
-                nudge: kid.kind === 'variant' && nudged(kid.key),
-              }"
-              :style="{
-                top: `${kidTop(i)}px`,
-                transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
-                animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
-              }"
-              @click="tapKid(r, kid, $event)"
-              @pointerenter="hover(r, kid.spelling)($event)"
-              @pointerleave="unhover"
-            >
-              <span class="text">{{ cap(kid.spelling.form) }}</span>
-            </button>
-            <button
-              :key="nudgeKey(r.answer.key)"
-              class="word card"
-              :class="{
-                missed: !r.found,
-                arrive: r.answer.key === arrival,
-                nudge: nudged(r.answer.key),
-              }"
-              type="button"
-              :aria-expanded="r.kids.length ? open === r.id : undefined"
-              :aria-label="
-                r.kids.length
-                  ? `${r.answer.display}, ${r.kids.length + 1} formes`
-                  : r.answer.display
-              "
-              @click="tapWord(r, $event)"
-              @pointerenter="hover(r, r.answer.spellings[0])($event)"
-              @pointerleave="unhover"
-            >
-              <span class="text">{{ cap(r.answer.display) }}</span>
-              <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
-            </button>
-          </template>
-          <span v-else class="sr-only">mot à trouver</span>
-        </div>
-        <span class="pointer">
-          <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
-        </span>
+    <div ref="rowsEl" class="rows" :class="layout.size">
+      <div v-for="(col, c) in columns" :key="c" class="col">
+        <template v-for="r in col" :key="r.id">
+          <DicoRareBox
+            v-if="r.box"
+            class="line"
+            :count="rares.length"
+            :arrival="rareArrival"
+            :nudge="rareNudge"
+            :pointed="!!inRares(pointer)"
+            @open="emit('rares')"
+          />
+          <div v-else class="line">
+            <span class="mark" aria-hidden="true">
+              <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
+                pad(r.num)
+              }}</span>
+              <DicoBook v-else class="book" />
+            </span>
+            <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
+              <template v-if="r.answer">
+                <button
+                  v-for="(kid, i) in r.kids"
+                  :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
+                  class="word kid"
+                  type="button"
+                  :tabindex="open === r.id ? 0 : -1"
+                  :class="{
+                    shown: open === r.id,
+                    variant: kid.kind === 'variant',
+                    arrive: kid.kind === 'variant' && kid.key === arrival,
+                    nudge: kid.kind === 'variant' && nudged(kid.key),
+                  }"
+                  :style="{
+                    top: `${kidTop(i)}px`,
+                    transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
+                    animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
+                  }"
+                  @click="tapKid(r, kid, $event)"
+                  @pointerenter="hover(r, kid.spelling)($event)"
+                  @pointerleave="unhover"
+                >
+                  <span class="text">{{ cap(kid.spelling.form) }}</span>
+                </button>
+                <button
+                  :key="nudgeKey(r.answer.key)"
+                  class="word card"
+                  :class="{
+                    missed: !r.found,
+                    arrive: r.answer.key === arrival,
+                    nudge: nudged(r.answer.key),
+                  }"
+                  type="button"
+                  :aria-expanded="r.kids.length ? open === r.id : undefined"
+                  :aria-label="
+                    r.kids.length
+                      ? `${r.answer.display}, ${r.kids.length + 1} formes`
+                      : r.answer.display
+                  "
+                  @click="tapWord(r, $event)"
+                  @pointerenter="hover(r, r.answer.spellings[0])($event)"
+                  @pointerleave="unhover"
+                >
+                  <span class="text">{{ cap(r.answer.display) }}</span>
+                  <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
+                </button>
+              </template>
+              <span v-else class="sr-only">mot à trouver</span>
+            </div>
+            <span class="pointer">
+              <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
+            </span>
+          </div>
+        </template>
       </div>
     </div>
     <div
@@ -302,7 +371,7 @@ const nudged = (key) => props.nudge?.key === key;
       <div class="tip-def" :class="{ loading: tipText.loading }">{{ tipText.definition }}</div>
       <span v-if="tipText.worth" class="worth-line">
         <span class="worth" :class="{ rare: tipText.worth.rare }"
-          ><DicoSparkle v-if="tipText.worth.rare" />{{ tipText.worth.text }}</span
+          ><DicoBook v-if="tipText.worth.rare" />{{ tipText.worth.text }}</span
         >
       </span>
       <span class="tail" />
@@ -359,11 +428,23 @@ const nudged = (key) => props.nudge?.key === key;
   --num-w: 22px;
   --pointer-w: 12px;
   --gap: 5px;
-  --fs: 17px;
-  --kid-fs: 14.5px;
+  --fs: 15.5px;
+  --kid-fs: 13.5px;
   --num-fs: 12.5px;
   --row-gap: 8px;
   --kid: 22px;
+  display: flex;
+  gap: 6px;
+}
+.rows.compact {
+  --row: 28px;
+  --card: 23px;
+  --fs: 14px;
+  --row-gap: 5px;
+}
+.col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--row-gap);
@@ -400,7 +481,7 @@ const nudged = (key) => props.nudge?.key === key;
 .num.on {
   color: var(--day);
 }
-.sparkle {
+.book {
   margin-right: 1px;
   font-size: 14px;
 }
@@ -505,7 +586,7 @@ const nudged = (key) => props.nudge?.key === key;
 /* The definition: a paper slip beside the word, banded like its card. */
 .tip {
   position: fixed;
-  z-index: 20;
+  z-index: 95;
   padding: 8px 10px 9px 13px;
   border-radius: 4px 9px 9px 4px;
   background: #fffdf8;

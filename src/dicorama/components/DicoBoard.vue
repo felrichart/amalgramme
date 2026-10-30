@@ -1,18 +1,19 @@
 <script setup>
 /*
- * One Dicorama level being played, filling its screen under the header: a side
- * column (the score, the `side` slot, then the `foot` slot and the level's menu)
- * beside the words, which take all the height left, the word being typed in the
- * housing above the keyboard, and the celebration over it all when the level is
- * finished, then complete. Emits `progress` (see progressOf) as it changes.
+ * One Dicorama level being played, filling its screen: a bar (the `lead` slot,
+ * then the score, the badges won and the level's menu), the words, which take all
+ * the height left, the word being typed in the housing above the keyboard, and
+ * the celebrations over it all. Emits `progress` (see progressOf) as it changes.
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { isAdmin } from '../../composables/useAccount.js';
-import { scoreOf, REASONS } from '../game.js';
+import { REASONS, kidsMax } from '../game.js';
 import { useDicorama } from '../useDicorama.js';
 import DicoConfirm from './DicoConfirm.vue';
 import DicoScore from './DicoScore.vue';
+import DicoMarks from './DicoMarks.vue';
+import DicoRares from './DicoRares.vue';
 import DicoFinish from './DicoFinish.vue';
 import DicoList from './DicoList.vue';
 import DicoInput from './DicoInput.vue';
@@ -35,12 +36,12 @@ const message = computed(() => {
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
   if (g.typed.value) return null;
   // Until a full word is typed, what to aim for next.
-  const { stars, goal } = g.progress.value;
+  const { stars, steps } = g.progress.value;
   const aims = [
-    `trouve ${goal} mots`,
+    `trouve ${steps[0]} mots`,
+    `trouve ${steps[1]} mots`,
     'trouve tous les mots de la liste',
-    'trouve tous les mots rares',
-    'tous les mots ont déjà été trouvés',
+    'toute la liste a été trouvée',
   ];
   return { text: aims[stars], tone: 'day' };
 });
@@ -56,7 +57,10 @@ function reset() {
   confirming.value = false;
 }
 
-const score = computed(() => scoreOf(g.progress.value, g.greeted.value));
+const rows = computed(() => g.list.value.filter((r) => r.kind === 'main'));
+const rares = computed(() => g.list.value.filter((r) => r.kind === 'rare'));
+const reserve = kidsMax(props.level);
+const showingRares = ref(false);
 
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 const GAME_KEYS = ['Backspace', 'Delete', 'Escape', 'ArrowLeft', 'ArrowRight'];
@@ -65,8 +69,8 @@ function onKeydown(e) {
     if (e.key === 'Escape' || e.key === 'Enter') g.dismiss();
     return;
   }
-  if (confirming.value) {
-    if (e.key === 'Escape') confirming.value = false;
+  if (confirming.value || showingRares.value) {
+    if (e.key === 'Escape') confirming.value = showingRares.value = false;
     return;
   }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -87,54 +91,56 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
 <template>
   <div class="board-screen">
-    <div class="body">
-      <aside class="side">
-        <DicoScore stacked v-bind="score" />
-        <slot name="side" />
-        <div class="side-foot">
-          <slot name="foot" />
-          <div class="menu-wrap">
-            <button
-              class="dc-icon dots"
-              type="button"
-              aria-label="options du niveau"
-              :aria-expanded="menu"
-              @click="menu = !menu"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <circle cx="5.5" cy="12" r="1.8" />
-                <circle cx="12" cy="12" r="1.8" />
-                <circle cx="18.5" cy="12" r="1.8" />
-              </svg>
-            </button>
-            <div v-if="menu" class="menu" role="menu">
-              <button type="button" role="menuitem" @click="askReset">Remettre à zéro</button>
-              <button
-                v-if="isAdmin"
-                type="button"
-                role="menuitem"
-                @click="router.push(`/dicorama/editer/${level.pattern}`)"
-              >
-                Éditer le niveau
-              </button>
-            </div>
-          </div>
+    <header class="bar">
+      <slot name="lead" />
+      <div class="standing">
+        <DicoMarks
+          class="marks"
+          :stars="g.greeted.value.stars"
+          :book="g.greeted.value.book"
+          :steps="g.progress.value.steps"
+        />
+        <DicoScore :value="g.progress.value.score" :max="g.progress.value.total" />
+      </div>
+      <div class="menu-wrap">
+        <button
+          class="dc-icon dots"
+          type="button"
+          aria-label="options du niveau"
+          :aria-expanded="menu"
+          @click="menu = !menu"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5.5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="18.5" cy="12" r="1.8" />
+          </svg>
+        </button>
+        <div v-if="menu" class="menu" role="menu">
+          <button type="button" role="menuitem" @click="askReset">Remettre à zéro</button>
+          <button
+            v-if="isAdmin"
+            type="button"
+            role="menuitem"
+            @click="router.push(`/dicorama/editer/${level.pattern}`)"
+          >
+            Éditer le niveau
+          </button>
         </div>
-      </aside>
-      <DicoList
-        class="dc-board words"
-        :rows="g.list.value"
-        :latest="g.latest.value"
-        :arrival="arrival"
-        :nudge="nudge"
-      />
-    </div>
+      </div>
+    </header>
+
+    <DicoList
+      class="dc-board words"
+      :rows="rows"
+      :rares="rares"
+      fit
+      :reserve="reserve"
+      :latest="g.latest.value"
+      :arrival="arrival"
+      :nudge="nudge"
+      @rares="showingRares = true"
+    />
 
     <section class="housing">
       <div class="tray">
@@ -168,6 +174,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       @more="g.dismiss"
     />
 
+    <DicoRares
+      v-if="showingRares"
+      :rows="rares"
+      :complete="g.progress.value.book"
+      @close="showingRares = false"
+    />
+
     <DicoConfirm
       v-if="confirming"
       title="Remettre le niveau à zéro ?"
@@ -186,31 +199,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   display: flex;
   flex-direction: column;
 }
-.body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 10px;
-  padding: 4px 12px 0;
-}
-.side {
+.bar {
   flex: none;
-  width: 92px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 18px 0 4px;
+  gap: 6px;
+  padding: max(8px, env(safe-area-inset-top)) 6px 6px 10px;
 }
-.side-foot {
-  margin-top: auto;
+.standing {
+  margin-left: auto;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+}
+.marks {
+  font-size: 20px;
 }
 .words {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
+  margin: 0 12px;
   box-shadow: none;
 }
 .menu-wrap {
@@ -223,8 +231,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .menu {
   position: absolute;
-  left: 0;
-  bottom: calc(100% + 4px);
+  right: 0;
+  top: calc(100% + 4px);
   z-index: 40;
   min-width: 180px;
   padding: 6px;

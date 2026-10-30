@@ -9,8 +9,8 @@ import {
   opens,
   listOf,
   deBefore,
-  scoreOf,
-  GOAL,
+  starSteps,
+  kidsMax,
 } from '../src/dicorama/game.js';
 import BANK from '../src/dicorama/bank.json';
 import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
@@ -46,31 +46,35 @@ describe('progress', () => {
   it('counts the families found, rare ones too', () => {
     expect(progressOf(level, ['PASSIFS', 'PASSIVE', 'PISCINE'])).toEqual({
       score: 2,
+      total: 3,
       rare: 0,
       rareTotal: 1,
-      listed: 2,
-      listTotal: 3,
-      goal: 3,
-      stars: 0,
+      steps: [1, 2, 3],
+      stars: 2,
+      book: false,
     });
+  });
+
+  it('keeps rare words out of the score, winning the book once all are found', () => {
     const withRare = progressOf(level, ['POSTING', 'PISCINE']);
-    expect(withRare).toMatchObject({ score: 2, rare: 1, listed: 1 });
+    expect(withRare).toMatchObject({ score: 1, rare: 1, stars: 1, book: true });
+    const none = buildLevel({ pattern: 'P_S_I__', words: [[26.3, 'piscine', 'piscine']] });
+    expect(progressOf(none, ['PISCINE']).book).toBe(false);
   });
 
-  it('wins a star at the goal, rare words counting, two with the list, three with all', () => {
+  it('wins stars at a third of the list, two thirds, then all of it, rounding up', () => {
+    expect(starSteps(11)).toEqual([4, 8, 11]);
+    expect(starSteps(13)).toEqual([5, 9, 13]);
+    expect(starSteps(21)).toEqual([7, 14, 21]);
     const stars = (found) => progressOf(level, found).stars;
-    expect(stars(['POSTING', 'PASSION', 'PISCINE'])).toBe(1);
-    expect(stars(['PASSIVE', 'PASSION', 'PISCINE'])).toBe(2);
-    expect(stars(['PASSIVE', 'PASSION', 'PISCINE', 'POSTING'])).toBe(3);
+    expect(stars(['POSTING'])).toBe(0);
+    expect(stars(['POSTING', 'PISCINE'])).toBe(1);
+    expect(stars(['PASSION', 'PISCINE'])).toBe(2);
+    expect(stars(['PASSIVE', 'PASSION', 'PISCINE'])).toBe(3);
   });
 
-  it('shows the score over the goal, the list and rare words found, "?", then all', () => {
-    const max = (found, stars) => scoreOf(progressOf(level, found), stars).max;
-    expect(max(['PISCINE'])).toBe(3);
-    expect(max(['POSTING', 'PASSION', 'PISCINE'])).toBe(4);
-    expect(max(['POSTING', 'PASSION', 'PISCINE'], 0)).toBe(3);
-    expect(max(['PASSIVE', 'PASSION', 'PISCINE'])).toBe('?');
-    expect(max(['PASSIVE', 'PASSION', 'PISCINE', 'POSTING'])).toBe(4);
+  it("makes room for the list's longest sub-list", () => {
+    expect(kidsMax(level)).toBe(1);
   });
 
   it('makes families rare from 75 points, unless told which', () => {
@@ -105,16 +109,16 @@ describe('list', () => {
   });
 
   it('gives every common family a spot, a rare one showing once found', () => {
-    const words = Array.from({ length: GOAL + 2 }, (_, i) => {
+    const words = Array.from({ length: 12 }, (_, i) => {
       const word = `mot${String.fromCharCode(97 + i)}`;
-      return [GOAL + 2 - i, word, word];
+      return [12 - i, word, word];
     });
     const many = buildLevel({ pattern: 'MOT_', words, rare: ['motl'] });
-    expect(listOf(many, [])).toHaveLength(GOAL + 1);
+    expect(listOf(many, [])).toHaveLength(11);
     const rows = listOf(many, ['MOTL']);
-    expect(rows).toHaveLength(GOAL + 2);
+    expect(rows).toHaveLength(12);
     expect(shown(rows).at(-1)).toEqual(['rare', null, 'motl', true]);
-    expect(progressOf(many, ['MOTL'])).toMatchObject({ score: 1, goal: GOAL, listTotal: GOAL + 1 });
+    expect(progressOf(many, ['MOTL'])).toMatchObject({ score: 0, rare: 1, total: 11 });
   });
 
   it("fills a spot with its first find, its family's later ones under it", () => {
@@ -261,39 +265,38 @@ describe('useDicorama', () => {
     expect(g.message.value).toBe(null);
   });
 
-  it('scores a family once and wins two stars once the list is found', async () => {
+  it('scores a family once, three stars with the list, the book with the rares', async () => {
     const g = useDicorama(level);
     for (const letters of ['ícné', 'asfs', 'asve']) typeAll(g, letters);
     expect(g.progress.value.score).toBe(2);
-    expect(g.progress.value.stars).toBe(0);
+    expect(g.celebration.value).toBe('two');
+    g.dismiss();
     typeAll(g, 'asôn');
-    expect(g.progress.value.stars).toBe(2);
+    expect(g.progress.value.stars).toBe(3);
     expect(g.celebration.value).toBe('all');
     g.dismiss();
     typeAll(g, 'otng');
-    expect(g.progress.value.stars).toBe(3);
-    expect(g.celebration.value).toBe('perfect');
+    expect(g.progress.value.score).toBe(3);
+    // A rare word takes longer to land, in its box.
+    expect(g.celebration.value).toBe(null);
+    vi.advanceTimersByTime(1000);
+    expect(g.celebration.value).toBe('book');
     await Promise.resolve();
     expect(loadProgress(level.pattern).found).toHaveLength(5);
   });
 
-  it('celebrates the first star, then shows the score past the goal once that is over', () => {
+  it('celebrates a star, then shows it once that is over', () => {
     const g = useDicorama(level);
-    for (const letters of ['otng', 'icne']) typeAll(g, letters);
-    expect(g.greeted.value).toBe(0);
-    expect(g.celebration.value).toBe(null);
-    [...'ason'].forEach((ch) => g.type(ch));
+    expect(g.greeted.value).toEqual({ stars: 0, book: false });
+    [...'icne'].forEach((ch) => g.type(ch));
     vi.advanceTimersByTime(1200);
     expect(g.progress.value.stars).toBe(1);
-    expect(g.greeted.value).toBe(0);
+    expect(g.celebration.value).toBe(null);
     vi.advanceTimersByTime(800);
-    expect(g.celebration.value).toBe('goal');
-    expect(g.greeted.value).toBe(0);
+    expect(g.celebration.value).toBe('one');
+    expect(g.greeted.value.stars).toBe(0);
     g.dismiss();
-    expect(g.greeted.value).toBe(1);
-    // The rare word already found: the last common one finds everything at once.
-    typeAll(g, 'asve');
-    expect(g.celebration.value).toBe('perfect');
+    expect(g.greeted.value.stars).toBe(1);
   });
 
   it('knows once a full word is typed, found or not, until it starts over', () => {
