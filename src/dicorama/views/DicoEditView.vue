@@ -223,7 +223,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
           >
             Enregistrer le brouillon
           </button>
-          <button class="cta press" type="button" @click="save('valid')">Valider</button>
+          <button class="cta validate press" type="button" @click="save('valid')">Valider</button>
         </template>
       </div>
       <button v-if="status" class="remove" type="button" @click="confirming = true">
@@ -468,6 +468,9 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
 .actions .cta {
   flex: 1;
   padding-inline: 0.8rem;
+}
+.cta.validate {
+  color: #fff;
 }
 .message {
   margin: 0;
