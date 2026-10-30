@@ -6,8 +6,8 @@
  * ones turning over to the day's colour, then slide out to the right through the
  * slots; the fixed letters rise again after. A word already found only dips.
  *
- * Each slot shows, through its window, the whole row of cards shifted to its
- * place, so a card sliding right crosses the next slots.
+ * Each slot shows, through its window, the row of cards shifted to its place, so
+ * a card sliding right crosses the next slots.
  */
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { WAVE_STAGGER, WAVE_MS } from '../useDicorama.js';
@@ -103,6 +103,13 @@ const cards = computed(() => {
   ];
 });
 
+/* The cards each slot shows: its own, and while a found word slides out, those
+ * from its left that cross it. */
+const bySlot = computed(() => {
+  const sliding = ['flip', 'out'].includes(props.phase);
+  return props.slots.map((_, i) => cards.value.filter((c) => c.j === i || (sliding && c.j < i)));
+});
+
 const label = (s, i) => (s.fixed ? `lettre fixe ${s.ch}` : `case ${i + 1}, ${s.ch ?? 'vide'}`);
 </script>
 
@@ -133,7 +140,7 @@ const label = (s, i) => (s.fixed ? `lettre fixe ${s.ch}` : `case ${i + 1}, ${s.c
             @animationend.self="shaking = false"
           >
             <span
-              v-for="c in cards"
+              v-for="c in bySlot[i]"
               :key="c.id"
               class="card"
               :class="c.cls"
