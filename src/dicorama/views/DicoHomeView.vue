@@ -76,7 +76,6 @@ const play = (l) =>
           Banque
         </button>
       </header>
-      <p class="pitch">Un motif, des lettres fixes : trouve tous les mots qui y entrent.</p>
 
       <section class="dc-board today">
         <p class="day">{{ longDayLabel(today) }}</p>
@@ -190,6 +189,7 @@ const play = (l) =>
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 18px;
 }
 .title {
   flex: 1;
@@ -203,11 +203,6 @@ const play = (l) =>
   min-height: 34px;
   padding: 0 12px;
   font-size: 13px;
-}
-.pitch {
-  margin: 2px 0 18px 42px;
-  font-size: 14px;
-  color: var(--dc-muted);
 }
 .today {
   display: flex;
