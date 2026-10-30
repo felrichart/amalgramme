@@ -1,12 +1,12 @@
 <script setup>
-/* The score on two digits, in the day's colour, over `max` when there's one;
+/* The score on two digits, in the day's colour, over `max` (a number, or "?");
  * `stacked` puts the max under the digits. A changed digit rolls up, then the
  * score pops. */
 import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
   value: { type: Number, required: true },
-  max: { type: Number, default: null },
+  max: { type: [Number, String], required: true },
   stacked: { type: Boolean, default: false },
 });
 
@@ -32,7 +32,9 @@ const digits = computed(() => {
     chars: score.changes.value && old[i] !== ch ? [old[i], ch] : [ch],
   }));
 });
-const label = computed(() => `score ${props.value}` + (props.max ? ` sur ${props.max}` : ''));
+const label = computed(
+  () => `score ${props.value} sur ${props.max === '?' ? 'un nombre caché' : props.max}`,
+);
 </script>
 
 <template>
@@ -44,7 +46,7 @@ const label = computed(() => `score ${props.value}` + (props.max ? ` sur ${props
         </span>
       </span>
     </span>
-    <span v-if="max" class="out-of" aria-hidden="true">
+    <span class="out-of" aria-hidden="true">
       <span :key="top.changes.value" class="max" :class="{ pop: top.changes.value }"
         >/{{ max }}</span
       >

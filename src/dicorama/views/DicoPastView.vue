@@ -73,12 +73,9 @@ const back = () => (window.history.state?.back ? router.back() : router.push('/d
               }}</span>
             </span>
             <span class="result">
-              <span
-                class="score"
-                :aria-label="`score ${d.score.value}` + (d.score.max ? ` sur ${d.score.max}` : '')"
-              >
+              <span class="score" :aria-label="`score ${d.score.value} sur ${d.score.max}`">
                 <span class="value">{{ pad(d.score.value) }}</span>
-                <span v-if="d.score.max" class="max">/{{ d.score.max }}</span>
+                <span class="max">/{{ d.score.max }}</span>
               </span>
               <DicoMarks class="marks" :stars="d.stars" />
             </span>

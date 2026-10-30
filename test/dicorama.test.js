@@ -64,12 +64,13 @@ describe('progress', () => {
     expect(stars(['PASSIVE', 'PASSION', 'PISCINE', 'POSTING'])).toBe(3);
   });
 
-  it('shows the score over the goal until its star, then alone', () => {
-    const p = progressOf(level, ['PISCINE']);
-    expect(scoreOf(p)).toEqual({ value: 1, max: 3 });
-    const won = progressOf(level, ['PASSIVE', 'PASSION', 'PISCINE']);
-    expect(scoreOf(won)).toEqual({ value: 3, max: null });
-    expect(scoreOf(won, 1)).toEqual({ value: 3, max: 3 });
+  it('shows the score over the goal, the list and rare words found, "?", then all', () => {
+    const max = (found, stars) => scoreOf(progressOf(level, found), stars).max;
+    expect(max(['PISCINE'])).toBe(3);
+    expect(max(['POSTING', 'PASSION', 'PISCINE'])).toBe(4);
+    expect(max(['POSTING', 'PASSION', 'PISCINE'], 0)).toBe(3);
+    expect(max(['PASSIVE', 'PASSION', 'PISCINE'])).toBe('?');
+    expect(max(['PASSIVE', 'PASSION', 'PISCINE', 'POSTING'])).toBe(4);
   });
 
   it('makes families rare from 75 points, unless told which', () => {
@@ -276,20 +277,20 @@ describe('useDicorama', () => {
     expect(loadProgress(level.pattern).found).toHaveLength(5);
   });
 
-  it('celebrates the first star, then drops the goal once that is over', () => {
+  it('celebrates the first star, then shows the score past the goal once that is over', () => {
     const g = useDicorama(level);
     for (const letters of ['otng', 'icne']) typeAll(g, letters);
-    expect(g.stage.value).toBe(1);
+    expect(g.greeted.value).toBe(0);
     expect(g.celebration.value).toBe(null);
     [...'ason'].forEach((ch) => g.type(ch));
     vi.advanceTimersByTime(1200);
     expect(g.progress.value.stars).toBe(1);
-    expect(g.stage.value).toBe(1);
+    expect(g.greeted.value).toBe(0);
     vi.advanceTimersByTime(800);
     expect(g.celebration.value).toBe('goal');
-    expect(g.stage.value).toBe(1);
+    expect(g.greeted.value).toBe(0);
     g.dismiss();
-    expect(g.stage.value).toBe(2);
+    expect(g.greeted.value).toBe(1);
     // The rare word already found: the last common one finds everything at once.
     typeAll(g, 'asve');
     expect(g.celebration.value).toBe('perfect');

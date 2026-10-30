@@ -26,7 +26,7 @@ const CELEBRATIONS = [null, 'goal', 'all', 'perfect'];
  * retyped at once. A full word is checked as soon as its last letter is typed; a
  * rejected one stays on screen. The word that wins a star is celebrated
  * (`celebration`: 'goal' | 'all' | 'perfect', for one, two or three); the score
- * drops its goal (`stage` 2) once the first celebration is over. Auto-saves.
+ * follows the stars `greeted`, once each celebration is over. Auto-saves.
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
@@ -51,8 +51,8 @@ export function useDicorama(level) {
   // The word just retyped, pointed at in the list until the next letter.
   const marked = ref(null);
   const celebration = ref(null);
-  // Whether the goal was celebrated (or reached before this visit).
-  const greeted = ref(false);
+  // The stars celebrated (or won before this visit).
+  const greeted = ref(0);
 
   const timers = new Set();
   function later(fn, ms) {
@@ -79,8 +79,7 @@ export function useDicorama(level) {
   });
 
   const progress = computed(() => progressOf(level, state.found));
-  greeted.value = progress.value.stars > 0;
-  const stage = computed(() => (greeted.value ? 2 : 1));
+  greeted.value = progress.value.stars;
   const list = computed(() => listOf(level, state.found));
   const latest = computed(() => marked.value ?? state.found[0] ?? null);
 
@@ -182,7 +181,7 @@ export function useDicorama(level) {
 
   function dismiss() {
     celebration.value = null;
-    greeted.value = progress.value.stars > 0;
+    greeted.value = progress.value.stars;
   }
 
   /* Forgets the level's progress, to play it again. */
@@ -205,7 +204,7 @@ export function useDicorama(level) {
     latest,
     marked,
     progress,
-    stage,
+    greeted,
     celebration,
     list,
     type,

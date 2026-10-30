@@ -51,7 +51,7 @@ function reset() {
   confirming.value = false;
 }
 
-const score = computed(() => scoreOf(g.progress.value, g.stage.value));
+const score = computed(() => scoreOf(g.progress.value, g.greeted.value));
 
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 const GAME_KEYS = ['Backspace', 'Delete', 'Escape', 'ArrowLeft', 'ArrowRight'];

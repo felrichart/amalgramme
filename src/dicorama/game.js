@@ -221,8 +221,12 @@ const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 /* "de" before a word, elided before a vowel (d’aimer). */
 export const deBefore = (word) => (VOWEL.test(word) ? 'd’' : 'de ');
 
-/* The score as shown: over the goal until its star is won (`stage` 1), then alone. */
-export const scoreOf = (p, stage = p.stars ? 2 : 1) => ({
-  value: p.score,
-  max: stage === 1 ? p.goal : null,
-});
+/*
+ * The score as shown, `stars` being won (or greeted): over the goal; then over
+ * the list plus the rare words found (15/17, a rare one: 16/18); then over "?"
+ * while rare ones hide; then over every word.
+ */
+export function scoreOf(p, stars = p.stars) {
+  const max = [p.goal, p.listTotal + p.rare, '?', p.score][stars];
+  return { value: p.score, max };
+}

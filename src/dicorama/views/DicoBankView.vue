@@ -112,7 +112,7 @@ function playRandom() {
           <span class="pattern">{{ r.pattern.replaceAll('_', '·') }}</span>
           <span v-if="r.status" class="status">{{ r.status }}</span>
           <span v-if="r.score" class="score"
-            >{{ r.score.value }}<span v-if="r.score.max" class="max">/{{ r.score.max }}</span></span
+            >{{ r.score.value }}<span class="max">/{{ r.score.max }}</span></span
           >
           <span v-else class="size">{{ r.size }}</span>
         </button>

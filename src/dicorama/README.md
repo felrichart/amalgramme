@@ -29,7 +29,10 @@ Trois étoiles, rien d'affiché avant la première : **une** à 10 familles trou
 rares comprises (« Bravo, vous avez trouvé 10 mots ») ; **deux** quand toute la
 liste est trouvée (les rares n'y comptent pas) ; **trois** quand les rares le sont
 aussi. Chacune a sa fenêtre de félicitations. Le score, à gauche des mots, est le
-nombre de familles trouvées : sur 10 jusqu'à la première étoile, seul ensuite. Liste
+nombre de familles trouvées : sur 10 jusqu'à la première étoile ; puis sur la liste
+plus les rares trouvés (15/17, un rare : 16/18) ; sur « ? » de la deuxième étoile à
+la troisième ; sur le total une fois tout trouvé. Il change une fois la fenêtre de
+l'étoile fermée. Liste
 complète, « il reste des mots rares à trouver » s'affiche sous la saisie tant qu'il
 en reste.
 
