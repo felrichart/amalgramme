@@ -1,10 +1,13 @@
 <script setup>
-/* The score on two digits, in the day's colour, and the yellow bonus tag from the
- * first rare word. A changed digit rolls up, then the score pops. */
+/* The score on two digits, in the day's colour, over `max`, and the rare words
+ * found on top of it (19 /17+2). A changed digit rolls up, then the
+ * score pops. */
 import { ref, computed, watch } from 'vue';
+import DicoBonus from './DicoBonus.vue';
 
 const props = defineProps({
   value: { type: Number, required: true },
+  max: { type: Number, required: true },
   bonus: { type: Number, default: 0 },
 });
 
@@ -21,7 +24,7 @@ function rolling(source) {
   return { from, changes };
 }
 const score = rolling(() => props.value);
-const extra = rolling(() => props.bonus);
+const top = rolling(() => props.max);
 
 const digits = computed(() => {
   const now = pad(props.value);
@@ -30,15 +33,15 @@ const digits = computed(() => {
     chars: score.changes.value && old[i] !== ch ? [old[i], ch] : [ch],
   }));
 });
-const bonusChars = computed(() =>
-  extra.changes.value && extra.from.value !== props.bonus
-    ? [String(extra.from.value), String(props.bonus)]
-    : [String(props.bonus)],
+const label = computed(
+  () =>
+    `score ${props.value} sur ${props.max}` +
+    (props.bonus ? ` plus ${props.bonus} rare${props.bonus > 1 ? 's' : ''}` : ''),
 );
 </script>
 
 <template>
-  <div class="score" :aria-label="`score ${value}${bonus ? `, bonus ${bonus}` : ''}`" role="status">
+  <div class="score" :aria-label="label" role="status">
     <span :key="score.changes.value" class="digits" :class="{ pop: score.changes.value }">
       <span v-for="(d, i) in digits" :key="i" class="window">
         <span class="strip" :class="{ roll: d.chars.length > 1 }">
@@ -46,18 +49,11 @@ const bonusChars = computed(() =>
         </span>
       </span>
     </span>
-    <span
-      v-if="bonus"
-      :key="`b${extra.changes.value}`"
-      class="bonus"
-      :class="{ pop: extra.changes.value }"
-    >
-      <span class="plus" aria-hidden="true" />
-      <span class="window small">
-        <span class="strip" :class="{ roll: bonusChars.length > 1 }">
-          <span v-for="(ch, j) in bonusChars" :key="j" class="digit small">{{ ch }}</span>
-        </span>
-      </span>
+    <span class="out-of" aria-hidden="true">
+      <span :key="top.changes.value" class="max" :class="{ pop: top.changes.value }"
+        >/{{ max }}</span
+      >
+      <DicoBonus v-if="bonus" class="bonus" :count="bonus" />
     </span>
   </div>
 </template>
@@ -66,7 +62,7 @@ const bonusChars = computed(() =>
 .score {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 .digits {
   display: flex;
@@ -75,9 +71,6 @@ const bonusChars = computed(() =>
   display: block;
   height: 38px;
   overflow: hidden;
-}
-.window.small {
-  height: 20px;
 }
 .strip {
   display: flex;
@@ -97,30 +90,22 @@ const bonusChars = computed(() =>
   line-height: 38px;
   color: var(--day);
 }
-.digit.small {
-  height: 20px;
-  font-family: var(--dc-mono);
-  font-weight: 700;
-  font-size: 20px;
-  line-height: 20px;
-  color: var(--dc-yellow-ink);
-}
-.bonus {
+.out-of {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: 26px;
-  padding: 0 7px;
-  border-radius: 6px;
-  background: var(--dc-yellow);
-  box-shadow: 0 1px 0 rgb(60 40 0 / 0.5);
+  gap: 4px;
+  align-self: flex-end;
+  margin-bottom: 5px;
+  font-family: var(--dc-serif);
+  color: var(--dc-faint);
 }
-.plus {
+.max {
   display: block;
-  width: 11px;
-  height: 11px;
-  background:
-    linear-gradient(var(--dc-yellow-ink), var(--dc-yellow-ink)) center / 100% 2.5px no-repeat,
-    linear-gradient(var(--dc-yellow-ink), var(--dc-yellow-ink)) center / 2.5px 100% no-repeat;
+  font-size: 20px;
+  line-height: 1;
+}
+.bonus {
+  margin-left: -4px;
+  font-size: 20px;
 }
 </style>

@@ -3,10 +3,12 @@
  *
  * A word is what's typed (without accents): its master spelling, shown, and its
  * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
- * durs) form a family holding a single spot: the first word found fills it and
- * counts once, the family's later finds show under it but don't count. A rare
- * family is a bonus: its spot shows only once found. The level is done once every
- * other spot is filled.
+ * durs) form a family: its first find counts once, its later ones join it
+ * without counting. Every family found counts, in three kinds: the GOAL most
+ * common ones are the list, a numbered spot each; the other common ones count
+ * the same but show only once found; a rare family is a bonus on top. The level
+ * is finished at GOAL families found (any kind), complete once every common one
+ * is.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
@@ -28,6 +30,9 @@ export const RARE_POINTS = 75;
 // Tiers the points are tuned on, by their lowest points: 25, 26–49, 50–74, 75–98, 99.
 const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, RARE_POINTS, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
+
+// Families to find to finish a level, and the list's numbered spots.
+export const GOAL = 10;
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
@@ -98,8 +103,14 @@ export function buildLevel({ pattern, words, rare, banned = [] }) {
     if (!keys.length) continue;
     const points = wordPoints(freq);
     const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
-    families.push({ id, base, freq, points, rare: isRare, keys });
+    families.push({ id, base, freq, points, rare: isRare, main: false, keys });
   }
+  // The list: the most common families, the word's own base first on a tie.
+  families
+    .filter((f) => !f.rare)
+    .sort((a, b) => b.freq - a.freq || a.base.localeCompare(b.base, 'fr'))
+    .slice(0, GOAL)
+    .forEach((f) => (f.main = true));
   return { pattern, answers, families };
 }
 
@@ -117,22 +128,39 @@ export function opens(level, found, key) {
   return !found.some((k) => k !== key && familyOf(level, k) === id);
 }
 
-/* The families found: `normal` ones and `rare` ones. */
-export function scoreOf(level, found) {
+/*
+ * Where a player stands, the words in `found` being found: `score`, the families
+ * found (`rare` of them rare, out of `rareTotal`); `goal`, the families that
+ * finish the level; `total`, every common family plus the rare ones found, the
+ * score that completes it. `perfect` once every family is found, rare ones too
+ * (a level without any is just complete).
+ */
+export function progressOf(level, found) {
   const opened = new Set(found.map((k) => familyOf(level, k)));
   const families = level.families.filter((f) => opened.has(f.id));
+  const score = families.length;
   const rare = families.filter((f) => f.rare).length;
-  return { normal: families.length - rare, rare };
+  const common = level.families.filter((f) => !f.rare).length;
+  const goal = Math.min(GOAL, common);
+  const rareTotal = level.families.length - common;
+  return {
+    score,
+    rare,
+    rareTotal,
+    goal,
+    total: common + rare,
+    finished: score >= goal,
+    complete: score - rare === common,
+    perfect: rareTotal > 0 && score === level.families.length,
+  };
 }
 
-// The normal families, the ones to find.
-export const maxScore = (level) => level.families.filter((f) => !f.rare).length;
-
 /*
- * The level's list, alphabetical: a spot per normal family, numbered from 1 and
- * filled by its first find, then a row of its own for every other find: `rare`
- * for a rare family's first one (a bonus), `variant` for a family's later ones
- * (worth nothing). Once `revealed`, the families still to find show their first
+ * The level's list, alphabetical: a numbered spot per family of the list, filled
+ * by its first find, and a row per other family found: 'extra' for a common one,
+ * 'rare' for a rare one. A row's `kids` are its word's homonyms then its family's
+ * later finds (`variant`, with their own homonyms), oldest first; `keys`, every
+ * word it shows. Once `revealed`, the families still to find show their first
  * word, not `found`.
  */
 export function listOf(level, found, revealed = false) {
@@ -140,42 +168,45 @@ export function listOf(level, found, revealed = false) {
   const sorted = [...level.families].sort((a, b) =>
     firstWord(a).display.localeCompare(firstWord(b).display, 'fr'),
   );
-  const opener = new Map();
+  // Each family's finds, oldest first.
+  const finds = new Map();
   for (const key of [...found].reverse()) {
     const id = familyOf(level, key);
-    if (!opener.has(id)) opener.set(id, key);
+    finds.set(id, [...(finds.get(id) ?? []), key]);
   }
+  const homonyms = (answer) =>
+    answer.spellings.slice(1).map((spelling) => ({ key: answer.key, spelling, kind: 'homonym' }));
+
   let num = 0;
   const rows = [];
   for (const f of sorted) {
-    const key = opener.get(f.id);
+    const [key, ...later] = finds.get(f.id) ?? [];
     const answer = key ? level.answers.get(key) : revealed ? firstWord(f) : null;
-    if (!f.rare) {
-      const sort = firstWord(f).display;
-      rows.push({ id: `f${f.id}`, kind: 'main', num: ++num, answer, found: !!key, sort });
-    } else if (answer) {
-      rows.push({
-        id: `f${f.id}`,
-        kind: 'rare',
-        num: null,
-        answer,
-        found: !!key,
-        sort: answer.display,
-      });
-    }
-  }
-  for (const key of found) {
-    if (opener.get(familyOf(level, key)) === key) continue;
-    const answer = level.answers.get(key);
-    rows.push({ id: key, kind: 'variant', num: null, answer, found: true, sort: answer.display });
+    const kind = f.main ? 'main' : f.rare ? 'rare' : 'extra';
+    if (!f.main && !answer) continue;
+    const kids = !key
+      ? []
+      : [
+          ...homonyms(answer),
+          ...later.flatMap((k) => {
+            const a = level.answers.get(k);
+            return [{ key: k, spelling: a.spellings[0], kind: 'variant' }, ...homonyms(a)];
+          }),
+        ];
+    rows.push({
+      id: `f${f.id}`,
+      kind,
+      num: f.main ? ++num : null,
+      answer,
+      found: !!key,
+      keys: key ? [key, ...later] : [],
+      kids,
+      // A spot stays put whichever word fills it.
+      sort: f.main ? firstWord(f).display : answer.display,
+    });
   }
   return rows.sort((a, b) => a.sort.localeCompare(b.sort, 'fr'));
 }
-
-export const isDone = (level, found) => {
-  const opened = new Set(found.map((k) => familyOf(level, k)));
-  return level.families.every((f) => f.rare || opened.has(f.id));
-};
 
 const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 

@@ -1,6 +1,6 @@
 import { reactive, ref, computed, watch, onScopeDispose } from 'vue';
 import { normalizeChar } from '../../shared/word-rules.js';
-import { BLANK, judge, scoreOf, listOf, isDone } from './game.js';
+import { BLANK, judge, progressOf, listOf } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
 
 // Timings, in ms. A full word is answered at REPLY_AT, once its last card has
@@ -14,13 +14,19 @@ const OUT_MS = 320;
 const IN_MS = 560;
 // How long "mot inconnu" or "déjà trouvé" stays, unless one types on.
 const MESSAGE_MS = 2400;
+// The pause between a word settling in the list and the level's celebration.
+const CELEBRATE_MS = 250;
 
 /*
  * One Dicorama level being played: the blanks being typed (fixed letters stay
  * put), the found words and the score. The cursor is on the blank picked, else
  * the first empty one, else the last one, so a full word's last letter can be
  * retyped at once. A full word is checked as soon as its last letter is typed; a
- * rejected one stays on screen. The score is the families found, normal and rare. Auto-saves.
+ * rejected one stays on screen. The word that finishes the level, then the one
+ * that completes it, then the one that finds the rare ones too, is celebrated
+ * (`celebration`: 'goal' | 'all' | 'perfect'); the progress
+ * shows its second stage, to completion, once the first celebration is over.
+ * Auto-saves.
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
@@ -47,6 +53,9 @@ export function useDicorama(level) {
   const wave = ref(0);
   // The word just retyped, pointed at in the list until the next letter.
   const marked = ref(null);
+  const celebration = ref(null);
+  // Whether the goal was celebrated (or reached before this visit).
+  const greeted = ref(false);
 
   const timers = new Set();
   function later(fn, ms) {
@@ -73,8 +82,9 @@ export function useDicorama(level) {
     return empty >= 0 ? empty : blanks.length - 1;
   });
 
-  const score = computed(() => scoreOf(level, state.found));
-  const done = computed(() => isDone(level, state.found));
+  const progress = computed(() => progressOf(level, state.found));
+  greeted.value = progress.value.finished;
+  const stage = computed(() => (greeted.value || state.revealed ? 2 : 1));
   const list = computed(() => listOf(level, state.found, state.revealed));
   const latest = computed(() => marked.value ?? state.found[0] ?? null);
 
@@ -163,11 +173,24 @@ export function useDicorama(level) {
   }
 
   function land(key) {
+    const before = progress.value;
     phase.value = 'in';
     state.found.unshift(key);
     round.value++;
     setCells(blanks.map(() => null));
     later(() => phase.value === 'in' && (phase.value = null), IN_MS);
+    const now = progress.value;
+    const reached = [
+      ['perfect', 'perfect'],
+      ['complete', 'all'],
+      ['finished', 'goal'],
+    ].find(([step]) => !before[step] && now[step])?.[1];
+    if (reached) later(() => (celebration.value = reached), IN_MS + CELEBRATE_MS);
+  }
+
+  function dismiss() {
+    celebration.value = null;
+    greeted.value = progress.value.finished;
   }
 
   function reveal() {
@@ -179,6 +202,7 @@ export function useDicorama(level) {
   /* Forgets the level's progress, to play it again. */
   function reset() {
     quiet();
+    dismiss();
     state.found = [];
     state.revealed = false;
     setCells(blanks.map(() => null));
@@ -195,8 +219,9 @@ export function useDicorama(level) {
     wave,
     latest,
     marked,
-    score,
-    done,
+    progress,
+    stage,
+    celebration,
     list,
     playing,
     type,
@@ -206,5 +231,6 @@ export function useDicorama(level) {
     step,
     reveal,
     reset,
+    dismiss,
   };
 }

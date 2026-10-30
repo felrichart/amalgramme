@@ -1,17 +1,20 @@
 <script setup>
 /*
- * Dicorama's home: today's level, then the past days with their score. The admin
- * also sees the levels to come (dated later or drafts) and reaches the bank.
+ * Dicorama's home: today's level, then the past days with their score and marks
+ * (see DicoMarks). The admin also sees the levels to come
+ * (dated later or drafts) and reaches the bank.
  */
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import '../theme.js';
 import { isAdmin } from '../../composables/useAccount.js';
 import { getToday } from '../../utils/today.js';
-import { buildLevel, scoreOf, maxScore, isDone } from '../game.js';
+import { buildLevel, progressOf } from '../game.js';
 import { loadProgress } from '../levels.js';
 import { official, loadOfficial, playedLevels, upcomingLevels } from '../store.js';
 import { dayColor, dayLabel, longDayLabel } from '../days.js';
+import DicoMarks from '../components/DicoMarks.vue';
+import DicoBonus from '../components/DicoBonus.vue';
 
 const router = useRouter();
 onMounted(() => loadOfficial());
@@ -22,14 +25,18 @@ const pad = (n) => String(n).padStart(2, '0');
 function entry(l) {
   const level = buildLevel(l);
   const { found, revealed } = loadProgress(l.pattern);
+  const progress = progressOf(level, found);
   return {
     ...l,
     color: dayColor(l.date ?? today),
     mini: [...l.pattern],
-    score: scoreOf(level, found),
-    max: maxScore(level),
+    progress,
+    // As in the game: over the goal, then over every common word, rare ones on top.
+    max: progress.finished ? progress.total - progress.rare : progress.goal,
+    bonus: progress.finished ? progress.rare : 0,
+    marks: progress.perfect ? 3 : progress.complete ? 2 : progress.finished ? 1 : 0,
     started: found.length > 0 || revealed,
-    done: revealed || isDone(level, found),
+    done: revealed || progress.complete,
   };
 }
 
@@ -86,11 +93,11 @@ const play = (l) =>
             }}</span>
           </span>
           <p v-if="todays.started" class="progress">
-            <span class="big-score">{{ pad(todays.score.normal) }}</span>
-            <span>sur {{ todays.max }} mots</span>
-            <span v-if="todays.score.rare" class="bonus">+{{ todays.score.rare }}</span>
+            <span class="big-score">{{ pad(todays.progress.score) }}</span>
+            <span class="big-max">/{{ todays.max }}</span>
+            <DicoBonus v-if="todays.bonus" class="big-bonus" :count="todays.bonus" />
           </p>
-          <p v-else class="progress muted">{{ todays.max }} mots à trouver</p>
+          <DicoMarks class="marks big" :level="todays.marks" />
           <button class="dc-button" type="button" @click="play(todays)">
             {{ todays.done ? 'Revoir' : todays.started ? 'Continuer' : 'Jouer' }}
           </button>
@@ -139,17 +146,24 @@ const play = (l) =>
         <h2 class="heading">Les jours passés</h2>
         <ul class="days">
           <li v-for="l in past" :key="l.pattern">
-            <button class="day-row" type="button" :style="{ '--day': l.color }" @click="play(l)">
+            <button
+              class="day-row two"
+              type="button"
+              :style="{ '--day': l.color }"
+              @click="play(l)"
+            >
               <span class="when">{{ dayLabel(l.date) }}</span>
+              <DicoMarks class="marks" :level="l.marks" />
               <span class="dc-mini" aria-hidden="true">
                 <span v-for="(ch, i) in l.mini" :key="i" :class="ch === '_' ? 'blank' : 'fixed'">{{
                   ch === '_' ? '' : ch
                 }}</span>
               </span>
-              <span v-if="l.started" class="row-score" :class="{ done: l.done }"
-                >{{ pad(l.score.normal) }}<small>/{{ l.max }}</small></span
-              >
-              <span v-else class="row-score fresh">à jouer</span>
+              <span class="row-score"
+                ><template v-if="l.started"
+                  >{{ pad(l.progress.score) }}<small>/{{ l.max }}</small
+                  ><DicoBonus v-if="l.bonus" class="row-bonus" :count="l.bonus" /></template
+              ></span>
             </button>
             <button
               v-if="isAdmin"
@@ -239,23 +253,21 @@ const play = (l) =>
   font-size: 14px;
   color: var(--dc-muted);
 }
-.progress.muted {
+.big-max {
+  margin-left: -4px;
+  font-family: var(--dc-serif);
+  font-size: 24px;
   color: var(--dc-faint);
+}
+.big-bonus {
+  margin-left: -8px;
+  font-size: 24px;
 }
 .big-score {
   font-family: var(--dc-serif);
   font-size: 34px;
   line-height: 1;
   color: var(--day);
-}
-.bonus {
-  padding: 2px 6px;
-  border-radius: 5px;
-  background: var(--dc-yellow);
-  color: var(--dc-yellow-ink);
-  font-family: var(--dc-mono);
-  font-weight: 700;
-  font-size: 13px;
 }
 .none {
   color: var(--dc-muted);
@@ -318,6 +330,21 @@ const play = (l) =>
   font-weight: 600;
   color: var(--dc-muted);
 }
+/* A past day on two lines: its date and marks, then its pattern and score. */
+.day-row.two {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 14px 14px;
+}
+.two .row-score {
+  justify-self: end;
+  line-height: 1;
+}
+.two .marks {
+  justify-self: end;
+}
 .row-score,
 .tag {
   margin-left: auto;
@@ -328,16 +355,22 @@ const play = (l) =>
   color: var(--day);
 }
 .row-score small {
-  font-family: var(--dc-mono);
-  font-weight: 700;
-  font-size: 12px;
+  font-family: var(--dc-serif);
+  font-size: 16px;
   color: var(--dc-faint);
 }
-.row-score.done::after {
-  content: ' ✓';
-  font-size: 15px;
+.row-bonus {
+  font-size: 16px;
 }
-.row-score.fresh,
+.marks {
+  flex: none;
+  font-size: 22px;
+}
+.marks.big {
+  min-width: 0;
+  margin: 2px 0 6px;
+  font-size: 34px;
+}
 .tag {
   font-family: var(--dc-mono);
   font-weight: 700;

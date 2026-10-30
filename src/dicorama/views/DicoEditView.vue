@@ -49,8 +49,9 @@ const dirty = computed(() => snapshot() !== savedAs.value);
 const message = ref(null);
 
 const level = computed(() => buildLevel(draft.value));
-/* The families, normal then rare, each alphabetical by its first word, with its
- * words' spellings and the other bases they're homonyms of. */
+/* The families, the list's (the most common), the other common ones, then the
+ * rare ones, each alphabetical by its first word, with its words' spellings and
+ * the other bases they're homonyms of. */
 const sections = computed(() => {
   const { answers, families } = level.value;
   const first = (f) => answers.get(f.keys[0]).display;
@@ -64,7 +65,8 @@ const sections = computed(() => {
     }),
   });
   return [
-    { title: 'Réponses', families: sorted.filter((f) => !f.rare).map(withWords) },
+    { title: 'Liste', families: sorted.filter((f) => f.main).map(withWords) },
+    { title: 'En plus', families: sorted.filter((f) => !f.main && !f.rare).map(withWords) },
     { title: 'Rares', families: sorted.filter((f) => f.rare).map(withWords) },
   ];
 });
@@ -143,7 +145,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
             <span class="note" title="note de rareté">{{ f.points }}</span>
             <DicoSenses class="family-def" :word="f.base" />
             <button class="pill swap" type="button" @click="rare(f.base)">
-              {{ f.rare ? '→ réponse' : '→ rare' }}
+              {{ f.rare ? '→ courant' : '→ rare' }}
             </button>
           </header>
           <ul class="words">

@@ -16,16 +16,28 @@ Trois niveaux de regroupement :
   égalité (tares avant tarés) ; les autres sont ses homonymes, trouvés avec lui,
   listés dessous (ouverte quand on le trouve, d'un clic ensuite).
 - **La famille** réunit les saisies dont le maître mot a la même base (dur, dure,
-  durs) et occupe une seule case : la première trouvée la remplit et compte ; les
-  suivantes s'ajoutent sous elle, reliées par un trait gris, sans compter.
+  durs) et occupe une seule ligne : la première trouvée la remplit et compte ; les
+  suivantes rejoignent sa sous-liste, après ses homonymes, sans compter (la
+  sous-liste s'ouvre à leur arrivée).
 
-Une famille est une **réponse**, à place numérotée (01, 02…), ou une **rare**, en
-bonus. La liste est alphabétique : la place d'une réponse se remplit de son premier
-mot trouvé ; tout autre mot trouvé a sa propre ligne, avec l'étiquette jaune « +1 »
-s'il ouvre une famille rare, avec un « – » (variante, ne rapporte rien) s'il est
-d'une famille déjà ouverte. En haut, le score (réponses trouvées) et l'étiquette
-jaune des rares dès la première. Le niveau est fini quand toutes les réponses sont
-trouvées ; on peut continuer à chercher des rares.
+Chaque famille trouvée compte, de trois sortes. Les **10 plus fréquentes** forment
+la liste : une place numérotée chacune (01, 02…), dans l'ordre alphabétique, qui
+aide à les chercher. Les **autres familles courantes** comptent pareil mais n'ont
+pas de place : leur ligne apparaît une fois trouvée, marquée d'un point. Une
+famille **rare** compte aussi, en bonus : un « + » devant le mot.
+
+Trois étapes : le niveau est **fini** (l'étoile) à 10 familles trouvées, rares
+comprises ; une fenêtre « Bravo » l'annonce et dit combien de mots courants le
+niveau cache en tout. Il est **complet** (le trophée) quand toutes les familles
+courantes sont trouvées, avec une seconde fenêtre (« il ne reste que des mots
+rares » s'affiche alors sous la saisie). Il est **parfait** (une couronne, montrée
+seulement une fois gagnée) quand les rares le sont aussi, avec une troisième
+fenêtre. Le score, en haut, est sur 10, puis sur toutes les familles courantes, les
+rares trouvées en bonus en plus du dénominateur (`19/17+2`). L'accueil reprend le
+score (les rares à côté, une fois le niveau fini) et ses marques : une étoile (fini)
+et un trophée (complet), gris jusqu'à les gagner puis jaunes, et la couronne
+(parfait). Chaque jour passé tient sur deux lignes : la date et les marques, puis le
+motif et le score ; pas commencé, il n'a pas de score.
 
 La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
 dernière. Un mot complet est vérifié tout de suite, sans bouton ; refusé, il reste
@@ -53,7 +65,7 @@ distinguer « il cogne » d'« un cogne », et un participe présent employé co
 adjectif a sa propre entrée (fatigant, portant).
 
 Les niveaux sont tous les motifs qui passent les seuils (en tête de
-`scripts/build-levels.mjs`) : 10 à 25 réponses (les rares en plus), de 4 à 7
+`scripts/build-levels.mjs`) : 10 à 25 familles courantes (les rares en plus), de 4 à 7
 lettres, au moins 2 lettres visibles, 2 cases vides pour 4
 lettres et 3 ou 4 sinon, au moins 5 familles connues (1 par million ou plus), pas
 plus de moitié de familles qui ne sont que des pluriels. Quand un niveau en précise
@@ -68,7 +80,8 @@ officiels** validés, un par jour, jusqu'à aujourd'hui.
 
 Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.js`) :
 
-- passer une famille de réponse à rare et inversement ;
+- passer une famille de courante à rare et inversement (les 10 plus fréquentes
+  des courantes forment la liste, section « Liste », les autres « En plus ») ;
 - changer le maître mot d'une saisie : le mot suit la base de son nouveau maître
   mot, dans sa famille (créée au besoin, la famille vidée disparaît) ;
 - bannir une orthographe du niveau (✕), rétablie depuis « Bannis » ; un maître mot

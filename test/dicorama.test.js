@@ -5,12 +5,11 @@ import {
   keyOf,
   tierOf,
   wordPoints,
-  scoreOf,
+  progressOf,
   opens,
-  maxScore,
   listOf,
-  isDone,
   deBefore,
+  GOAL,
 } from '../src/dicorama/game.js';
 import BANK from '../src/dicorama/bank.json';
 import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
@@ -42,11 +41,31 @@ describe('points', () => {
   });
 });
 
-describe('score', () => {
-  it('counts the families found, normal and rare', () => {
-    expect(scoreOf(level, ['PASSIFS', 'PASSIVE', 'PISCINE'])).toEqual({ normal: 2, rare: 0 });
-    expect(scoreOf(level, ['POSTING', 'PISCINE'])).toEqual({ normal: 1, rare: 1 });
-    expect(maxScore(level)).toBe(3);
+describe('progress', () => {
+  it('counts the families found, rare ones too', () => {
+    expect(progressOf(level, ['PASSIFS', 'PASSIVE', 'PISCINE'])).toEqual({
+      score: 2,
+      rare: 0,
+      rareTotal: 1,
+      goal: 3,
+      total: 3,
+      finished: false,
+      complete: false,
+      perfect: false,
+    });
+    const withRare = progressOf(level, ['POSTING', 'PISCINE']);
+    expect(withRare).toMatchObject({ score: 2, rare: 1, total: 4 });
+  });
+
+  it('finishes at the goal, rare words counting, and completes with every common one', () => {
+    expect(progressOf(level, ['POSTING', 'PASSION', 'PISCINE'])).toMatchObject({
+      finished: true,
+      complete: false,
+    });
+    expect(progressOf(level, ['PASSIVE', 'PASSION', 'PISCINE'])).toMatchObject({
+      finished: true,
+      complete: true,
+    });
   });
 
   it('makes families rare from 75 points, unless told which', () => {
@@ -70,22 +89,61 @@ describe('tierOf', () => {
 describe('list', () => {
   const shown = (rows) => rows.map((r) => [r.kind, r.num, r.answer?.display ?? null, r.found]);
 
-  it('gives each normal family a numbered spot, alphabetical', () => {
+  const kids = (rows) => rows.flatMap((r) => r.kids.map((k) => [k.kind, k.spelling.form]));
+
+  it('gives each family of the list a numbered spot, alphabetical', () => {
     expect(shown(listOf(level, []))).toEqual([
       ['main', 1, null, false],
       ['main', 2, null, false],
       ['main', 3, null, false],
     ]);
-    expect(isDone(level, ['PISCINE', 'PASSION', 'PASSIVE'])).toBe(true);
   });
 
-  it('fills a spot with its first find, later ones and rares on rows of their own', () => {
-    expect(shown(listOf(level, ['POSTING', 'PASSIFS', 'PISCINE', 'PASSIVE']))).toEqual([
-      ['variant', null, 'passifs', true],
+  it('makes the most common families the list, the others showing once found', () => {
+    const words = Array.from({ length: GOAL + 2 }, (_, i) => {
+      const word = `mot${String.fromCharCode(97 + i)}`;
+      return [GOAL + 2 - i, word, word];
+    });
+    const many = buildLevel({ pattern: 'MOT_', words, rare: [] });
+    expect(many.families.filter((f) => f.main).map((f) => f.base)).toEqual(
+      words.slice(0, GOAL).map((w) => w[1]),
+    );
+    const rows = listOf(many, ['MOTL']);
+    expect(rows).toHaveLength(GOAL + 1);
+    expect(shown(rows).at(-1)).toEqual(['extra', null, 'motl', true]);
+    expect(progressOf(many, ['MOTL'])).toMatchObject({ score: 1, goal: GOAL, total: GOAL + 2 });
+  });
+
+  it("fills a spot with its first find, its family's later ones under it", () => {
+    const rows = listOf(level, ['POSTING', 'PASSIFS', 'PISCINE', 'PASSIVE']);
+    expect(shown(rows)).toEqual([
       ['main', 1, null, false],
       ['main', 2, 'passive', true],
       ['main', 3, 'piscine', true],
       ['rare', null, 'posting', true],
+    ]);
+    expect(kids(rows)).toEqual([['variant', 'passifs']]);
+    expect(rows[1].keys).toEqual(['PASSIVE', 'PASSIFS']);
+  });
+
+  it("lists a word's homonyms before its family's later finds", () => {
+    const tigre = buildLevel({
+      pattern: '__GRE_',
+      words: [
+        [
+          3.32,
+          'tigre',
+          [
+            ['tigres', 'plur.'],
+            ['tigrés', 'part. passé plur.', 'tigrer', 0.252],
+          ],
+          [['tigrer', 'inf.']],
+        ],
+      ],
+    });
+    expect(kids(listOf(tigre, ['TIGRER', 'TIGRES']))).toEqual([
+      ['homonym', 'tigrés'],
+      ['variant', 'tigrer'],
     ]);
   });
 
@@ -154,7 +212,7 @@ describe('useDicorama', () => {
     expect(g.cursor.value).toBe(null);
     vi.advanceTimersByTime(1200);
     expect(g.state.found).toEqual(['PISCINE']);
-    expect(g.score.value).toEqual({ normal: 1, rare: 0 });
+    expect(g.progress.value.score).toBe(1);
     expect(typed(g)).toBe('P_S_I__');
     expect(g.cursor.value).toBe(0);
   });
@@ -209,16 +267,40 @@ describe('useDicorama', () => {
     expect(g.message.value).toBe(null);
   });
 
-  it('scores a family once and is done once every spot is filled', async () => {
+  it('scores a family once and is complete once every common one is found', async () => {
     const g = useDicorama(level);
     for (const letters of ['ícné', 'asfs', 'asve']) typeAll(g, letters);
-    expect(g.score.value).toEqual({ normal: 2, rare: 0 });
-    expect(g.done.value).toBe(false);
+    expect(g.progress.value.score).toBe(2);
+    expect(g.progress.value.complete).toBe(false);
     typeAll(g, 'asôn');
-    expect(g.done.value).toBe(true);
+    expect(g.progress.value.complete).toBe(true);
+    expect(g.celebration.value).toBe('all');
+    g.dismiss();
+    typeAll(g, 'otng');
+    expect(g.progress.value.perfect).toBe(true);
+    expect(g.celebration.value).toBe('perfect');
     expect(g.playing.value).toBe(true);
     await Promise.resolve();
-    expect(loadProgress(level.pattern).found).toHaveLength(4);
+    expect(loadProgress(level.pattern).found).toHaveLength(5);
+  });
+
+  it('celebrates the goal, then shows the second stage once that is over', () => {
+    const g = useDicorama(level);
+    for (const letters of ['otng', 'icne']) typeAll(g, letters);
+    expect(g.stage.value).toBe(1);
+    expect(g.celebration.value).toBe(null);
+    [...'ason'].forEach((ch) => g.type(ch));
+    vi.advanceTimersByTime(1200);
+    expect(g.progress.value.finished).toBe(true);
+    expect(g.stage.value).toBe(1);
+    vi.advanceTimersByTime(800);
+    expect(g.celebration.value).toBe('goal');
+    expect(g.stage.value).toBe(1);
+    g.dismiss();
+    expect(g.stage.value).toBe(2);
+    // The rare word already found: the last common one finds everything at once.
+    typeAll(g, 'asve');
+    expect(g.celebration.value).toBe('perfect');
   });
 
   it('stops at the solutions and starts over', async () => {

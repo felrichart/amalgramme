@@ -2,9 +2,11 @@
 /*
  * The level's words on the cream board, a slot each (see listOf), in 2 columns,
  * roomy when they fit, else compact and scrolling, a fading arrow showing there's
- * more below. A found word is a light card in its slot; tapping it shows
- * its definition, and opens its other spellings when it has some (one word open
- * at a time); its bubble opens beside it. The yellow arrow points at the word
+ * more below. Left of a slot: its number for the list, a dot for another common
+ * word, a plus in a disc for a rare one. A found word is a light card in its slot;
+ * tapping it shows its definition, and opens its sub-list (homonyms, then its
+ * family's later finds) when it has one, one at a time; its bubble opens beside
+ * it. A word landing in a sub-list opens it. The yellow arrow points at the word
  * last tapped, else the latest one.
  */
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
@@ -19,6 +21,8 @@ const props = defineProps({
   arrival: { type: String, default: null },
   // `{ key, n }`: the word typed again, nudged on each retry.
   nudge: { type: Object, default: null },
+  // The common words to find, once rare ones are a bonus on top (stage 2).
+  common: { type: Number, default: null },
 });
 
 // Sizes in px, for 2 roomy columns, 2 and 3: row, card and sub-word heights.
@@ -64,9 +68,7 @@ const columns = computed(() => {
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const pad = (n) => String(n).padStart(2, '0');
-const others = (r) => (r.found ? r.answer.spellings.slice(1) : []);
-
-/* The word whose other spellings show, and the bubble: `{ id, spelling }`. */
+/* The row whose sub-list shows (its id), and the bubble: `{ id, spelling }`. */
 const open = ref(null);
 const tip = ref(null);
 const definitions = reactive({});
@@ -111,7 +113,11 @@ function loadDefinition(base) {
 
 // Fetched as soon as a word is found, not when its bubble opens: the Wiktionnaire is slow.
 watch(
-  () => props.rows.filter((r) => r.found).flatMap((r) => r.answer.spellings.map((sp) => sp.base)),
+  () =>
+    props.rows
+      .filter((r) => r.found)
+      .flatMap((r) => [r.answer.spellings, r.kids.map((k) => k.spelling)].flat())
+      .map((sp) => sp.base),
   (bases) => bases.forEach(loadDefinition),
   { immediate: true },
 );
@@ -132,19 +138,18 @@ watch(
 const pointer = computed(() => pointed.value ?? props.latest);
 
 function tapWord(r, e) {
-  const key = r.answer.key;
-  if (r.found) pointed.value = key;
-  if (others(r).length && open.value === key) {
+  if (r.found) pointed.value = r.answer.key;
+  if (r.kids.length && open.value === r.id) {
     open.value = null;
     return hideTip();
   }
-  open.value = others(r).length ? key : null;
+  open.value = r.kids.length ? r.id : null;
   if (tip.value?.id === r.id && tip.value.spelling.form === r.answer.display) hideTip();
   else showTip(r, r.answer.spellings[0], e.currentTarget);
 }
-function tapOther(r, sp, e) {
-  pointed.value = r.answer.key;
-  showTip(r, sp, e.currentTarget);
+function tapKid(r, kid, e) {
+  pointed.value = kid.key;
+  showTip(r, kid.spelling, e.currentTarget);
 }
 const hover = (r, spelling) => (e) =>
   e.pointerType === 'mouse' && showTip(r, spelling, e.currentTarget);
@@ -155,31 +160,45 @@ const outside = (e) => !e.target.closest?.('.word') && hideTip();
 onMounted(() => window.addEventListener('pointerdown', outside));
 onUnmounted(() => window.removeEventListener('pointerdown', outside));
 
-// A new word closes the open one.
+const rowOf = (key) => props.rows.find((r) => r.keys.includes(key));
+
+/* A new word opens its row's sub-list if it has one (it may have just joined
+ * it), else closes the open one; a word typed again opens the one it's in. */
 watch(
   () => props.arrival,
   (key) => {
     if (!key) return;
-    open.value = null;
+    const r = rowOf(key);
+    open.value = r?.kids.length ? r.id : null;
     hideTip();
     // Brought into view if the list scrolls past it.
     nextTick(() =>
       boardEl.value
-        ?.querySelector('.card.arrive')
+        ?.querySelector('.arrive')
         ?.closest('.line')
         ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
     );
   },
 );
+watch(
+  () => props.nudge,
+  (nudge) => {
+    const r = nudge && rowOf(nudge.key);
+    if (r && r.answer.key !== nudge.key) open.value = r.id;
+  },
+);
 
-/* What a found word adds beyond its family's point, if anything: a rare
- * family's bonus, or nothing for a family's later finds and a word's other
- * spellings. */
+/* What a found word is worth, when it's not the usual point: a rare family's
+ * bonus, or nothing for a word's homonyms and a family's later finds. */
 function worthOf(row, spelling) {
   if (!row?.found) return null;
-  if (spelling.form !== row.answer.display) return { text: 'Homonyme (0 point)' };
-  if (row.kind === 'rare') return { text: 'Rare (+1 bonus)', bonus: true };
-  if (row.kind === 'variant') return { text: 'Variante (0 point)' };
+  const kid = row.kids.find((k) => k.spelling === spelling);
+  if (kid?.kind === 'homonym') return { text: 'Homonyme (0 point)' };
+  if (kid) return { text: `Même famille que ${row.answer.display} (0 point)` };
+  if (row.kind === 'rare') {
+    const note = props.common ? `en plus des ${props.common} mots` : null;
+    return { text: 'Mot rare', bonus: true, note };
+  }
   return null;
 }
 
@@ -206,13 +225,14 @@ const tipText = computed(() => {
 
 function slotHeight(r) {
   const s = size.value;
-  if (open.value !== r.answer?.key) return s.row;
-  return s.row + others(r).length * (s.kid + s.kidGap) + 2;
+  if (open.value !== r.id) return s.row;
+  return s.row + r.kids.length * (s.kid + s.kidGap) + 2;
 }
 const kidTop = (i) => size.value.row + i * (size.value.kid + size.value.kidGap);
 
-const cardKey = (r) =>
-  r.answer.key + (props.nudge?.key === r.answer.key ? `-${props.nudge.n}` : '');
+// Remade on each retry, so the nudge replays.
+const nudgeKey = (key) => key + (props.nudge?.key === key ? `-${props.nudge.n}` : '');
+const nudged = (key) => props.nudge?.key === key;
 </script>
 
 <template>
@@ -224,41 +244,46 @@ const cardKey = (r) =>
             <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
               pad(r.num)
             }}</span>
-            <span v-else-if="r.kind === 'rare'" class="rare"><span class="plus" />1</span>
-            <span v-else class="variant" />
+            <span v-else-if="r.kind === 'rare'" class="plus-disc rare" />
+            <span v-else class="extra" />
           </span>
           <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
             <template v-if="r.answer">
               <button
-                v-for="(sp, i) in others(r)"
-                :key="sp.form"
+                v-for="(kid, i) in r.kids"
+                :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
                 class="word kid"
                 type="button"
-                :tabindex="open === r.answer.key ? 0 : -1"
-                :class="{ shown: open === r.answer.key }"
+                :tabindex="open === r.id ? 0 : -1"
+                :class="{
+                  shown: open === r.id,
+                  variant: kid.kind === 'variant',
+                  arrive: kid.kind === 'variant' && kid.key === arrival,
+                  nudge: kid.kind === 'variant' && nudged(kid.key),
+                }"
                 :style="{
                   top: `${kidTop(i)}px`,
-                  transitionDelay: `${open === r.answer.key ? 110 + i * 60 : (others(r).length - 1 - i) * 40}ms`,
+                  transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
                 }"
-                @click="tapOther(r, sp, $event)"
-                @pointerenter="hover(r, sp)($event)"
+                @click="tapKid(r, kid, $event)"
+                @pointerenter="hover(r, kid.spelling)($event)"
                 @pointerleave="unhover"
               >
-                <span class="text">{{ cap(sp.form) }}</span>
+                <span class="text">{{ cap(kid.spelling.form) }}</span>
               </button>
               <button
-                :key="cardKey(r)"
+                :key="nudgeKey(r.answer.key)"
                 class="word card"
                 :class="{
                   missed: !r.found,
                   arrive: r.answer.key === arrival,
-                  nudge: nudge?.key === r.answer.key,
+                  nudge: nudged(r.answer.key),
                 }"
                 type="button"
-                :aria-expanded="others(r).length ? open === r.answer.key : undefined"
+                :aria-expanded="r.kids.length ? open === r.id : undefined"
                 :aria-label="
-                  others(r).length
-                    ? `${r.answer.display}, ${others(r).length + 1} formes`
+                  r.kids.length
+                    ? `${r.answer.display}, ${r.kids.length + 1} formes`
                     : r.answer.display
                 "
                 @click="tapWord(r, $event)"
@@ -266,17 +291,13 @@ const cardKey = (r) =>
                 @pointerleave="unhover"
               >
                 <span class="text">{{ cap(r.answer.display) }}</span>
-                <span
-                  v-if="others(r).length"
-                  class="chevron"
-                  :class="{ up: open === r.answer.key }"
-                />
+                <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
               </button>
             </template>
             <span v-else class="sr-only">mot à trouver</span>
           </div>
           <span class="pointer">
-            <span v-if="r.found && r.answer.key === pointer" class="dc-arrow-left" />
+            <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
           </span>
         </div>
       </div>
@@ -300,9 +321,12 @@ const cardKey = (r) =>
         <span v-if="tipText.nature" class="tip-nature">{{ tipText.nature }}</span>
       </div>
       <div class="tip-def" :class="{ loading: tipText.loading }">{{ tipText.definition }}</div>
-      <span v-if="tipText.worth" class="worth" :class="{ bonus: tipText.worth.bonus }">{{
-        tipText.worth.text
-      }}</span>
+      <span v-if="tipText.worth" class="worth-line">
+        <span class="worth" :class="{ bonus: tipText.worth.bonus }"
+          ><span v-if="tipText.worth.bonus" class="plus-disc" />{{ tipText.worth.text }}</span
+        >
+        <span v-if="tipText.worth.note" class="worth-note">{{ tipText.worth.note }}</span>
+      </span>
       <span class="tail" />
     </div>
     <div v-if="scrolls" class="more" :class="{ shown: below }" aria-hidden="true">
@@ -409,35 +433,28 @@ const cardKey = (r) =>
 .num.on {
   color: var(--day);
 }
-.rare {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  height: 15px;
-  padding: 0 3px;
-  border-radius: 4px;
-  background: var(--dc-yellow);
-  box-shadow: 0 1px 0 rgb(60 40 0 / 0.5);
-  font-family: var(--dc-mono);
-  font-weight: 700;
-  font-size: calc(var(--num-fs) - 1px);
-  line-height: 1;
-  color: var(--dc-yellow-ink);
-}
-.plus {
+/* The rare words' mark: a small disc in the day's colour, a cream plus drawn in
+ * its centre. */
+.plus-disc {
   display: block;
-  width: 6px;
-  height: 6px;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
   background:
-    linear-gradient(var(--dc-yellow-ink), var(--dc-yellow-ink)) center / 100% 1.5px no-repeat,
-    linear-gradient(var(--dc-yellow-ink), var(--dc-yellow-ink)) center / 1.5px 100% no-repeat;
+    linear-gradient(var(--dc-cream), var(--dc-cream)) center / 6px 1.6px no-repeat,
+    linear-gradient(var(--dc-cream), var(--dc-cream)) center / 1.6px 6px no-repeat,
+    var(--day);
 }
-.variant {
+.rare {
+  margin-right: 2px;
+}
+.extra {
   display: block;
-  width: 8px;
-  height: 1.75px;
-  margin-right: 3px;
-  border-radius: 1px;
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
+  border-radius: 50%;
   background: var(--day);
 }
 .slot {
@@ -496,6 +513,22 @@ const cardKey = (r) =>
 }
 .kid.shown {
   transform: translateX(0);
+}
+/* A family's later find: its card's band, which a homonym's lighter one isn't. */
+.kid.variant {
+  box-shadow: inset 2px 0 0 var(--day);
+}
+.kid.arrive {
+  animation: kid-flash 0.9s ease-out 0.25s both;
+}
+.kid.nudge {
+  animation: dico-nudge 0.42s ease-in-out both;
+}
+@keyframes kid-flash {
+  0%,
+  30% {
+    background: var(--dc-day-soft);
+  }
 }
 .text {
   flex: 1;
@@ -570,22 +603,31 @@ const cardKey = (r) =>
   font-style: italic;
 }
 /* What the word is worth, at the foot of its bubble: the rare bonus stands out. */
-.worth {
-  align-self: flex-start;
+.worth-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 7px;
   margin-top: 3px;
+}
+.worth-note {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--dc-faint);
+}
+.worth {
   font-size: 11.5px;
   font-style: italic;
   font-weight: 600;
   color: var(--dc-faint);
 }
 .worth.bonus {
-  padding: 2px 7px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-style: normal;
-  border-radius: 4px;
-  background: var(--dc-yellow);
-  color: var(--dc-yellow-ink);
   font-weight: 700;
-  box-shadow: 0 1px 0 rgb(60 40 0 / 0.35);
+  color: var(--day);
 }
 /* Points at the word, from the bubble's side facing it. */
 .tail {

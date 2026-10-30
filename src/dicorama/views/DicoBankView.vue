@@ -9,7 +9,7 @@ import '../theme.js';
 import { getToday } from '../../utils/today.js';
 import { bank, loadProgress } from '../levels.js';
 import { officialLevel } from '../store.js';
-import { buildLevel, scoreOf, maxScore, isDone, keyOf } from '../game.js';
+import { buildLevel, progressOf, keyOf } from '../game.js';
 import { dayColor } from '../days.js';
 
 const router = useRouter();
@@ -27,8 +27,9 @@ const rows = bank().map((l) => {
     words: new Set([...level.answers.keys(), ...level.families.map((f) => keyOf(f.base))]),
   };
   if (!found.length && !revealed) return row;
-  const done = revealed || isDone(level, found);
-  return { ...row, score: scoreOf(level, found), max: maxScore(level), done };
+  const progress = progressOf(level, found);
+  const max = progress.finished ? progress.total : progress.goal;
+  return { ...row, progress, max, done: revealed || progress.complete };
 });
 
 const length = ref(null);
@@ -111,9 +112,9 @@ function playRandom() {
         <button class="row press" :class="{ done: r.done }" type="button" @click="play(r.pattern)">
           <span class="pattern">{{ r.pattern.replaceAll('_', '·') }}</span>
           <span v-if="r.status" class="status">{{ r.status }}</span>
-          <span v-if="r.score" class="score"
-            >{{ r.score.normal }}<span v-if="r.score.rare" class="rare">+{{ r.score.rare }}</span
-            ><span class="max">/{{ r.max }}</span></span
+          <span v-if="r.progress" class="score"
+            >{{ r.progress.score }}<span class="max">/{{ r.max }}</span
+            ><span v-if="r.progress.rare" class="rare">+{{ r.progress.rare }}</span></span
           >
           <span v-else class="size">{{ r.size }}</span>
         </button>

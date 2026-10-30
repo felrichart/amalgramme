@@ -1,8 +1,9 @@
 <script setup>
 /*
- * A Dicorama level: the date and score on top, the words on the cream board, the
- * word being typed in the housing above the keyboard. The day's colour tints it
- * all (today's for an undated level).
+ * A Dicorama level: the date and score on top, the words on the
+ * cream board, the word being typed in the housing above the keyboard, and the
+ * celebration over it all when the level is finished, then complete. The day's
+ * colour tints it all (today's for an undated level).
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -14,6 +15,7 @@ import { levelFor } from '../levels.js';
 import { dayColor, dayLabel } from '../days.js';
 import { useDicorama } from '../useDicorama.js';
 import DicoScore from '../components/DicoScore.vue';
+import DicoFinish from '../components/DicoFinish.vue';
 import DicoList from '../components/DicoList.vue';
 import DicoInput from '../components/DicoInput.vue';
 import DicoKeyboard from '../components/DicoKeyboard.vue';
@@ -39,7 +41,11 @@ const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
   if (g.state.revealed) return { text: 'solutions révélées', tone: 'quiet' };
-  if (g.done.value && !g.phase.value) return { text: 'tout est trouvé, bravo !', tone: 'day' };
+  const p = g.progress.value;
+  if (p.complete && !g.phase.value)
+    return p.rare < p.rareTotal
+      ? { text: 'il ne reste que des mots rares', tone: 'day' }
+      : { text: 'tout est trouvé, bravo !', tone: 'day' };
   return null;
 });
 
@@ -49,7 +55,7 @@ const confirming = ref(null);
 const CONFIRMS = {
   reveal: { title: "Voir les solutions ? Le niveau s'arrête là.", label: 'Voir' },
   reset: {
-    title: 'Recommencer ce niveau ? Tes mots trouvés seront effacés.',
+    title: 'Recommencer ce niveau ? Les mots trouvés seront effacés.',
     label: 'Recommencer',
   },
 };
@@ -62,9 +68,21 @@ function confirm() {
   confirming.value = null;
 }
 
+/* Every word found over the goal, rare ones counting; then over every common
+ * word, the rare ones found on top (19 /17+2). */
+const bonus = computed(() => (g.stage.value === 2 ? g.progress.value.rare : 0));
+const max = computed(() => {
+  const p = g.progress.value;
+  return g.stage.value === 1 ? p.goal : p.total - p.rare;
+});
+
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 const GAME_KEYS = ['Backspace', 'Delete', 'Escape', 'ArrowLeft', 'ArrowRight'];
 function onKeydown(e) {
+  if (g.celebration.value) {
+    if (e.key === 'Escape' || e.key === 'Enter') g.dismiss();
+    return;
+  }
   if (confirming.value || e.metaKey || e.ctrlKey || e.altKey) return;
   // Typing goes to the word, not to the button last tapped: drop its focus, or it
   // would show its keyboard focus ring.
@@ -101,7 +119,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           </svg>
         </button>
         <h1 class="date">{{ title }}</h1>
-        <DicoScore :value="g.score.value.normal" :bonus="g.score.value.rare" />
+        <DicoScore :value="g.progress.value.score" :max="max" :bonus="bonus" />
         <div class="menu-wrap">
           <button
             class="dc-icon"
@@ -133,7 +151,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </div>
       </header>
 
-      <DicoList :rows="g.list.value" :latest="g.latest.value" :arrival="arrival" :nudge="nudge" />
+      <DicoList
+        :rows="g.list.value"
+        :latest="g.latest.value"
+        :arrival="arrival"
+        :nudge="nudge"
+        :common="g.stage.value === 2 ? max : null"
+      />
 
       <section class="housing">
         <div class="tray">
@@ -165,6 +189,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </section>
     </div>
     <div v-if="menu" class="scrim" @click="menu = false" />
+
+    <DicoFinish
+      v-if="g.celebration.value"
+      :kind="g.celebration.value"
+      :progress="g.progress.value"
+      @more="g.dismiss"
+      @menu="router.push(back)"
+    />
 
     <ConfirmModal
       v-if="confirming"
