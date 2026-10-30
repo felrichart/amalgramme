@@ -1,86 +1,46 @@
 <script setup>
 /*
- * Dicorama's one screen for players: the day picked in the URL played under the
- * frieze of the days played, its summary (date and marks) beside the words. A
- * swipe right goes to the day before, left to the day after, as the frieze's
- * arrows do; the words slide in from that side.
+ * Dicorama's one screen for players: the day picked in the URL, its date small
+ * in the header, its marks beside the words, and a way to the days played before.
  */
-import { ref, reactive, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import '../theme.js';
 import { isAdmin } from '../../composables/useAccount.js';
 import { getToday } from '../../utils/today.js';
-import { buildLevel, progressOf, marksOf } from '../game.js';
+import { progressOf, marksOf } from '../game.js';
 import { levelFor, loadProgress } from '../levels.js';
-import { official, playedLevels } from '../store.js';
-import { dayColor, dayOfMonth, shortMonth, relativeDay } from '../days.js';
-import { useSwipe } from '../useSwipe.js';
+import { dayColor, dayOfMonth, shortMonth, shortWeekday } from '../days.js';
 import DicoBoard from '../components/DicoBoard.vue';
-import DicoFrieze from '../components/DicoFrieze.vue';
 import DicoMarks from '../components/DicoMarks.vue';
 
 const route = useRoute();
 const router = useRouter();
 const today = getToday();
 
-// The marks won while playing here, by date, over the saved ones.
-const live = reactive({});
-const saved = computed(() =>
-  // Recomputed when the levels refresh.
-  (official.levels, playedLevels()).map((l) => ({
-    date: l.date,
-    color: dayColor(l.date),
-    marks: marksOf(progressOf(buildLevel(l), loadProgress(l.pattern).found)),
-  })),
-);
-const days = computed(() => saved.value.map((d) => ({ ...d, marks: live[d.date] ?? d.marks })));
-
 const picked = computed(() => route.params.date);
 const level = computed(() => (picked.value ? levelFor('day', picked.value) : null));
-const marks = computed(() => days.value.find((d) => d.date === picked.value)?.marks ?? 0);
 
-// The side the words come in from: -1 the left (an older day), 1 the right.
-const enter = ref(0);
-const indexOf = (date) => days.value.findIndex((d) => d.date === date);
-function pick(date) {
-  if (!date || date === picked.value) return;
-  enter.value = indexOf(date) < indexOf(picked.value) ? -1 : 1;
-  router.replace(`/dicorama/${date}`);
-}
-const step = (delta) => pick(days.value[indexOf(picked.value) + delta]?.date);
+// The progress while playing here, else the saved one.
+const live = ref(null);
+watch(picked, () => (live.value = null));
+const marks = computed(() => {
+  const l = level.value;
+  return l ? marksOf(live.value ?? progressOf(l, loadProgress(l.pattern).found)) : 0;
+});
 
-const screen = ref(null);
-// A swipe right brings the day before, as turning a page back.
-useSwipe(screen, (dir) => step(-dir), '.housing, .strip');
-
-const soon = ref(false);
-let soonTimer = null;
-function showSoon(on = true) {
-  clearTimeout(soonTimer);
-  soon.value = on;
-  if (on) soonTimer = setTimeout(() => (soon.value = false), 1600);
-}
+// "ve 30 oct.", or "aujourd'hui".
+const dateLabel = computed(() =>
+  picked.value === today
+    ? "aujourd'hui"
+    : `${shortWeekday(picked.value)} ${dayOfMonth(picked.value)} ${shortMonth(picked.value)}`,
+);
 </script>
 
 <template>
   <div class="dico days" :style="{ '--day': dayColor(picked ?? today) }">
-    <div ref="screen" class="screen">
+    <div class="screen">
       <header class="bar">
-        <button class="dc-icon" type="button" aria-label="Amalgramme" @click="router.push('/')">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </button>
         <h1 class="brand">Dicorama</h1>
         <template v-if="isAdmin">
           <button
@@ -98,44 +58,29 @@ function showSoon(on = true) {
             Banque
           </button>
         </template>
+        <span v-if="level" class="date">{{ dateLabel }}</span>
       </header>
 
-      <template v-if="level">
-        <DicoFrieze :days="days" :picked="picked" :today="today" @pick="pick" @step="step" />
-        <DicoBoard
-          :key="level.pattern"
-          :level="level"
-          :enter="enter"
-          @progress="(p) => (live[picked] = marksOf(p))"
-        >
-          <template #side>
-            <aside class="summary">
-              <span class="when">{{ relativeDay(picked, today) }}</span>
-              <span class="big">{{ dayOfMonth(picked) }}</span>
-              <span class="month">{{ shortMonth(picked) }}</span>
-              <DicoMarks class="marks" :level="marks" />
-              <button
-                class="league"
-                type="button"
-                aria-label="ligues, à venir"
-                @click="showSoon()"
-                @pointerenter="$event.pointerType === 'mouse' && showSoon()"
-                @pointerleave="$event.pointerType === 'mouse' && showSoon(false)"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="8" cy="8" r="3.2" />
-                  <circle cx="16.5" cy="9" r="2.6" />
-                  <path
-                    d="M2.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5M14 14.3c.8-.3 1.6-.4 2.5-.4 2.4 0 4.3 1.5 4.9 4.6"
-                  />
-                </svg>
-                ligues
-                <span v-if="soon" class="bubble" role="tooltip">À venir</span>
-              </button>
-            </aside>
-          </template>
-        </DicoBoard>
-      </template>
+      <DicoBoard v-if="level" :key="level.pattern" :level="level" @progress="(p) => (live = p)">
+        <template #side>
+          <DicoMarks class="marks" :level="marks" />
+        </template>
+        <template #foot>
+          <button
+            class="past"
+            type="button"
+            aria-label="niveaux passés"
+            @click="router.push('/dicorama/jours')"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+              <path d="M3.5 10h17M8 3v4M16 3v4" />
+              <path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2" />
+            </svg>
+            <span class="past-label">niveaux passés</span>
+          </button>
+        </template>
+      </DicoBoard>
       <p v-else class="none">Pas encore de Dicorama, reviens demain.</p>
     </div>
   </div>
@@ -159,7 +104,7 @@ function showSoon(on = true) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: max(8px, env(safe-area-inset-top)) 10px 4px 6px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 6px 14px;
 }
 .brand {
   flex: 1;
@@ -174,77 +119,55 @@ function showSoon(on = true) {
   padding: 0 10px;
   font-size: 12.5px;
 }
-.summary {
+.date {
   flex: none;
-  width: 92px;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dc-faint);
+}
+.date::first-letter {
+  text-transform: uppercase;
+}
+.marks {
+  margin-top: 18px;
+  font-size: 22px;
+}
+.past {
+  width: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0 8px;
-}
-.when {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dc-faint);
-}
-.when::first-letter {
-  text-transform: uppercase;
-}
-.big {
-  margin-top: 4px;
-  font-family: var(--dc-serif);
-  font-size: 44px;
-  line-height: 1;
-  color: var(--dc-day-ink);
-}
-.month {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dc-faint);
-}
-.marks {
-  margin-top: 10px;
-  font-size: 22px;
-}
-.league {
-  position: relative;
-  margin-top: auto;
-  width: 86px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1.5px dashed var(--dc-faint);
+  gap: 4px;
+  padding: 10px 6px 9px;
+  border: 0;
   border-radius: 12px;
-  background: none;
-  color: var(--dc-faint);
+  background: var(--dc-cream);
+  box-shadow: 0 3px 0 #b3ab9a;
   font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.15;
+  color: var(--dc-day-ink);
   cursor: pointer;
 }
-.league svg {
-  width: 18px;
-  height: 18px;
+/* Short screens: the icon alone, so the side column fits. */
+@media (max-height: 600px) {
+  .past-label {
+    display: none;
+  }
+}
+.past:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+.past svg {
+  width: 26px;
+  height: 26px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.8;
   stroke-linecap: round;
-}
-.bubble {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  /* Not `transform`, which the appear animation sets. */
-  translate: -50% 0;
-  padding: 6px 10px;
-  border-radius: 7px;
-  background: var(--dc-ink);
-  color: var(--dc-cream);
-  font-size: 12.5px;
-  white-space: nowrap;
-  pointer-events: none;
-  animation: dico-appear 0.14s ease-out both;
+  stroke-linejoin: round;
 }
 .none {
   margin: 40px 20px;

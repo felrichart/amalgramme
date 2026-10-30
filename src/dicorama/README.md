@@ -29,20 +29,19 @@ famille **rare** compte aussi, en bonus : un « + » devant le mot.
 Trois étapes : le niveau est **fini** (l'étoile) à 10 familles trouvées, rares
 comprises ; une fenêtre « Bravo » l'annonce et dit combien de mots courants le
 niveau cache en tout. Il est **complet** (le trophée) quand toutes les familles
-courantes sont trouvées, avec une seconde fenêtre (« il ne reste que des mots
-rares » s'affiche alors sous la saisie). Il est **parfait** (une couronne, montrée
+courantes sont trouvées, avec une seconde fenêtre. Il est **parfait** (une couronne, montrée
 seulement une fois gagnée) quand les rares le sont aussi, avec une troisième
-fenêtre. Le score, en tête de la colonne des mots, est sur 10, puis sur toutes les
+fenêtre. Le score, à gauche des mots, est sur 10, puis sur toutes les
 familles courantes, les rares trouvées en bonus en plus du dénominateur (`19/17+2`) ;
-son ⋮ propose de recommencer le niveau. Les marques : une étoile (fini) et un trophée
+Les marques : une étoile (fini) et un trophée
 (complet), gris jusqu'à les gagner puis jaunes, et la couronne (parfait).
 
 Il n'y a pas d'accueil : `/dicorama` mène au niveau du jour (`/dicorama/<date>`, le
-dernier jour joué). En haut, la frise des jours joués, du plus ancien à gauche à
-aujourd'hui : le jour de la semaine, la date dans la couleur du jour, le mois et les
-marques gagnées. Ses flèches fines, ou un swipe sur l'écran (à droite : la veille),
-changent de jour, et l'URL suit. À gauche des mots, le résumé du jour (sa date et ses
-marques) et les ligues, à venir.
+dernier jour joué). La date du jour, en petit, est en haut à droite ; les mots
+prennent toute la hauteur à droite ; à gauche, le score en grand, les marques, puis
+« niveaux passés » et le ⋯ du niveau (remettre à zéro). « Niveaux passés » (`/dicorama/jours`) liste
+les jours joués, du plus récent au plus ancien, avec leur score et leurs marques ; en
+toucher un le rouvre.
 
 La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
 dernière. Un mot complet est vérifié tout de suite, sans bouton ; refusé, il reste

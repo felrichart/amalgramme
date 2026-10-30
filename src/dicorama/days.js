@@ -41,8 +41,8 @@ export function longDayLabel(iso) {
   return `${WEEKDAYS[weekday(iso)]} ${d} ${MONTHS[m - 1]}`;
 }
 
-/* "ve", the weekday on two letters. */
-export const shortWeekday = (iso) => WEEKDAYS[weekday(iso)].slice(0, 2);
+/* "ven", the weekday on three letters. */
+export const shortWeekday = (iso) => WEEKDAYS[weekday(iso)].slice(0, 3);
 
 const SHORT_MONTHS = [
   'janv.',

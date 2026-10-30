@@ -344,13 +344,13 @@ const nudged = (key) => props.nudge?.key === key;
   margin-bottom: -16px;
   background: linear-gradient(to top, transparent, var(--dc-board) 70%);
 }
-/* A faint shade at the foot, over the words further down. */
+/* A thin cream fade at the foot, over the words further down. */
 .more {
   bottom: -14px;
-  height: 28px;
-  margin-top: -28px;
+  height: 26px;
+  margin-top: -26px;
   margin-bottom: -14px;
-  background: linear-gradient(to bottom, transparent, rgb(42 38 32 / 0.07));
+  background: linear-gradient(to bottom, transparent, var(--dc-board) 80%);
 }
 .less.shown,
 .more.shown {
@@ -374,6 +374,8 @@ const nudged = (key) => props.nudge?.key === key;
 
 .line {
   position: relative;
+  /* Brought into view clear of the fades. */
+  scroll-margin: 30px 0;
   display: flex;
   align-items: flex-start;
   gap: var(--gap);

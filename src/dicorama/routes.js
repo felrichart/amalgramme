@@ -1,7 +1,7 @@
 /*
  * Dicorama's routes, under /dicorama. Its views load on demand, so Amalgramme's
- * players don't fetch them. Players have one screen, a day's level under the
- * days played: /dicorama goes to the latest day's. The bank, the editor, the
+ * players don't fetch them. Players have a day's level (/dicorama goes to the
+ * latest day's) and the list of the days played. The bank, the editor, the
  * levels to come and drafts are the admin's: a casual gate, the Worker enforces
  * it on every write.
  */
@@ -33,6 +33,11 @@ export default [
     path: '/dicorama/:date(\\d{4}-\\d{2}-\\d{2})?',
     component: () => import('./views/DicoDaysView.vue'),
     beforeEnter: playedDay,
+  },
+  {
+    path: '/dicorama/jours',
+    component: () => import('./views/DicoPastView.vue'),
+    beforeEnter: () => loadOfficial().then(() => true),
   },
   {
     path: '/dicorama/a-venir',

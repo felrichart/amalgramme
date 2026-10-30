@@ -1,7 +1,7 @@
 <script setup>
 /* The score on two digits, in the day's colour, over `max`, and the rare words
- * found on top of it (19 /17+2). A changed digit rolls up, then the
- * score pops. */
+ * found on top of it (19 /17+2); `stacked` puts the max under the digits. A
+ * changed digit rolls up, then the score pops. */
 import { ref, computed, watch } from 'vue';
 import DicoBonus from './DicoBonus.vue';
 
@@ -9,6 +9,7 @@ const props = defineProps({
   value: { type: Number, required: true },
   max: { type: Number, required: true },
   bonus: { type: Number, default: 0 },
+  stacked: { type: Boolean, default: false },
 });
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -41,7 +42,7 @@ const label = computed(
 </script>
 
 <template>
-  <div class="score" :aria-label="label" role="status">
+  <div class="score" :class="{ stacked }" :aria-label="label" role="status">
     <span :key="score.changes.value" class="digits" :class="{ pop: score.changes.value }">
       <span v-for="(d, i) in digits" :key="i" class="window">
         <span class="strip" :class="{ roll: d.chars.length > 1 }">
@@ -63,6 +64,26 @@ const label = computed(
   display: flex;
   align-items: center;
   gap: 4px;
+}
+.stacked {
+  flex-direction: column;
+  gap: 0;
+}
+.stacked .out-of {
+  align-self: center;
+  margin: 2px 0 0;
+}
+.stacked .window,
+.stacked .digit {
+  height: 58px;
+  line-height: 58px;
+}
+.stacked .digit {
+  font-size: 52px;
+}
+.stacked .max,
+.stacked .bonus {
+  font-size: 22px;
 }
 .digits {
   display: flex;

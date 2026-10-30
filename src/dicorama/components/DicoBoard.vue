@@ -1,27 +1,24 @@
 <script setup>
 /*
- * One Dicorama level being played, filling its screen under the header: the
- * `side` slot beside the words' column (the score on top, its menu, the words),
- * the word being typed in the housing above the keyboard, and the celebration
- * over it all when the level is finished, then complete. `enter` slides the
- * column in from that side (-1: the left, 1: the right). Emits `progress` (see
- * progressOf) as it changes.
+ * One Dicorama level being played, filling its screen under the header: a side
+ * column (the score, the `side` slot, then the `foot` slot and the level's menu)
+ * beside the words, which take all the height left, the word being typed in the
+ * housing above the keyboard, and the celebration over it all when the level is
+ * finished, then complete. Emits `progress` (see progressOf) as it changes.
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import ConfirmModal from '../../components/ui/ConfirmModal.vue';
 import { isAdmin } from '../../composables/useAccount.js';
+import { scoreOf } from '../game.js';
 import { useDicorama } from '../useDicorama.js';
+import DicoConfirm from './DicoConfirm.vue';
 import DicoScore from './DicoScore.vue';
 import DicoFinish from './DicoFinish.vue';
 import DicoList from './DicoList.vue';
 import DicoInput from './DicoInput.vue';
 import DicoKeyboard from './DicoKeyboard.vue';
 
-const props = defineProps({
-  level: { type: Object, required: true },
-  enter: { type: Number, default: 0 },
-});
+const props = defineProps({ level: { type: Object, required: true } });
 const emit = defineEmits(['progress']);
 const router = useRouter();
 
@@ -36,10 +33,8 @@ const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
   const p = g.progress.value;
-  if (p.complete && !g.phase.value)
-    return p.rare < p.rareTotal
-      ? { text: 'il ne reste que des mots rares', tone: 'day' }
-      : { text: 'tout est trouvé, bravo !', tone: 'day' };
+  if (p.complete && p.rare === p.rareTotal && !g.phase.value)
+    return { text: 'tout est trouvé, bravo !', tone: 'day' };
   return null;
 });
 
@@ -54,13 +49,7 @@ function reset() {
   confirming.value = false;
 }
 
-/* Every word found over the goal, rare ones counting; then over every common
- * word, the rare ones found on top (19 /17+2). */
-const bonus = computed(() => (g.stage.value === 2 ? g.progress.value.rare : 0));
-const max = computed(() => {
-  const p = g.progress.value;
-  return g.stage.value === 1 ? p.goal : p.total - p.rare;
-});
+const score = computed(() => scoreOf(g.progress.value, g.stage.value));
 
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 const GAME_KEYS = ['Backspace', 'Delete', 'Escape', 'ArrowLeft', 'ArrowRight'];
@@ -69,7 +58,11 @@ function onKeydown(e) {
     if (e.key === 'Escape' || e.key === 'Enter') g.dismiss();
     return;
   }
-  if (confirming.value || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (confirming.value) {
+    if (e.key === 'Escape') confirming.value = false;
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   // Typing goes to the word, not to the button last tapped: drop its focus, or it
   // would show its keyboard focus ring.
   if (LETTER.test(e.key) || GAME_KEYS.includes(e.key)) document.activeElement?.blur?.();
@@ -88,14 +81,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 <template>
   <div class="board-screen">
     <div class="body">
-      <slot name="side" />
-      <section
-        class="dc-board words"
-        :class="{ enter: enter }"
-        :style="{ '--from': `${enter * 36}px` }"
-      >
-        <header class="head">
-          <DicoScore :value="g.progress.value.score" :max="max" :bonus="bonus" />
+      <aside class="side">
+        <DicoScore stacked v-bind="score" />
+        <slot name="side" />
+        <div class="side-foot">
+          <slot name="foot" />
           <div class="menu-wrap">
             <button
               class="dc-icon dots"
@@ -111,13 +101,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 fill="currentColor"
                 aria-hidden="true"
               >
-                <circle cx="12" cy="5.5" r="1.8" />
+                <circle cx="5.5" cy="12" r="1.8" />
                 <circle cx="12" cy="12" r="1.8" />
-                <circle cx="12" cy="18.5" r="1.8" />
+                <circle cx="18.5" cy="12" r="1.8" />
               </svg>
             </button>
             <div v-if="menu" class="menu" role="menu">
-              <button type="button" role="menuitem" @click="askReset">Recommencer</button>
+              <button type="button" role="menuitem" @click="askReset">Remettre à zéro</button>
               <button
                 v-if="isAdmin"
                 type="button"
@@ -128,15 +118,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
               </button>
             </div>
           </div>
-        </header>
-        <DicoList
-          :rows="g.list.value"
-          :latest="g.latest.value"
-          :arrival="arrival"
-          :nudge="nudge"
-          :common="g.stage.value === 2 ? max : null"
-        />
-      </section>
+        </div>
+      </aside>
+      <DicoList
+        class="dc-board words"
+        :rows="g.list.value"
+        :latest="g.latest.value"
+        :arrival="arrival"
+        :nudge="nudge"
+        :common="g.stage.value === 2 ? score.max : null"
+      />
     </div>
 
     <section class="housing">
@@ -171,10 +162,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       @more="g.dismiss"
     />
 
-    <ConfirmModal
+    <DicoConfirm
       v-if="confirming"
-      title="Recommencer ce niveau ? Les mots trouvés seront effacés."
-      confirm-label="Recommencer"
+      title="Remettre le niveau à zéro ?"
+      text="Tous les mots trouvés seront effacés."
+      confirm-label="Remettre à zéro"
       @cancel="confirming = false"
       @confirm="reset"
     />
@@ -192,38 +184,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 8px;
-  padding: 0 12px;
-  touch-action: pan-y;
+  gap: 10px;
+  padding: 4px 12px 0;
+}
+.side {
+  flex: none;
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 0 4px;
+}
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
 }
 .words {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.words.enter {
-  /* No fill: a lasting transform would hold the fixed definition bubble. */
-  animation: words-in 0.28s ease-out;
-}
-@keyframes words-in {
-  from {
-    opacity: 0;
-    transform: translateX(var(--from));
-  }
-}
-.head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 6px 8px 14px;
-  border-bottom: 1px dashed var(--dc-board-edge);
+  box-shadow: none;
 }
 .menu-wrap {
   position: relative;
-  margin-left: auto;
 }
 .dots {
   width: 32px;
@@ -232,8 +217,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 }
 .menu {
   position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
+  left: 0;
+  bottom: calc(100% + 4px);
   z-index: 40;
   min-width: 180px;
   padding: 6px;
