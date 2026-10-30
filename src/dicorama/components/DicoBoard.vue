@@ -33,11 +33,16 @@ const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
   if (REASONS[g.message.value]) return { text: REASONS[g.message.value], tone: 'bad' };
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
-  const { stars } = g.progress.value;
-  if (g.phase.value || stars < 2) return null;
-  return stars === 3
-    ? { text: 'tout est trouvé, bravo !', tone: 'day' }
-    : { text: 'il reste des mots rares à trouver', tone: 'day' };
+  if (g.typed.value) return null;
+  // Until a full word is typed, what to aim for next.
+  const { stars, goal } = g.progress.value;
+  const aims = [
+    `trouve ${goal} mots`,
+    'trouve tous les mots de la liste',
+    'trouve tous les mots rares',
+    'tous les mots ont déjà été trouvés',
+  ];
+  return { text: aims[stars], tone: 'day' };
 });
 
 const menu = ref(false);

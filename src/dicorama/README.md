@@ -32,9 +32,9 @@ aussi. Chacune a sa fenêtre de félicitations. Le score, à gauche des mots, es
 nombre de familles trouvées : sur 10 jusqu'à la première étoile ; puis sur la liste
 plus les rares trouvés (15/17, un rare : 16/18) ; sur « ? » de la deuxième étoile à
 la troisième ; sur le total une fois tout trouvé. Il change une fois la fenêtre de
-l'étoile fermée. Liste
-complète, « il reste des mots rares à trouver » s'affiche sous la saisie tant qu'il
-en reste.
+l'étoile fermée. Sous la saisie, jusqu'au premier mot tapé en entier (trouvé ou non), le
+prochain but : « trouve 10 mots », « trouve tous les mots de la liste », « trouve
+tous les mots rares », ou « tous les mots ont déjà été trouvés ».
 
 Il n'y a pas d'accueil : `/dicorama` mène au niveau du jour (`/dicorama/<date>`, le
 dernier jour joué). La date du jour, en petit, est en haut à droite ; les mots

@@ -296,6 +296,16 @@ describe('useDicorama', () => {
     expect(g.celebration.value).toBe('perfect');
   });
 
+  it('knows once a full word is typed, found or not, until it starts over', () => {
+    const g = useDicorama(level);
+    [...'xxx'].forEach((ch) => g.type(ch));
+    expect(g.typed.value).toBe(false);
+    typeAll(g, 'xxxx');
+    expect(g.typed.value).toBe(true);
+    g.reset();
+    expect(g.typed.value).toBe(false);
+  });
+
   it('starts over', async () => {
     const g = useDicorama(level);
     typeAll(g, 'icne');

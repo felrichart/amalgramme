@@ -53,6 +53,8 @@ export function useDicorama(level) {
   const celebration = ref(null);
   // The stars celebrated (or won before this visit).
   const greeted = ref(0);
+  // Whether a full word was typed since the level opened (or was reset).
+  const typed = ref(false);
 
   const timers = new Set();
   function later(fn, ms) {
@@ -149,6 +151,7 @@ export function useDicorama(level) {
       .map((ch, i) => (ch === BLANK ? cells.value[blanks.indexOf(i)].ch : ch))
       .join('');
     const kind = judge(level, key, state.found);
+    typed.value = true;
     picked.value = null;
     phase.value = 'checking';
     if (kind !== 'new') {
@@ -189,6 +192,7 @@ export function useDicorama(level) {
     quiet();
     dismiss();
     state.found = [];
+    typed.value = false;
     setCells(blanks.map(() => null));
   }
 
@@ -205,6 +209,7 @@ export function useDicorama(level) {
     marked,
     progress,
     greeted,
+    typed,
     celebration,
     list,
     type,
