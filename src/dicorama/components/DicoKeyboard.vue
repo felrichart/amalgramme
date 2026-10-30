@@ -91,8 +91,8 @@ const ROWS = ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'];
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  /* Taller on taller screens: 40px on a short one, up to 56px. */
-  height: clamp(40px, 6.2dvh, 56px);
+  /* Taller on taller screens: 44px on a short one, up to 56px. */
+  height: clamp(44px, 6.2dvh, 56px);
   padding: 0;
   border: 0;
   background: none;
