@@ -280,4 +280,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .message.quiet {
   color: var(--dc-faint);
 }
+/* Short screens (a phone browser with its bars): the list keeps the room. */
+@media (max-height: 720px) {
+  .housing {
+    margin-top: 8px;
+    padding: 10px 8px max(12px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+  .tray {
+    padding: 22px 12px 4px;
+  }
+  .message {
+    margin-top: 5px;
+  }
+}
 </style>

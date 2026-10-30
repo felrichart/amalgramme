@@ -73,7 +73,7 @@ const bonusChars = computed(() =>
 }
 .window {
   display: block;
-  height: 48px;
+  height: 38px;
   overflow: hidden;
 }
 .window.small {
@@ -91,10 +91,10 @@ const bonusChars = computed(() =>
 }
 .digit {
   display: block;
-  height: 48px;
+  height: 38px;
   font-family: var(--dc-serif);
-  font-size: 44px;
-  line-height: 48px;
+  font-size: 34px;
+  line-height: 38px;
   color: var(--day);
 }
 .digit.small {

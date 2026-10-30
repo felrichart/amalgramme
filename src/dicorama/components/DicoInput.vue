@@ -158,6 +158,11 @@ const label = (s, i) => (s.fixed ? `lettre fixe ${s.ch}` : `case ${i + 1}, ${s.c
 .machine.seven {
   --gap: 6px;
 }
+@media (max-height: 720px) {
+  .machine {
+    grid-template-columns: repeat(var(--n), minmax(0, 44px));
+  }
+}
 .seat {
   position: relative;
   display: block;

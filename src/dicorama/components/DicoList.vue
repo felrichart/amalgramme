@@ -1,7 +1,8 @@
 <script setup>
 /*
- * The level's words on the cream board, a slot each (see listOf), in 2 columns or
- * 3 when 2 don't fit. A found word is a light card in its slot; tapping it shows
+ * The level's words on the cream board, a slot each (see listOf), in 2 columns,
+ * roomy when they fit, else compact and scrolling, a fading arrow showing there's
+ * more below. A found word is a light card in its slot; tapping it shows
  * its definition, and opens its other spellings when it has some (one word open
  * at a time); its bubble opens beside it. The yellow arrow points at the word
  * last tapped, else the latest one.
@@ -24,7 +25,6 @@ const props = defineProps({
 const SIZES = {
   big: { cols: 2, row: 34, card: 27, kid: 22, kidGap: 4, gap: 8 },
   2: { cols: 2, row: 26, card: 20, kid: 18, kidGap: 3, gap: 5 },
-  3: { cols: 3, row: 24, card: 18, kid: 16, kidGap: 3, gap: 5 },
 };
 
 const boardEl = ref(null);
@@ -44,10 +44,19 @@ const fits = (layout) => {
   const s = SIZES[layout];
   return Math.ceil(props.rows.length / s.cols) * (s.row + s.gap) - s.gap <= room.value;
 };
-const layout = computed(() => (!room.value ? 2 : (['big', 2, 3].find(fits) ?? 3)));
+const layout = computed(() => (room.value && fits('big') ? 'big' : 2));
 const size = computed(() => SIZES[layout.value]);
 const cols = computed(() => size.value.cols);
-const scrolls = computed(() => !!room.value && !fits(3));
+const scrolls = computed(() => !!room.value && !fits(2));
+
+/* Whether words are hidden below, while the list scrolls. */
+const below = ref(false);
+function onScroll() {
+  hideTip();
+  const el = boardEl.value;
+  below.value = !!el && el.scrollTop + el.clientHeight < el.scrollHeight - 4;
+}
+watch([scrolls, () => props.rows.length], () => nextTick(onScroll), { immediate: true });
 const columns = computed(() => {
   const per = Math.ceil(props.rows.length / cols.value);
   return Array.from({ length: cols.value }, (_, c) => props.rows.slice(c * per, (c + 1) * per));
@@ -153,6 +162,13 @@ watch(
     if (!key) return;
     open.value = null;
     hideTip();
+    // Brought into view if the list scrolls past it.
+    nextTick(() =>
+      boardEl.value
+        ?.querySelector('.card.arrive')
+        ?.closest('.line')
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+    );
   },
 );
 
@@ -200,7 +216,7 @@ const cardKey = (r) =>
 </script>
 
 <template>
-  <section ref="boardEl" class="dc-board board" :class="{ scrolls }" @scroll="hideTip">
+  <section ref="boardEl" class="dc-board board" :class="{ scrolls }" @scroll="onScroll">
     <div class="columns" :class="`c${layout}`">
       <div v-for="(column, ci) in columns" :key="ci" class="column">
         <div v-for="(r, ri) in column" :key="r.id" class="line">
@@ -289,6 +305,9 @@ const cardKey = (r) =>
       }}</span>
       <span class="tail" />
     </div>
+    <div v-if="scrolls" class="more" :class="{ shown: below }" aria-hidden="true">
+      <span class="dc-arrow-down" />
+    </div>
   </section>
 </template>
 
@@ -302,6 +321,31 @@ const cardKey = (r) =>
 }
 .board.scrolls {
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dc-dash) transparent;
+}
+/* Pinned to the board's bottom edge, over the words left below. */
+.more {
+  position: sticky;
+  bottom: -14px;
+  z-index: 2;
+  height: 40px;
+  margin: -40px -12px -14px -10px;
+  background: linear-gradient(to bottom, transparent, var(--dc-board) 75%);
+  border-radius: 0 0 18px 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.more.shown {
+  opacity: 1;
+}
+.more .dc-arrow-down {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  animation: dico-bob 0.55s ease-in-out infinite alternate;
 }
 .columns {
   --row: 26px;
@@ -328,18 +372,6 @@ const cardKey = (r) =>
   --num-fs: 12.5px;
   --row-gap: 8px;
   --kid: 22px;
-}
-.columns.c3 {
-  --row: 24px;
-  --card: 18px;
-  --num-w: 17px;
-  --pointer-w: 9px;
-  --gap: 3px;
-  --fs: 12.5px;
-  --kid-fs: 11.5px;
-  --num-fs: 10.5px;
-  --kid: 16px;
-  gap: 8px;
 }
 .column {
   flex: 1;
@@ -392,10 +424,6 @@ const cardKey = (r) =>
   line-height: 1;
   color: var(--dc-yellow-ink);
 }
-.c3 .rare {
-  height: 13px;
-  padding: 0 2px;
-}
 .plus {
   display: block;
   width: 6px;
@@ -446,9 +474,6 @@ const cardKey = (r) =>
     inset 3px 0 0 var(--dc-day-soft),
     inset 0 1px 0 rgb(255 255 255 / 0.5);
 }
-.c3 .card {
-  padding-left: 8px;
-}
 .card.missed {
   background: transparent;
   box-shadow: none;
@@ -468,10 +493,6 @@ const cardKey = (r) =>
   box-shadow: inset 2px 0 0 var(--dc-day-soft);
   transform: translateX(-104%);
   transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.3, 1);
-}
-.c3 .kid {
-  right: 8px;
-  padding-left: 12px;
 }
 .kid.shown {
   transform: translateX(0);

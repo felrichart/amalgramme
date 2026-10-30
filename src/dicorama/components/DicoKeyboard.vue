@@ -97,6 +97,14 @@ const ROWS = ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'];
   background: none;
   cursor: pointer;
 }
+@media (max-height: 720px) {
+  .keyboard {
+    gap: 7px;
+  }
+  .key {
+    height: 40px;
+  }
+}
 .key.wide {
   flex-grow: 1.5;
 }
