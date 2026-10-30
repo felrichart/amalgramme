@@ -80,7 +80,7 @@ const ROWS = ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'];
 .keyboard {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: clamp(7px, 1.1dvh, 11px);
   padding-top: 2px;
 }
 .krow {
@@ -91,19 +91,12 @@ const ROWS = ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'];
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  height: 46px;
+  /* Taller on taller screens: 40px on a short one, up to 56px. */
+  height: clamp(40px, 6.2dvh, 56px);
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
-}
-@media (max-height: 720px) {
-  .keyboard {
-    gap: 7px;
-  }
-  .key {
-    height: 40px;
-  }
 }
 .key.wide {
   flex-grow: 1.5;
@@ -129,7 +122,7 @@ const ROWS = ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'];
 }
 .letter {
   font-family: var(--dc-serif);
-  font-size: 20px;
+  font-size: clamp(19px, 2.7dvh, 24px);
   line-height: 1;
 }
 .key:active:not(:disabled) .cap {

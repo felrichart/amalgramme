@@ -1,8 +1,8 @@
 <script setup>
 /*
- * The level's words on the cream board, a slot each (see listOf), in 2 columns,
- * roomy when they fit, else compact and scrolling, a fading arrow showing there's
- * more below. Left of a slot: its number for the list, a dot for another common
+ * The level's words on the cream board, a slot each (see listOf), in 2 columns
+ * of a fixed size, scrolling once they outgrow it: fades and a bobbing arrow show
+ * there's more above or below. Left of a slot: its number for the list, a dot for another common
  * word, a plus in a disc for a rare one. A found word is a light card in its slot;
  * tapping it shows its definition, and opens its sub-list (homonyms, then its
  * family's later finds) when it has one, one at a time; its bubble opens beside
@@ -25,45 +25,38 @@ const props = defineProps({
   common: { type: Number, default: null },
 });
 
-// Sizes in px, for 2 roomy columns, 2 and 3: row, card and sub-word heights.
-const SIZES = {
-  big: { cols: 2, row: 34, card: 27, kid: 22, kidGap: 4, gap: 8 },
-  2: { cols: 2, row: 26, card: 20, kid: 18, kidGap: 3, gap: 5 },
-};
+// Sizes in px: row, sub-word and the gap between sub-words (as in the CSS).
+const ROW = 34;
+const KID = 22;
+const KID_GAP = 4;
+const COLS = 2;
 
 const boardEl = ref(null);
-const room = ref(0);
-let resizes = null;
-onMounted(() => {
-  resizes = new ResizeObserver(() => {
-    const el = boardEl.value;
-    const style = getComputedStyle(el);
-    room.value = el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-  });
-  resizes.observe(boardEl.value);
-});
-onUnmounted(() => resizes?.disconnect());
-
-const fits = (layout) => {
-  const s = SIZES[layout];
-  return Math.ceil(props.rows.length / s.cols) * (s.row + s.gap) - s.gap <= room.value;
-};
-const layout = computed(() => (room.value && fits('big') ? 'big' : 2));
-const size = computed(() => SIZES[layout.value]);
-const cols = computed(() => size.value.cols);
-const scrolls = computed(() => !!room.value && !fits(2));
-
-/* Whether words are hidden below, while the list scrolls. */
+const columnsEl = ref(null);
+/* Whether words are hidden above or below. Checked on scroll and whenever the
+ * board or its content resizes (a word landing, a sub-list opening). */
+const above = ref(false);
 const below = ref(false);
+function measure() {
+  const el = boardEl.value;
+  if (!el) return;
+  above.value = el.scrollTop > 4;
+  below.value = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
+}
 function onScroll() {
   hideTip();
-  const el = boardEl.value;
-  below.value = !!el && el.scrollTop + el.clientHeight < el.scrollHeight - 4;
+  measure();
 }
-watch([scrolls, () => props.rows.length], () => nextTick(onScroll), { immediate: true });
+let resizes = null;
+onMounted(() => {
+  resizes = new ResizeObserver(measure);
+  resizes.observe(boardEl.value);
+  resizes.observe(columnsEl.value);
+});
+onUnmounted(() => resizes?.disconnect());
 const columns = computed(() => {
-  const per = Math.ceil(props.rows.length / cols.value);
-  return Array.from({ length: cols.value }, (_, c) => props.rows.slice(c * per, (c + 1) * per));
+  const per = Math.ceil(props.rows.length / COLS);
+  return Array.from({ length: COLS }, (_, c) => props.rows.slice(c * per, (c + 1) * per));
 });
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -223,12 +216,8 @@ const tipText = computed(() => {
   };
 });
 
-function slotHeight(r) {
-  const s = size.value;
-  if (open.value !== r.id) return s.row;
-  return s.row + r.kids.length * (s.kid + s.kidGap) + 2;
-}
-const kidTop = (i) => size.value.row + i * (size.value.kid + size.value.kidGap);
+const slotHeight = (r) => (open.value === r.id ? ROW + r.kids.length * (KID + KID_GAP) + 2 : ROW);
+const kidTop = (i) => ROW + i * (KID + KID_GAP);
 
 // Remade on each retry, so the nudge replays.
 const nudgeKey = (key) => key + (props.nudge?.key === key ? `-${props.nudge.n}` : '');
@@ -236,8 +225,9 @@ const nudged = (key) => props.nudge?.key === key;
 </script>
 
 <template>
-  <section ref="boardEl" class="dc-board board" :class="{ scrolls }" @scroll="onScroll">
-    <div class="columns" :class="`c${layout}`">
+  <section ref="boardEl" class="dc-board board" @scroll="onScroll">
+    <div class="less" :class="{ shown: above }" aria-hidden="true" />
+    <div ref="columnsEl" class="columns">
       <div v-for="(column, ci) in columns" :key="ci" class="column">
         <div v-for="(r, ri) in column" :key="r.id" class="line">
           <span class="mark" aria-hidden="true">
@@ -264,6 +254,7 @@ const nudged = (key) => props.nudge?.key === key;
                 :style="{
                   top: `${kidTop(i)}px`,
                   transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
+                  animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
                 }"
                 @click="tapKid(r, kid, $event)"
                 @pointerenter="hover(r, kid.spelling)($event)"
@@ -329,7 +320,7 @@ const nudged = (key) => props.nudge?.key === key;
       </span>
       <span class="tail" />
     </div>
-    <div v-if="scrolls" class="more" :class="{ shown: below }" aria-hidden="true">
+    <div class="more" :class="{ shown: below }" aria-hidden="true">
       <span class="dc-arrow-down" />
     </div>
   </section>
@@ -342,60 +333,65 @@ const nudged = (key) => props.nudge?.key === key;
   min-height: 0;
   margin: 0 12px;
   padding: 14px 12px 14px 10px;
-}
-.board.scrolls {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--dc-dash) transparent;
 }
-/* Pinned to the board's bottom edge, over the words left below. */
+/* Pinned to the board's top and bottom edges, over the words scrolled past. */
+.less,
 .more {
   position: sticky;
-  bottom: -14px;
   z-index: 2;
-  height: 40px;
-  margin: -40px -12px -14px -10px;
-  background: linear-gradient(to bottom, transparent, var(--dc-board) 75%);
-  border-radius: 0 0 18px 18px;
+  margin-left: -10px;
+  margin-right: -12px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s;
 }
+.less {
+  top: -14px;
+  height: 30px;
+  margin-top: -14px;
+  margin-bottom: -16px;
+  background: linear-gradient(to top, transparent, var(--dc-board) 70%);
+  border-radius: 18px 18px 0 0;
+}
+.more {
+  bottom: -14px;
+  height: 56px;
+  margin-top: -56px;
+  margin-bottom: -14px;
+  background: linear-gradient(to bottom, transparent, var(--dc-board) 65%);
+  border-radius: 0 0 18px 18px;
+}
+.less.shown,
 .more.shown {
   opacity: 1;
 }
 .more .dc-arrow-down {
   position: absolute;
   left: 50%;
-  bottom: 10px;
+  bottom: 12px;
+  transform: translateX(-50%);
+}
+.more.shown .dc-arrow-down {
   animation: dico-bob 0.55s ease-in-out infinite alternate;
 }
 .columns {
-  --row: 26px;
-  --card: 20px;
-  --num-w: 20px;
-  --pointer-w: 11px;
-  --gap: 5px;
-  --fs: 14px;
-  --kid-fs: 12.5px;
-  --num-fs: 11.5px;
-  --row-gap: 5px;
-  --kid: 18px;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.columns.cbig {
   --row: 34px;
   --card: 27px;
   --num-w: 22px;
   --pointer-w: 12px;
+  --gap: 5px;
   --fs: 17px;
   --kid-fs: 14.5px;
   --num-fs: 12.5px;
   --row-gap: 8px;
   --kid: 22px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
 }
 .column {
   flex: 1;
@@ -519,15 +515,15 @@ const nudged = (key) => props.nudge?.key === key;
   box-shadow: inset 2px 0 0 var(--day);
 }
 .kid.arrive {
-  animation: kid-flash 0.9s ease-out 0.25s both;
+  animation: kid-in 0.3s cubic-bezier(0.25, 0.8, 0.3, 1) both;
 }
 .kid.nudge {
   animation: dico-nudge 0.42s ease-in-out both;
 }
-@keyframes kid-flash {
-  0%,
-  30% {
-    background: var(--dc-day-soft);
+/* Slides in even when its sub-list is already open. */
+@keyframes kid-in {
+  from {
+    transform: translateX(-104%);
   }
 }
 .text {
