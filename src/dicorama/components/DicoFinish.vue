@@ -67,9 +67,7 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
       <h2 class="title">{{ TITLES[kind] }}</h2>
       <template v-if="kind === 'goal'">
         <p class="text">
-          <strong>{{ progress.goal }} mots</strong> trouvés<template v-if="rares"
-            >, dont {{ rares }}</template
-          >.
+          <strong>{{ progress.goal }} mots</strong> trouvés.
         </p>
         <p class="text nudge">
           Plus que <strong>{{ left }}</strong> pour obtenir le trophée.
