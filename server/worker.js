@@ -25,6 +25,12 @@
  *   POST   /plays/:puzzle            record an attempt or solve (by account, else device)
  *   POST   /plays/claim              fold this device's anonymous plays into the account
  *   POST   /admin/export             full DB dump for the admin's manual backup
+ *   GET    /dicorama                 Dicorama's levels (players: validated, up to tomorrow;
+ *                                    the admin: all) and its picked definitions
+ *   PUT    /dicorama/levels/:pattern save a level (admin)
+ *   DELETE /dicorama/levels/:pattern remove one (admin)
+ *   PUT    /dicorama/definitions/:base  pick a base word's definition (admin)
+ *   DELETE /dicorama/definitions/:base  back to its default one (admin)
  *
  * Community levels are create-only: there is no edit endpoint.
  *
@@ -698,18 +704,129 @@ async function claimPlays({ request, env, user }) {
   return json({ ok: true });
 }
 
+/* --- Dicorama --- */
+
+const DICO_PATTERN = /^[A-Z_]{4,7}$/;
+const DICO_MAX_BYTES = 64 * 1024;
+
+const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+const dicoLevel = (r) => ({
+  pattern: r.pattern,
+  status: r.status,
+  date: r.date,
+  words: JSON.parse(r.words),
+  rare: JSON.parse(r.rare),
+  banned: JSON.parse(r.banned),
+});
+
+/* Players get validated levels up to tomorrow (Paris), so no timezone misses its
+ * day; the client keeps the ones up to its own today. */
+async function getDicorama({ request, env }) {
+  const user = await sessionUser(env, request);
+  const cols = 'pattern, status, date, words, rare, banned';
+  const levels =
+    user?.username === ADMIN_NAME
+      ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
+      : env.DB.prepare(
+          `SELECT ${cols} FROM dicorama_levels WHERE status = 'valid' AND date <= ? ORDER BY date`,
+        ).bind(addDays(serverToday(), 1));
+  const [{ results: rows }, { results: defs }] = await Promise.all([
+    levels.all(),
+    env.DB.prepare('SELECT base, idx, text FROM dicorama_definitions').all(),
+  ]);
+  return json({
+    levels: rows.map(dicoLevel),
+    definitions: Object.fromEntries(defs.map((d) => [d.base, { index: d.idx, text: d.text }])),
+  });
+}
+
+/* A validated level needs its day, which no other level may hold. */
+async function saveDicoLevel({ request, env, params }) {
+  const body = await readBody(request);
+  if (!body) return fail('bad_json', 400);
+  const { pattern } = params;
+  const { status, words, rare, banned } = body;
+  const date = body.date ?? null;
+  if (!DICO_PATTERN.test(pattern) || !pattern.includes('_')) return fail('bad_pattern', 422);
+  if (status !== 'draft' && status !== 'valid') return fail('invalid', 422);
+  if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad_date', 422);
+  if (status === 'valid' && !date) return fail('bad_date', 422);
+  if (!Array.isArray(words) || !words.length || !isStrings(rare) || !isStrings(banned))
+    return fail('invalid', 422);
+  const stored = [words, rare, banned].map((v) => JSON.stringify(v));
+  if (stored.join('').length > DICO_MAX_BYTES) return fail('invalid', 422);
+  if (date) {
+    const taken = await env.DB.prepare(
+      'SELECT 1 FROM dicorama_levels WHERE date = ? AND pattern != ?',
+    )
+      .bind(date, pattern)
+      .first();
+    if (taken) return fail('date_taken', 409);
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO dicorama_levels (pattern, status, date, words, rare, banned, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(pattern) DO UPDATE SET status = excluded.status, date = excluded.date,
+       words = excluded.words, rare = excluded.rare, banned = excluded.banned,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(pattern, status, date, ...stored, Date.now())
+    .run();
+  return json({ pattern, status, date, words, rare, banned });
+}
+
+async function deleteDicoLevel({ env, params }) {
+  if (!(await exists(env, 'dicorama_levels', 'pattern', params.pattern)))
+    return fail('not_found', 404);
+  await env.DB.prepare('DELETE FROM dicorama_levels WHERE pattern = ?').bind(params.pattern).run();
+  return json({ ok: true });
+}
+
+async function setDicoDefinition({ request, env, params }) {
+  const body = await readBody(request);
+  const base = decodeURIComponent(params.base);
+  const index = body?.index;
+  const text = String(body?.text ?? '').trim();
+  if (!Number.isInteger(index) || index < 0 || !text || text.length > 2000)
+    return fail('invalid', 422);
+  await env.DB.prepare(
+    `INSERT INTO dicorama_definitions (base, idx, text) VALUES (?, ?, ?)
+     ON CONFLICT(base) DO UPDATE SET idx = excluded.idx, text = excluded.text`,
+  )
+    .bind(base, index, text)
+    .run();
+  return json({ base, index, text });
+}
+
+async function deleteDicoDefinition({ env, params }) {
+  await env.DB.prepare('DELETE FROM dicorama_definitions WHERE base = ?')
+    .bind(decodeURIComponent(params.base))
+    .run();
+  return json({ ok: true });
+}
+
 /* Full DB dump (password hashes included, sessions and email tokens left out). */
 async function exportAll({ env }) {
   const all = (sql) => env.DB.prepare(sql).all();
-  const [dailies, levels, users, plays, puzzleStats, progress, comments] = await Promise.all([
-    all('SELECT * FROM dailies ORDER BY date'),
-    all('SELECT * FROM levels ORDER BY created_at'),
-    all('SELECT * FROM users ORDER BY created_at'),
-    all('SELECT * FROM plays'),
-    all('SELECT * FROM puzzle_stats'),
-    all('SELECT * FROM progress'),
-    all('SELECT * FROM comments'),
-  ]);
+  const [dailies, levels, users, plays, puzzleStats, progress, comments, dicoLevels, dicoDefs] =
+    await Promise.all([
+      all('SELECT * FROM dailies ORDER BY date'),
+      all('SELECT * FROM levels ORDER BY created_at'),
+      all('SELECT * FROM users ORDER BY created_at'),
+      all('SELECT * FROM plays'),
+      all('SELECT * FROM puzzle_stats'),
+      all('SELECT * FROM progress'),
+      all('SELECT * FROM comments'),
+      all('SELECT * FROM dicorama_levels ORDER BY pattern'),
+      all('SELECT * FROM dicorama_definitions ORDER BY base'),
+    ]);
   return json({
     exported_at: Date.now(),
     dailies: dailies.results,
@@ -719,6 +836,8 @@ async function exportAll({ env }) {
     puzzle_stats: puzzleStats.results,
     progress: progress.results,
     comments: comments.results,
+    dicorama_levels: dicoLevels.results,
+    dicorama_definitions: dicoDefs.results,
   });
 }
 
@@ -772,6 +891,11 @@ const ROUTES = [
   ['PUT', /^\/dailies\/(?<date>[^/]+)$/, adminOnly(updateDaily)],
   ['DELETE', /^\/dailies\/(?<date>[^/]+)$/, adminOnly(deleteDaily)],
   ['POST', /^\/admin\/export$/, adminOnly(exportAll)],
+  ['GET', /^\/dicorama$/, getDicorama],
+  ['PUT', /^\/dicorama\/levels\/(?<pattern>[^/]+)$/, adminOnly(saveDicoLevel)],
+  ['DELETE', /^\/dicorama\/levels\/(?<pattern>[^/]+)$/, adminOnly(deleteDicoLevel)],
+  ['PUT', /^\/dicorama\/definitions\/(?<base>[^/]+)$/, adminOnly(setDicoDefinition)],
+  ['DELETE', /^\/dicorama\/definitions\/(?<base>[^/]+)$/, adminOnly(deleteDicoDefinition)],
 ];
 
 export default {

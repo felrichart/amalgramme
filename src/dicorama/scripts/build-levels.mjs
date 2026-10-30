@@ -1,8 +1,8 @@
 /*
- * Generates lab/lexilouhette/levels.json, every silhouette that makes a good level,
+ * Generates src/dicorama/bank.json, every silhouette that makes a good level,
  * from data/dictionnaire.tsv (build-dictionary.mjs; or another one: `npm run
- * lab:levels -- path/to.tsv`). Manual settings live in levels.config.json, see
- * lab/lexilouhette/README.md.
+ * dicorama:levels -- path/to.tsv`). Manual settings live in levels.config.json, see
+ * src/dicorama/README.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -169,7 +169,7 @@ function curate(pattern, words) {
   return [...kept, ...added];
 }
 
-// A frequency as levels.json stores it, which the game rates.
+// A frequency as bank.json stores it, which the game rates.
 const round = (f) => Number(f.toPrecision(3));
 
 /* A pattern's words in families, one per base: its own word first (tigre before
@@ -240,7 +240,7 @@ function candidates(byLength) {
   );
 }
 
-/* A level's families as levels.json stores them (see game.js), commonest first. */
+/* A level's families as bank.json stores them (see game.js), commonest first. */
 const familyRows = (families) =>
   [...families]
     .sort((a, b) => b.freq - a.freq)
@@ -260,7 +260,7 @@ const levels = candidates(loadDictionary(tsvPath));
 const lines = levels.map((l) =>
   JSON.stringify({ pattern: l.pattern, words: familyRows(l.families) }),
 );
-writeFileSync(file('levels.json'), `[\n${lines.join(',\n')}\n]\n`);
+writeFileSync(file('bank.json'), `[\n${lines.join(',\n')}\n]\n`);
 
 // Families of the 5 to 7-letter levels by points tier: what the points formula is
 // tuned on.

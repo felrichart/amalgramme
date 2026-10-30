@@ -1,5 +1,0 @@
-/* Lexilouhette tokens, shared by its views. */
-:root {
-  /* A rare family (a bonus to find). */
-  --rare: color-mix(in srgb, var(--pink) 50%, var(--danger));
-}

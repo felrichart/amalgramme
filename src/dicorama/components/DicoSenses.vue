@@ -2,8 +2,8 @@
 /* A word's definition in the editor, and the Wiktionnaire sense to pick for it,
  * saved for that word in every level at once. */
 import { ref, computed } from 'vue';
-import { official, setDefinition } from './official.js';
-import { sensesOf, defaultSense } from './definitions.js';
+import { official, setDefinition } from '../store.js';
+import { sensesOf, defaultSense } from '../definitions.js';
 
 const props = defineProps({ word: { type: String, required: true } });
 

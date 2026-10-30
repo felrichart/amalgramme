@@ -1,7 +1,8 @@
-# Lexilouhette
+# Dicorama
 
-Jeu en test (labo local, jamais buildé ni déployé). Une silhouette (`P_S_I__`) :
-trouver le plus de mots qui rentrent dedans.
+Ex-Lexilouhette, sorti du labo : il vit dans l'app à `/dicorama`. Une silhouette
+(`P_S_I__`) : trouver le plus de mots qui rentrent dedans. Un niveau par jour,
+une couleur par jour de la semaine (`days.js`).
 
 Trois niveaux de regroupement :
 
@@ -18,10 +19,18 @@ Trois niveaux de regroupement :
   durs) et occupe une seule case : la première trouvée la remplit et compte ; les
   suivantes s'ajoutent sous elle, reliées par un trait gris, sans compter.
 
-Une famille est une **réponse**, à case numérotée, ou une **rare**, en bonus : sa
-case n'apparaît qu'une fois trouvée, marquée d'un point rose. En haut, « X+Y » : X
-réponses et Y rares trouvées (le +Y dès la première). Le niveau est fini quand
-toutes les réponses sont trouvées.
+Une famille est une **réponse**, à place numérotée (01, 02…), ou une **rare**, en
+bonus. La liste est alphabétique : la place d'une réponse se remplit de son premier
+mot trouvé ; tout autre mot trouvé a sa propre ligne, avec l'étiquette jaune « +1 »
+s'il ouvre une famille rare, avec un « – » (variante, ne rapporte rien) s'il est
+d'une famille déjà ouverte. En haut, le score (réponses trouvées) et l'étiquette
+jaune des rares dès la première. Le niveau est fini quand toutes les réponses sont
+trouvées ; on peut continuer à chercher des rares.
+
+La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
+dernière. Un mot complet est vérifié tout de suite, sans bouton ; refusé, il reste
+(« mot inconnu », « déjà trouvé ») et la dernière lettre se retape directement.
+⌫ efface la dernière lettre, ↺ toutes.
 
 Dans la banque, une famille est rare selon sa note, de 25 à 99, jamais montrée aux
 joueurs : rare à partir de 75. La note vient de la rareté de sa base : la somme des
@@ -33,8 +42,9 @@ lettres dans les tranches 25, 26–49, 50–74, 75–98 et 99. Constantes en tê
 
 Survoler (ou toucher) un mot trouvé montre ce qu'il est de sa base (« part. passé
 fém. plur. de fatiguer ») et le sens de la base sur le Wiktionnaire : celui choisi
-par l'admin, sinon le premier qui lui est propre (`definitions.js`, seul appel
-réseau du labo ; les sens sont gardés ensuite sur l’appareil).
+par l'admin, sinon le premier qui lui est propre (`definitions.js` ; les sens sont
+gardés ensuite sur l’appareil). Toucher un mot qui a d'autres graphies (pêche :
+péché, pêché) les déplie dessous, un mot ouvert à la fois.
 
 Les mots jouables : tout ce qui n'est pas un verbe, les infinitifs et les
 participes passés qui s'accordent (fatigué, fatiguée ; pas dormi). Les
@@ -51,12 +61,12 @@ un autre (A__TE dans A___E), seul le plus précis reste.
 
 ## Banque et niveaux officiels
 
-Ce que génère `lab:levels` est la **banque** (`levels.json`), réservée à l'admin
-(tout le monde l'est en dev, `isAdmin` dans `official.js`). Les joueurs n'ont que
-les **niveaux officiels**, édités et validés par l'admin, dans leur ordre de
-validation.
+Ce que génère `dicorama:levels` est la **banque** (`bank.json`, plusieurs Mo),
+réservée à l'admin (le compte `cara+`) : elle n'est chargée qu'à l'ouverture de la
+banque ou de l'éditeur, jamais par les joueurs. Les joueurs n'ont que les **niveaux
+officiels** validés, un par jour, jusqu'à aujourd'hui.
 
-Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`LexEditView.vue`, `editor.js`) :
+Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.js`) :
 
 - passer une famille de réponse à rare et inversement ;
 - changer le maître mot d'une saisie : le mot suit la base de son nouveau maître
@@ -64,16 +74,20 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`LexEditView.vue`, `editor.j
 - bannir une orthographe du niveau (✕), rétablie depuis « Bannis » ; un maître mot
   banni cède sa place à l'orthographe suivante ;
 - choisir le sens du Wiktionnaire d'une base, enregistré tout de suite et valable
-  dans tous les niveaux.
+  dans tous les niveaux ;
+- choisir son jour (« prochain jour libre » par défaut à la validation).
 
 « Enregistrer le brouillon » le garde pour l'admin seul, « Valider » le donne aux
-joueurs. Les niveaux officiels et les sens choisis vivent dans `official.json`,
-écrit par le serveur du labo (`lab/vite.config.js`) en attendant notre Worker.
+joueurs à son jour. Les niveaux officiels et les sens choisis vivent dans la base
+D1 du Worker (`dicorama_levels`, `dicorama_definitions`, migration 0012, qui y
+reprend les niveaux du labo en brouillons sans date) ; `store.js` les garde aussi
+sur l'appareil. L'accueil `/dicorama` montre à l'admin les niveaux à venir et les
+brouillons.
 
 ```
-npm run lab                       # http://localhost:5174/lexilouhette (banque : /banque)
-npm run lab:dico                  # refait data/dictionnaire.tsv
-npm run lab:levels                # puis les niveaux
+npm run dev                       # /dicorama (banque : /dicorama/banque, admin)
+npm run dicorama:dico             # refait data/dictionnaire.tsv
+npm run dicorama:levels           # puis la banque
 ```
 
 Source : le lexique de Grammalecte v7.7, le correcteur de LibreOffice
@@ -90,14 +104,18 @@ noms propres ni les abréviations (kcal, chap ; les mots abrégés comme radio r
 | -------------------------------------- | ------------------------------------------------------------------------------------ |
 | `levels.config.json`                   | Réglages manuels des niveaux (ci-dessous).                                           |
 | `data/lexique-grammalecte-fr-v7.7.zip` | Le lexique Grammalecte d'origine.                                                    |
-| `data/dictionnaire.tsv`                | Généré par `lab:dico` : le dictionnaire du jeu.                                      |
-| `levels.json`                          | Généré : la banque, famille par famille (format en tête de `buildLevel`, `game.js`). |
-| `official.json`                        | Les niveaux officiels (même format) et les sens choisis, écrits par l'éditeur.       |
-| `official.js`                          | Lecture et écriture de `official.json`, et qui est admin.                            |
+| `data/dictionnaire.tsv`                | Généré par `dicorama:dico` : le dictionnaire du jeu.                                 |
+| `bank.json`                            | Généré : la banque, famille par famille (format en tête de `buildLevel`, `game.js`). |
+| `game.js`                              | Règles du jeu, liste et formule de rareté.                                           |
+| `useDicorama.js`                       | Une partie : saisie, vérification, enchaînement des animations, sauvegarde.          |
+| `store.js`                             | Niveaux officiels et sens choisis, depuis le Worker (écriture admin).                |
+| `levels.js`                            | Banque (chargée à la demande), niveau d'une route, progression sur l'appareil.       |
 | `editor.js`                            | Les modifications de l'éditeur.                                                      |
+| `definitions.js`                       | Les sens du Wiktionnaire.                                                            |
+| `days.js`, `theme.js`, `dicorama.css`  | Couleur du jour, polices, jetons et animations partagés.                             |
+| `routes.js`, `views/`, `components/`   | Les routes `/dicorama…` et les écrans.                                               |
 | `scripts/build-dictionary.mjs`         | La réduction du lexique Grammalecte.                                                 |
 | `scripts/build-levels.mjs`             | Le générateur (règles de sélection en tête de fichier).                              |
-| `game.js`                              | Règles du jeu et formule de rareté.                                                  |
 
 ## `levels.config.json`
 

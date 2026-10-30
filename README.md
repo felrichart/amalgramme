@@ -45,6 +45,12 @@ l'artefact d'amorçage historique. Les règles d'un mot (3–12 lettres, sans
 accents, espaces/traits/apostrophes comme séparateurs) sont dans
 `shared/word-rules.js`.
 
+## Dicorama
+
+Un second jeu, à `/dicorama` (ex-Lexilouhette du labo) : règles, banque et
+éditeur dans `src/dicorama/README.md`. Ses niveaux officiels vivent aussi dans D1
+(migration 0012) et ne s'éditent que depuis le compte `cara+`.
+
 ## Déploiement
 
 Poussé sur `main`, le workflow `.github/workflows/deploy.yml` construit le site

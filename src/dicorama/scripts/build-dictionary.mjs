@@ -2,7 +2,7 @@
  * Writes data/dictionnaire.tsv, the words the games draw from: the Grammalecte
  * lexicon (data/lexique-grammalecte-fr-v7.7.zip, the LibreOffice spellchecker's)
  * in its common, modern and classic spellings, minus proper nouns and
- * abbreviations, every length kept: `npm run lab:dico`.
+ * abbreviations, every length kept: `npm run dicorama:dico`.
  *
  * Columns: Mot, Lemme, Etiquettes (Grammalecte's: nature, gender, number, verb
  * form), FreqMot, FreqLemme (per million words, the lemma's summed over its

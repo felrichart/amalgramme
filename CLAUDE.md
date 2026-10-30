@@ -30,16 +30,18 @@ src/
   components/                  PuzzlePiece, TutorialCoach, AidePopup, ChallengeForm,
                                LevelRow, UserBadge, AccountModal, SyncPrompt, CommentsModal; ui/ = PageHeader, BaseModal,
                                ConfirmModal, ProgressMark, BulbIcon
+  dicorama/                    Dicorama, a second game at /dicorama (README there): own
+                               routes.js (lazy views), store (Worker), useDicorama, bank.json
+                               (admin-only, loaded on demand) and its generator scripts
 shared/                        word-rules.js, constants.js (ADMIN_NAME, PIN_DEADLINE, password/email
                                rules, id length), progress.js (save merge rule); imported by both
                                the client and the Worker
 server/worker.js               Cloudflare Worker: route table over D1 (accounts, progress, dailies,
-                               community, stats); crypto.js (PBKDF2, tokens), mail.js (emails)
+                               community, stats, dicorama); crypto.js (PBKDF2, tokens), mail.js (emails)
 lab/                           local-only playground for new games (`npm run lab`), never
-                               built or deployed, never calls the Worker; lexilouhette/ (README
-                               there) fetches definitions from the Wiktionnaire
+                               built or deployed, never calls the Worker
 test/                          vitest: puzzle, word, gamestate, migration, dailies, community,
-                               sync, worker (real migrations on node:sqlite, test/d1.js)
+                               sync, dicorama, worker (real migrations on node:sqlite, test/d1.js)
 ```
 
 > `shared/` is dependency-free and bundles for both the browser (Vite) and the

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   buildLevel,
   judge,
@@ -8,21 +8,16 @@ import {
   scoreOf,
   opens,
   maxScore,
-  familiesOf,
+  listOf,
   isDone,
   deBefore,
-} from '../lab/lexilouhette/game.js';
-import { BANK, bankLevel, loadProgress } from '../lab/lexilouhette/levels.js';
-import {
-  draftFrom,
-  toggleRare,
-  setMaster,
-  ban,
-  unban,
-  bannedOf,
-} from '../lab/lexilouhette/editor.js';
-import { useLexilouhette } from '../lab/lexilouhette/useLexilouhette.js';
-import { pageTitles } from '../lab/lexilouhette/definitions.js';
+} from '../src/dicorama/game.js';
+import BANK from '../src/dicorama/bank.json';
+import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
+import { draftFrom, toggleRare, setMaster, ban, unban, bannedOf } from '../src/dicorama/editor.js';
+import { useDicorama } from '../src/dicorama/useDicorama.js';
+import { pageTitles } from '../src/dicorama/definitions.js';
+import { dayColor, dayLabel, longDayLabel } from '../src/dicorama/days.js';
 
 const level = buildLevel({
   pattern: 'P_S_I__',
@@ -33,7 +28,11 @@ const level = buildLevel({
     [0.01, 'posting', 'posting'],
   ],
 });
-const typeAll = (g, letters) => [...letters].forEach((ch) => g.type(ch));
+// Types a word's blanks and lets it be checked (and land, when found).
+const typeAll = (g, letters) => {
+  [...letters].forEach((ch) => g.type(ch));
+  vi.advanceTimersByTime(2000);
+};
 
 describe('points', () => {
   it('rises on an S-curve from 25 for common words to 99 for the rarest', () => {
@@ -68,35 +67,39 @@ describe('tierOf', () => {
   });
 });
 
-describe('families', () => {
-  const rows = (f) => f.rows.map((r) => r.display);
+describe('list', () => {
+  const shown = (rows) => rows.map((r) => [r.kind, r.num, r.answer?.display ?? null, r.found]);
 
-  it('gives each family a spot, alphabetical, its finds first find first', () => {
-    expect(familiesOf(level, []).map((f) => f.rows.length)).toEqual([0, 0, 0]);
-    const [, passif] = familiesOf(level, ['PASSIFS', 'PISCINE', 'PASSIVE']);
-    expect(rows(passif)).toEqual(['passive', 'passifs']);
-    expect(passif.found).toBe(true);
-  });
-
-  it('numbers the normal spots and shows a rare one once found', () => {
-    const spots = familiesOf(level, ['POSTING']);
-    expect(spots.map((f) => [f.base, f.num])).toEqual([
-      ['passion', 1],
-      ['passif', 2],
-      ['piscine', 3],
-      ['posting', null],
+  it('gives each normal family a numbered spot, alphabetical', () => {
+    expect(shown(listOf(level, []))).toEqual([
+      ['main', 1, null, false],
+      ['main', 2, null, false],
+      ['main', 3, null, false],
     ]);
     expect(isDone(level, ['PISCINE', 'PASSION', 'PASSIVE'])).toBe(true);
   });
 
-  it('lists every word once revealed, the found ones first', () => {
-    const [, passif] = familiesOf(level, ['PASSIFS'], true);
-    expect(passif.rows.map((r) => [r.display, r.found])).toEqual([
-      ['passifs', true],
-      ['passive', false],
+  it('fills a spot with its first find, later ones and rares on rows of their own', () => {
+    expect(shown(listOf(level, ['POSTING', 'PASSIFS', 'PISCINE', 'PASSIVE']))).toEqual([
+      ['variant', null, 'passifs', true],
+      ['main', 1, null, false],
+      ['main', 2, 'passive', true],
+      ['main', 3, 'piscine', true],
+      ['rare', null, 'posting', true],
     ]);
   });
 
+  it('shows the families still to find once revealed', () => {
+    expect(shown(listOf(level, ['PASSIFS'], true))).toEqual([
+      ['main', 1, 'passion', false],
+      ['main', 2, 'passifs', true],
+      ['main', 3, 'piscine', false],
+      ['rare', null, 'posting', false],
+    ]);
+  });
+});
+
+describe('answers', () => {
   it('reads a word with its homonyms and their bases', () => {
     const gre = buildLevel({
       pattern: '__GRE_',
@@ -132,83 +135,102 @@ describe('judge', () => {
   });
 });
 
-describe('useLexilouhette', () => {
-  beforeEach(() => localStorage.clear());
+describe('useDicorama', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+  const typed = (g) => g.slots.value.map((s) => s.ch ?? '_').join('');
 
-  it('types the blanks only and adds a found word', () => {
-    const g = useLexilouhette(level);
-    typeAll(g, 'icne');
+  it('types the blanks only, checks a full word on its own and lands it', () => {
+    const g = useDicorama(level);
+    [...'icn'].forEach((ch) => g.type(ch));
+    expect(typed(g)).toBe('PISCIN_');
+    g.type('e');
+    expect(g.state.found).toEqual([]);
+    vi.advanceTimersByTime(400);
+    expect(g.phase.value).toBe('flip');
+    expect(g.cursor.value).toBe(null);
+    vi.advanceTimersByTime(1200);
     expect(g.state.found).toEqual(['PISCINE']);
     expect(g.score.value).toEqual({ normal: 1, rare: 0 });
-    expect(g.slots.value.filter((s) => !s.fixed).every((s) => s.ch == null)).toBe(true);
+    expect(typed(g)).toBe('P_S_I__');
+    expect(g.cursor.value).toBe(0);
   });
 
-  it('erases only the last letter of a rejected guess', () => {
-    const g = useLexilouhette(level);
+  it('keeps a rejected word, its cursor on the last blank to retype it', () => {
+    const g = useDicorama(level);
     typeAll(g, 'icnx');
-    expect(g.rejected.value).toBe(true);
-    g.backspace();
-    expect(g.rejected.value).toBe(false);
-    expect(g.slots.value.map((s) => s.ch).join('')).toBe('PISCIN');
+    expect(g.message.value).toBe('unknown');
+    expect(g.shake.value).toBe(1);
+    expect(g.cursor.value).toBe(3);
     g.type('e');
+    expect(g.message.value).toBe(null);
+    vi.advanceTimersByTime(2000);
     expect(g.state.found).toEqual(['PISCINE']);
   });
 
-  it('lets a rejected guess be fixed in place', () => {
-    const g = useLexilouhette(level);
+  it('retypes a picked blank, then goes back to the first empty one', () => {
+    const g = useDicorama(level);
     typeAll(g, 'xcne');
-    g.moveTo(0);
+    g.pick(0);
     g.type('i');
+    vi.advanceTimersByTime(2000);
     expect(g.state.found).toEqual(['PISCINE']);
+    ['a', 's'].forEach(g.type);
+    g.pick(0);
+    g.type('o');
+    expect(typed(g)).toBe('POSSI__');
+    expect(g.cursor.value).toBe(2);
   });
 
-  it('starts over when typing on after a rejected guess', () => {
-    const g = useLexilouhette(level);
-    typeAll(g, 'aaaa');
-    expect(g.feedback.value.kind).toBe('unknown');
-    expect(g.rejected.value).toBe(true);
-    g.type('a');
-    expect(g.rejected.value).toBe(false);
-    expect(g.slots.value[1].ch).toBe('A');
-    expect(g.slots.value[3].ch).toBe(null);
+  it('erases the last letter, or all of them', () => {
+    const g = useDicorama(level);
+    ['i', 'c', 'n'].forEach(g.type);
+    g.pick(0);
+    g.backspace();
+    expect(typed(g)).toBe('PISCI__');
+    g.clear();
+    expect(typed(g)).toBe('P_S_I__');
   });
 
-  it('fills spots and highlights the latest word, or a retyped one', () => {
-    const g = useLexilouhette(level);
+  it('points at a word typed again', () => {
+    const g = useDicorama(level);
     typeAll(g, 'icne');
     typeAll(g, 'asôn');
-    expect(g.families.value.filter((f) => f.found).map((f) => f.rows[0].display)).toEqual([
-      'passion',
-      'piscine',
-    ]);
     expect(g.latest.value).toBe('PASSION');
     typeAll(g, 'icne');
+    expect(g.message.value).toBe('dup');
     expect(g.latest.value).toBe('PISCINE');
+    g.type('a');
+    expect(g.latest.value).toBe('PASSION');
+    vi.advanceTimersByTime(3000);
+    expect(g.message.value).toBe(null);
   });
 
-  it('scores a family once and ends once every spot is filled', async () => {
-    const g = useLexilouhette(level);
-    for (const letters of ['ícné', 'asfs']) typeAll(g, letters);
-    expect(g.feedback.value.opens).toBe(true);
-    typeAll(g, 'asve');
-    expect(g.feedback.value.opens).toBe(false);
+  it('scores a family once and is done once every spot is filled', async () => {
+    const g = useDicorama(level);
+    for (const letters of ['ícné', 'asfs', 'asve']) typeAll(g, letters);
     expect(g.score.value).toEqual({ normal: 2, rare: 0 });
-    expect(g.exhausted.value).toBe(false);
+    expect(g.done.value).toBe(false);
     typeAll(g, 'asôn');
-    expect(g.exhausted.value).toBe(true);
-    expect(g.playing.value).toBe(false);
+    expect(g.done.value).toBe(true);
+    expect(g.playing.value).toBe(true);
     await Promise.resolve();
     expect(loadProgress(level.pattern).found).toHaveLength(4);
   });
 
-  it('starts a finished level over', async () => {
-    const g = useLexilouhette(level);
-    for (const letters of ['icne', 'asfs', 'asôn']) typeAll(g, letters);
+  it('stops at the solutions and starts over', async () => {
+    const g = useDicorama(level);
+    typeAll(g, 'icne');
     g.reveal();
+    expect(g.playing.value).toBe(false);
+    g.type('a');
+    expect(typed(g)).toBe('P_S_I__');
     g.reset();
     expect(g.state.found).toEqual([]);
     expect(g.playing.value).toBe(true);
-    expect(g.score.value).toEqual({ normal: 0, rare: 0 });
     await Promise.resolve();
     expect(loadProgress(level.pattern)).toEqual({ found: [], revealed: false });
   });
@@ -232,9 +254,11 @@ describe('levels', () => {
         expect(a.spellings.every((s) => keyOf(s.form) === a.key)).toBe(true);
       }
     }
-  });
+    // Builds every level of the bank: slow.
+  }, 30_000);
 
-  it('plays a level by its pattern', () => {
+  it('plays a level by its pattern', async () => {
+    await loadBank();
     expect(bankLevel(BANK[0].pattern).pattern).toBe(BANK[0].pattern);
     expect(bankLevel('ZZZZZ')).toBe(null);
   });
@@ -313,5 +337,14 @@ describe('definitions', () => {
   it('looks a spelled-out œ up with its ligature first', () => {
     expect(pageTitles('soeur')).toEqual(['sœur', 'soeur']);
     expect(pageTitles('rumba')).toEqual(['rumba']);
+  });
+});
+
+describe('days', () => {
+  it('colours and names a day', () => {
+    expect(dayColor('2026-11-02')).toBe('#2f4ad6');
+    expect(dayColor('2026-11-08')).toBe('#cc3a9e');
+    expect(dayLabel('2026-11-07')).toBe('07 novembre');
+    expect(longDayLabel('2026-11-07')).toBe('samedi 7 novembre');
   });
 });

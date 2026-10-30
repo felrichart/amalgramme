@@ -1,0 +1,312 @@
+/*
+ * Dicorama's tokens and shared bits. A view's root has `.dico` and sets `--day`,
+ * the day's colour, which tints the cards: plain for fixed letters, very light
+ * for typed ones.
+ */
+.dico {
+  --dc-paper: #ebe8e2;
+  --dc-board: #f3efe6;
+  --dc-board-edge: #d2cab9;
+  --dc-housing: #cfc8bb;
+  --dc-slot: #24211d;
+  --dc-ink: #2a2620;
+  --dc-muted: #4f4a42;
+  --dc-faint: #6f685c;
+  --dc-dash: #9c9483;
+  --dc-cream: #fffaf0;
+  --dc-yellow: #f4b41a;
+  --dc-yellow-ink: #3a2a00;
+  --dc-brick: #8f3a1f;
+  --dc-serif: 'Young Serif', Georgia, serif;
+  --dc-mono: 'Courier Prime', ui-monospace, monospace;
+  --day: #2f4ad6;
+  --dc-tint: color-mix(in srgb, var(--day) 16%, white);
+  --dc-tint-light: color-mix(in srgb, var(--day) 9%, white);
+  --dc-day-ink: color-mix(in srgb, var(--day) 40%, black);
+  --dc-day-soft: color-mix(in srgb, var(--day) 55%, white);
+
+  min-height: 100dvh;
+  background: var(--dc-paper);
+  color: var(--dc-ink);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 16px;
+}
+.dico button {
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.dico button:focus-visible {
+  outline: 2px solid var(--dc-yellow);
+  outline-offset: 1px;
+}
+
+/* The cream board, as under the word list. */
+.dico .dc-board {
+  background: var(--dc-board);
+  border-radius: 18px;
+  box-shadow: inset 0 -3px 0 var(--dc-board-edge);
+}
+
+/* A round icon button on the paper. */
+.dico .dc-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dc-muted);
+  cursor: pointer;
+}
+.dico .dc-icon:active {
+  background: rgb(0 0 0 / 0.06);
+}
+
+/* A raised button, like a key. */
+.dico .dc-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--day);
+  color: var(--dc-cream);
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 3px 0 var(--dc-day-ink);
+  cursor: pointer;
+}
+.dico .dc-button.quiet {
+  background: #f7f3eb;
+  color: var(--dc-ink);
+  box-shadow: 0 3px 0 #b3ab9a;
+}
+.dico .dc-button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+.dico .dc-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The yellow arrow: down above the input, left beside a word. */
+.dico .dc-arrow-down {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid var(--dc-yellow);
+  filter: drop-shadow(0 1.5px 0 rgb(60 40 0 / 0.55));
+}
+.dico .dc-arrow-left {
+  display: block;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 7px solid var(--dc-yellow);
+  filter: drop-shadow(0 1px 0 rgb(60 40 0 / 0.55));
+  animation: dico-sway 0.55s ease-in-out infinite alternate;
+}
+
+/* A mini pattern: fixed letters as cards, blanks as slots. */
+.dico .dc-mini {
+  display: inline-flex;
+  gap: 3px;
+  align-items: flex-end;
+}
+.dico .dc-mini > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  border-radius: 5px 5px 1px 1px;
+  font-family: var(--dc-serif);
+  font-size: 13px;
+  line-height: 1;
+}
+.dico .dc-mini .fixed {
+  background: var(--day);
+  color: var(--dc-cream);
+}
+.dico .dc-mini .blank {
+  border-radius: 3px;
+  background: var(--dc-slot);
+  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.6);
+}
+
+@keyframes dico-bob {
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    transform: translate(-50%, 5px);
+  }
+}
+@keyframes dico-sway {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(3px);
+  }
+}
+@keyframes dico-rise {
+  0% {
+    transform: translateY(80%);
+  }
+  64% {
+    transform: translateY(-4.5%);
+  }
+  84% {
+    transform: translateY(1%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes dico-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(82%);
+  }
+}
+@keyframes dico-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  12% {
+    transform: translateX(-16%);
+  }
+  28% {
+    transform: translateX(14%);
+  }
+  44% {
+    transform: translateX(-10%);
+  }
+  60% {
+    transform: translateX(6%);
+  }
+  76% {
+    transform: translateX(-3%);
+  }
+}
+@keyframes dico-dip {
+  0% {
+    transform: translateY(0);
+    filter: brightness(1);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5);
+  }
+  40% {
+    transform: translateY(12%);
+    filter: brightness(0.9);
+    animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+  }
+  78% {
+    transform: translateY(-2%);
+    filter: brightness(1);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes dico-flip {
+  0% {
+    transform: perspective(260px) translateY(0) rotateY(0deg);
+    filter: brightness(1);
+    background-color: var(--dc-tint);
+    color: var(--dc-day-ink);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5);
+  }
+  39.9% {
+    background-color: var(--dc-tint);
+    color: var(--dc-day-ink);
+  }
+  40% {
+    transform: perspective(260px) translateY(12%) rotateY(-90deg);
+    filter: brightness(0.9);
+    background-color: var(--day);
+    color: var(--dc-cream);
+    animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+  }
+  78% {
+    transform: perspective(260px) translateY(-2%) rotateY(0deg);
+    filter: brightness(1);
+  }
+  100% {
+    transform: perspective(260px) translateY(0) rotateY(0deg);
+    background-color: var(--day);
+    color: var(--dc-cream);
+  }
+}
+@keyframes dico-arrive {
+  0% {
+    transform: translateX(-104%);
+  }
+  70% {
+    transform: translateX(2%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes dico-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-9px);
+  }
+  50% {
+    transform: translateX(0);
+  }
+  70% {
+    transform: translateX(-4px);
+  }
+}
+@keyframes dico-roll {
+  0% {
+    transform: translateY(0);
+  }
+  75% {
+    transform: translateY(calc(-50% - 3px));
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+@keyframes dico-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes dico-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

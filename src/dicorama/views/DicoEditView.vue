@@ -1,20 +1,23 @@
 <script setup>
 /*
  * The admin's level editor: a bank level, or an official one, to save as a draft
- * or validate. Each family can be made rare or normal, each word given another
- * master spelling (it then follows that spelling's base), each spelling banned
- * from the level, and each base its Wiktionnaire definition (saved at once, for
- * every level).
+ * or validate on a day. Each family can be made rare or normal, each word given
+ * another master spelling (it then follows that spelling's base), each spelling
+ * banned from the level, and each base its Wiktionnaire definition (saved at
+ * once, for every level).
  */
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import PageHeader from '../../src/components/ui/PageHeader.vue';
-import ConfirmModal from '../../src/components/ui/ConfirmModal.vue';
-import { BANK } from './levels.js';
-import { officialLevel, saveLevel, removeLevel } from './official.js';
-import { buildLevel } from './game.js';
-import { draftFrom, toggleRare, setMaster, ban, unban, bannedOf } from './editor.js';
-import LexDefinition from './LexDefinition.vue';
+import '../theme.js';
+import ConfirmModal from '../../components/ui/ConfirmModal.vue';
+import { getToday } from '../../utils/today.js';
+import { addDays } from '../../utils/date.js';
+import { bank } from '../levels.js';
+import { official, officialLevel, saveLevel, removeLevel } from '../store.js';
+import { buildLevel } from '../game.js';
+import { draftFrom, toggleRare, setMaster, ban, unban, bannedOf } from '../editor.js';
+import { dayColor, longDayLabel } from '../days.js';
+import DicoSenses from '../components/DicoSenses.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -24,14 +27,25 @@ const stored = officialLevel(pattern);
 // A plain copy: the stored level is reactive, which structuredClone refuses.
 const draft = ref(
   stored
-    ? { banned: [], ...JSON.parse(JSON.stringify(stored)) }
-    : draftFrom(BANK.find((l) => l.pattern === pattern)),
+    ? (({ pattern, words, rare, banned = [] }) => ({ pattern, words, rare, banned }))(
+        JSON.parse(JSON.stringify(stored)),
+      )
+    : draftFrom(bank().find((l) => l.pattern === pattern)),
 );
-delete draft.value.status;
 const status = ref(stored?.status ?? null);
+
+/* The first day from today no other level holds. */
+function freeDay() {
+  const taken = new Set(official.levels.map((l) => l.date));
+  let day = getToday();
+  while (taken.has(day)) day = addDays(day, 1);
+  return day;
+}
+const date = ref(stored?.date ?? '');
+const snapshot = () => JSON.stringify([draft.value, date.value]);
 // What's saved, or the bank's level until it is.
-const savedAs = ref(JSON.stringify(draft.value));
-const dirty = computed(() => JSON.stringify(draft.value) !== savedAs.value);
+const savedAs = ref(snapshot());
+const dirty = computed(() => snapshot() !== savedAs.value);
 const message = ref(null);
 
 const level = computed(() => buildLevel(draft.value));
@@ -62,11 +76,14 @@ const unbanOne = (form) => (draft.value = unban(draft.value, form));
 const banned = computed(() => bannedOf(draft.value));
 
 async function save(as) {
-  const res = await saveLevel(draft.value, as);
+  if (as === 'valid' && !date.value) date.value = freeDay();
+  const res = await saveLevel(draft.value, as, date.value);
   if (!res.ok) return (message.value = { text: res.error, tone: 'bad' });
   status.value = as;
-  savedAs.value = JSON.stringify(draft.value);
-  message.value = { text: as === 'valid' ? 'Niveau officiel enregistré' : 'Brouillon enregistré' };
+  savedAs.value = snapshot();
+  message.value = {
+    text: as === 'valid' ? `Validé pour le ${longDayLabel(date.value)}` : 'Brouillon enregistré',
+  };
 }
 
 const confirming = ref(false);
@@ -74,26 +91,46 @@ async function remove() {
   confirming.value = false;
   const res = await removeLevel(pattern);
   if (!res.ok) return (message.value = { text: res.error, tone: 'bad' });
-  router.push('/lexilouhette/banque');
+  router.push('/dicorama');
 }
 
-const play = () =>
-  router.push(status.value ? `/lexilouhette/${pattern}` : `/lexilouhette/banque/${pattern}`);
+const back = stored ? '/dicorama' : '/dicorama/banque';
+const play = () => router.push(`/dicorama/motif/${pattern}`);
 </script>
 
 <template>
-  <div class="page fit">
-    <PageHeader
-      :title="pattern.replaceAll('_', '·')"
-      back="/lexilouhette/banque"
-      back-label="banque"
-    >
-      <button class="icon-btn press sm" type="button" aria-label="jouer" @click="play">▶</button>
-    </PageHeader>
+  <div class="dico admin" :style="{ '--day': dayColor(date || getToday()) }">
+    <header class="bar">
+      <button class="dc-icon" type="button" aria-label="retour" @click="router.push(back)">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M15 5l-7 7 7 7" />
+        </svg>
+      </button>
+      <h1 class="title">{{ pattern.replaceAll('_', '·') }}</h1>
+      <button class="dc-button quiet small" type="button" @click="play">Jouer</button>
+    </header>
     <p class="state">
-      {{ status === 'valid' ? 'Officiel' : status === 'draft' ? 'Brouillon' : 'Banque' }}
+      {{ status === 'valid' ? 'Validé' : status === 'draft' ? 'Brouillon' : 'Banque' }}
       <span v-if="dirty"> · modifié</span>
     </p>
+    <label class="when">
+      <span>Jour</span>
+      <input v-model="date" type="date" />
+      <button v-if="!date" class="link" type="button" @click="date = freeDay()">
+        prochain jour libre
+      </button>
+      <button v-else class="link" type="button" @click="date = ''">sans date</button>
+    </label>
 
     <div class="sections">
       <section v-for="s in sections" :key="s.title" class="section">
@@ -104,7 +141,7 @@ const play = () =>
         <article v-for="f in s.families" :key="f.base" class="family" :class="{ rare: f.rare }">
           <header class="family-top">
             <span class="note" title="note de rareté">{{ f.points }}</span>
-            <LexDefinition class="family-def" :word="f.base" />
+            <DicoSenses class="family-def" :word="f.base" />
             <button class="pill swap" type="button" @click="rare(f.base)">
               {{ f.rare ? '→ réponse' : '→ rare' }}
             </button>
@@ -141,7 +178,7 @@ const play = () =>
                   </button>
                 </span>
               </div>
-              <LexDefinition v-for="b in w.others" :key="b" class="other-def" :word="b" />
+              <DicoSenses v-for="b in w.others" :key="b" class="other-def" :word="b" />
             </li>
           </ul>
         </article>
@@ -190,7 +227,7 @@ const play = () =>
         </template>
       </div>
       <button v-if="status" class="remove" type="button" @click="confirming = true">
-        Retirer des niveaux officiels
+        Retirer des niveaux
       </button>
     </footer>
 
@@ -205,6 +242,73 @@ const play = () =>
 </template>
 
 <style scoped>
+/* Dicorama's colours on the shared admin bits (pills, buttons, modals). */
+.admin {
+  --ink: var(--dc-ink);
+  --muted: var(--dc-muted);
+  --panel: var(--dc-board);
+  --line: var(--dc-board-edge);
+  --rare: #b07d00;
+  --on-color: var(--dc-cream);
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 4px 10px;
+}
+.title {
+  flex: 1;
+  margin: 0;
+  font-family: var(--dc-mono);
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--day);
+}
+.small {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.when {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 1rem 0.6rem;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dc-muted);
+}
+.when input {
+  padding: 6px 8px;
+  border: 1.5px solid var(--dc-board-edge);
+  border-radius: 8px;
+  background: var(--dc-board);
+  font: inherit;
+  color: var(--dc-ink);
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  text-decoration: underline;
+  color: var(--dc-muted);
+  cursor: pointer;
+}
+.family-top .note {
+  font-family: var(--dc-mono);
+}
+.foot {
+  padding: 0.6rem 1rem max(1rem, env(safe-area-inset-bottom));
+  border-top: 1.5px solid var(--dc-board-edge);
+}
 .state {
   margin: 0;
   padding: 0 1rem 0.4rem;

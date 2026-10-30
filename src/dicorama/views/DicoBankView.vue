@@ -1,34 +1,29 @@
 <script setup>
+/* The bank, every level the generator found (admin only), to play any or edit it
+ * into an official one: filter by length, by a piece of pattern ("RE_E", blanks
+ * typed as _ . or space) or by a word it holds (frivole, also matching its
+ * family: frivoles), or draw one at random. */
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import PageHeader from '../../src/components/ui/PageHeader.vue';
-import { WORD_TINTS } from '../../src/palette.js';
-import { levelsOf, loadProgress } from './levels.js';
-import { isAdmin, officialLevel } from './official.js';
-import { buildLevel, scoreOf, maxScore, isDone, keyOf } from './game.js';
+import '../theme.js';
+import { getToday } from '../../utils/today.js';
+import { bank, loadProgress } from '../levels.js';
+import { officialLevel } from '../store.js';
+import { buildLevel, scoreOf, maxScore, isDone, keyOf } from '../game.js';
+import { dayColor } from '../days.js';
 
-/* A list of levels, the official ones or the bank (every level the generator
- * found, admin only, each with a button to edit it into an official one), to pick
- * any: filter by length, by a piece of pattern ("RE_E", blanks typed as _ . or
- * space) or by a word it holds (frivole, also matching its family: frivoles), or
- * draw one at random. */
-const props = defineProps({ source: { type: String, required: true } });
 const router = useRouter();
 const LENGTHS = [4, 5, 6, 7];
 const PAGE = 150;
-const inBank = props.source === 'bank';
-const home = inBank ? '/lexilouhette/banque' : '/lexilouhette';
-const STATUS = { draft: 'brouillon', valid: 'officiel' };
+const STATUS = { draft: 'brouillon', valid: 'validé' };
 
-const rows = levelsOf(props.source).map((l) => {
+const rows = bank().map((l) => {
   const { found, revealed } = loadProgress(l.pattern);
   const level = buildLevel(l);
   const row = {
     pattern: l.pattern,
-    // Beside a level not played: how many families in the bank, answers otherwise.
-    size: inBank ? `${l.words.length} familles` : `${maxScore(level)} réponses`,
-    status: isAdmin && STATUS[(inBank ? officialLevel(l.pattern) : l)?.status],
-    tint: WORD_TINTS[(l.pattern.length - LENGTHS[0]) % WORD_TINTS.length],
+    size: `${l.words.length} familles`,
+    status: STATUS[officialLevel(l.pattern)?.status],
     words: new Set([...level.answers.keys(), ...level.families.map((f) => keyOf(f.base))]),
   };
   if (!found.length && !revealed) return row;
@@ -54,8 +49,8 @@ function setLength(len) {
   shown.value = PAGE;
 }
 
-const play = (pattern) => router.push(`${home}/${pattern}`);
-const edit = (pattern) => router.push(`/lexilouhette/editer/${pattern}`);
+const play = (pattern) => router.push(`/dicorama/banque/${pattern}`);
+const edit = (pattern) => router.push(`/dicorama/editer/${pattern}`);
 function playRandom() {
   const list = filtered.value;
   if (list.length) play(list[Math.floor(Math.random() * list.length)].pattern);
@@ -63,18 +58,25 @@ function playRandom() {
 </script>
 
 <template>
-  <div class="page fit">
-    <PageHeader v-if="inBank" title="Banque" back="/lexilouhette" back-label="niveaux" />
-    <PageHeader v-else title="Lexilouhette" back="/" back-label="labo">
-      <button
-        v-if="isAdmin"
-        class="pill bank"
-        type="button"
-        @click="router.push('/lexilouhette/banque')"
-      >
-        Banque
+  <div class="dico admin" :style="{ '--day': dayColor(getToday()) }">
+    <header class="bar">
+      <button class="dc-icon" type="button" aria-label="retour" @click="router.push('/dicorama')">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M15 5l-7 7 7 7" />
+        </svg>
       </button>
-    </PageHeader>
+      <h1 class="title">Banque</h1>
+    </header>
     <div class="filters">
       <div class="lengths">
         <button
@@ -106,13 +108,7 @@ function playRandom() {
     </div>
     <ul class="list">
       <li v-for="r in filtered.slice(0, shown)" :key="r.pattern" class="item">
-        <button
-          class="row press"
-          :class="{ done: r.done }"
-          :style="{ '--tint': r.tint }"
-          type="button"
-          @click="play(r.pattern)"
-        >
+        <button class="row press" :class="{ done: r.done }" type="button" @click="play(r.pattern)">
           <span class="pattern">{{ r.pattern.replaceAll('_', '·') }}</span>
           <span v-if="r.status" class="status">{{ r.status }}</span>
           <span v-if="r.score" class="score"
@@ -121,13 +117,7 @@ function playRandom() {
           >
           <span v-else class="size">{{ r.size }}</span>
         </button>
-        <button
-          v-if="inBank"
-          class="act press"
-          type="button"
-          aria-label="éditer"
-          @click="edit(r.pattern)"
-        >
+        <button class="act press" type="button" aria-label="éditer" @click="edit(r.pattern)">
           ✎
         </button>
       </li>
@@ -136,19 +126,48 @@ function playRandom() {
           Afficher plus
         </button>
       </li>
-      <li v-if="!rows.length" class="empty">
-        Aucun niveau officiel pour l'instant<template v-if="isAdmin"
-          >, ajoute-en depuis la banque</template
-        >.
-      </li>
-      <li v-else-if="!filtered.length" class="empty">
-        Aucun niveau ne contient ce motif ni ce mot.
-      </li>
+      <li v-if="!filtered.length" class="empty">Aucun niveau ne contient ce motif ni ce mot.</li>
     </ul>
   </div>
 </template>
 
 <style scoped>
+/* Dicorama's colours on the shared list bits (pills, rows). */
+.admin {
+  --ink: var(--dc-ink);
+  --muted: var(--dc-muted);
+  --panel: var(--dc-board);
+  --line: var(--dc-board-edge);
+  --rare: #b07d00;
+  --on-color: var(--dc-cream);
+  --tint: var(--dc-board);
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.admin .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 4px 10px;
+}
+.title {
+  margin: 0;
+  font-family: var(--dc-serif);
+  font-weight: 400;
+  font-size: 28px;
+  color: var(--day);
+}
+.pattern {
+  font-family: var(--dc-mono);
+}
 .filters {
   flex: none;
   display: flex;

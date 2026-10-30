@@ -9,6 +9,7 @@ import AdminView from './views/AdminView.vue';
 import AdminDailyEditView from './views/AdminDailyEditView.vue';
 import GameView from './views/GameView.vue';
 import AccountLinkView from './views/AccountLinkView.vue';
+import dicoramaRoutes from './dicorama/routes.js';
 
 // Casual gate: the Worker enforces admin rights on every write.
 const adminOnly = () => isAdmin.value || '/';
@@ -26,6 +27,7 @@ const routes = [
   // Emailed links (paths set in server/mail.js).
   { path: '/verifier', component: AccountLinkView, props: { kind: 'verify' } },
   { path: '/mot-de-passe', component: AccountLinkView, props: { kind: 'reset' } },
+  ...dicoramaRoutes,
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

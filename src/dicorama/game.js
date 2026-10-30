@@ -1,5 +1,5 @@
 /*
- * Lexilouhette rules: a silhouette (`P_S_I__`) and every word that fits it.
+ * Dicorama rules: a silhouette (`P_S_I__`) and every word that fits it.
  *
  * A word is what's typed (without accents): its master spelling, shown, and its
  * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
@@ -19,7 +19,7 @@ export const POINTS_MAX = 99;
  * frequency): slow near both ends, fastest at CENTRE (0 = FREQ_COMMON, 1 =
  * FREQ_RARE), more so the higher STEEPNESS. Tuned so the families of the 5 to
  * 7-letter levels split about 5/30/35/25/5 % across the tiers (`npm run
- * lab:levels` prints it). */
+ * dicorama:levels` prints it). */
 const FREQ_COMMON = 66;
 const FREQ_RARE = 0.0013;
 const STEEPNESS = 3.1;
@@ -74,7 +74,7 @@ export function storedWord(spellings, base) {
 }
 
 /*
- * A level as levels.json (and official.json) stores it: `[freq, base, ...words]`
+ * A level as bank.json (and the Worker) stores it: `[freq, base, ...words]`
  * per family, a word being its spellings, master first, or `base` alone when that's
  * its only one. A spelling is `form` (the base itself), `[form, label]` (a form of
  * the base: ["dures", "fém. plur."]) or `[form, label, base, freq]` (a homonym of
@@ -129,22 +129,47 @@ export function scoreOf(level, found) {
 export const maxScore = (level) => level.families.filter((f) => !f.rare).length;
 
 /*
- * The level's spots, alphabetical by their first word: one per normal family,
- * numbered (`num`, from 1), and one per rare family once found or `revealed`.
- * `rows` are its words found, first find first (the one that counts), then once
- * `revealed` the others, each with whether it's found.
+ * The level's list, alphabetical: a spot per normal family, numbered from 1 and
+ * filled by its first find, then a row of its own for every other find: `rare`
+ * for a rare family's first one (a bonus), `variant` for a family's later ones
+ * (worth nothing). Once `revealed`, the families still to find show their first
+ * word, not `found`.
  */
-export function familiesOf(level, found, revealed = false) {
-  const first = (f) => level.answers.get(f.keys[0]).display;
-  const sorted = [...level.families].sort((a, b) => first(a).localeCompare(first(b), 'fr'));
+export function listOf(level, found, revealed = false) {
+  const firstWord = (f) => level.answers.get(f.keys[0]);
+  const sorted = [...level.families].sort((a, b) =>
+    firstWord(a).display.localeCompare(firstWord(b).display, 'fr'),
+  );
+  const opener = new Map();
+  for (const key of [...found].reverse()) {
+    const id = familyOf(level, key);
+    if (!opener.has(id)) opener.set(id, key);
+  }
   let num = 0;
-  return sorted.flatMap((f) => {
-    const mine = found.filter((k) => familyOf(level, k) === f.id).reverse();
-    if (f.rare && !mine.length && !revealed) return [];
-    const keys = revealed ? [...mine, ...f.keys.filter((k) => !mine.includes(k))] : mine;
-    const rows = keys.map((k) => ({ ...level.answers.get(k), found: mine.includes(k) }));
-    return [{ ...f, num: f.rare ? null : ++num, rows, found: mine.length > 0 }];
-  });
+  const rows = [];
+  for (const f of sorted) {
+    const key = opener.get(f.id);
+    const answer = key ? level.answers.get(key) : revealed ? firstWord(f) : null;
+    if (!f.rare) {
+      const sort = firstWord(f).display;
+      rows.push({ id: `f${f.id}`, kind: 'main', num: ++num, answer, found: !!key, sort });
+    } else if (answer) {
+      rows.push({
+        id: `f${f.id}`,
+        kind: 'rare',
+        num: null,
+        answer,
+        found: !!key,
+        sort: answer.display,
+      });
+    }
+  }
+  for (const key of found) {
+    if (opener.get(familyOf(level, key)) === key) continue;
+    const answer = level.answers.get(key);
+    rows.push({ id: key, kind: 'variant', num: null, answer, found: true, sort: answer.display });
+  }
+  return rows.sort((a, b) => a.sort.localeCompare(b.sort, 'fr'));
 }
 
 export const isDone = (level, found) => {

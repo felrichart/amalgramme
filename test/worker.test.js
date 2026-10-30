@@ -492,3 +492,67 @@ describe('play stats', () => {
     expect(DB.sql('SELECT COUNT(*) n FROM level_stats_legacy')[0].n).toBe(4);
   });
 });
+
+describe('dicorama', () => {
+  const level = (extra = {}) => ({
+    status: 'valid',
+    date: '2026-01-02',
+    words: [[1, 'perle', 'perle']],
+    rare: [],
+    banned: [],
+    ...extra,
+  });
+  const read = async (env, token) => (await call(env, 'GET', '/dicorama', undefined, token)).json();
+
+  it('ships the lab levels as undated drafts, for the admin only', async () => {
+    const env = fakeEnv();
+    expect((await read(env)).levels).toEqual([]);
+    const all = await read(env, await signup(env, 'cara+'));
+    expect(all.levels).toHaveLength(6);
+    expect(all.levels.every((l) => l.status === 'draft' && l.date === null)).toBe(true);
+    expect(all.definitions.peul.index).toBe(2);
+  });
+
+  it('gives players the validated levels up to tomorrow', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T12:00:00Z'));
+    const env = fakeEnv();
+    const admin = await signup(env, 'cara+');
+    const put = (pattern, body) => call(env, 'PUT', `/dicorama/levels/${pattern}`, body, admin);
+    expect((await put('P__L_', level())).status).toBe(200);
+    expect((await put('B___N', level({ date: '2026-01-03' }))).status).toBe(200);
+    expect((await put('__NC_E', level({ status: 'draft', date: null }))).status).toBe(200);
+    expect((await read(env)).levels.map((l) => l.pattern)).toEqual(['P__L_']);
+    // The three overwrite lab levels: still six.
+    expect((await read(env, admin)).levels).toHaveLength(6);
+  });
+
+  it('keeps a day to one level, and a validated level to its day', async () => {
+    const env = fakeEnv();
+    const admin = await signup(env, 'cara+');
+    const put = (pattern, body) => call(env, 'PUT', `/dicorama/levels/${pattern}`, body, admin);
+    expect((await put('P__L_', level())).status).toBe(200);
+    expect((await put('P__L_', level({ rare: ['perle'] }))).status).toBe(200);
+    expect((await put('B___N', level())).status).toBe(409);
+    expect((await put('B___N', level({ date: null }))).status).toBe(422);
+    expect((await put('PERLE', level({ date: '2026-02-02' }))).status).toBe(422);
+    // Any day, past ones too.
+    expect((await put('B___N', level({ date: '2001-01-01' }))).status).toBe(200);
+  });
+
+  it('lets only the admin write, levels and definitions', async () => {
+    const env = fakeEnv();
+    const bob = await signup(env, 'bob');
+    expect((await call(env, 'PUT', '/dicorama/levels/P__L_', level(), bob)).status).toBe(403);
+    expect((await call(env, 'DELETE', '/dicorama/levels/P__L_', {}, bob)).status).toBe(403);
+    const admin = await signup(env, 'cara+');
+    const path = `/dicorama/definitions/${encodeURIComponent('bénin')}`;
+    expect((await call(env, 'PUT', path, { index: 1, text: 'Doux.' }, bob)).status).toBe(403);
+    expect((await call(env, 'PUT', path, { index: 1, text: 'Doux.' }, admin)).status).toBe(200);
+    expect((await read(env)).definitions['bénin']).toEqual({ index: 1, text: 'Doux.' });
+    expect((await call(env, 'DELETE', path, {}, admin)).status).toBe(200);
+    expect((await read(env)).definitions['bénin']).toBeUndefined();
+    expect((await call(env, 'DELETE', '/dicorama/levels/P__L_', {}, admin)).status).toBe(200);
+    expect((await call(env, 'DELETE', '/dicorama/levels/P__L_', {}, admin)).status).toBe(404);
+  });
+});

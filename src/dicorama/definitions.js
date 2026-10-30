@@ -1,14 +1,14 @@
 /*
  * A base word's French senses, fetched from the Wiktionnaire on demand and kept on
- * the device, and its definition: the sense the admin picked (official.js), else
+ * the device, and its definition: the sense the admin picked (store.js), else
  * its first one of its own. Rejects when a request fails, which isn't kept, so the
  * next one retries.
  */
-import { readJSON, writeJSON, isObject } from '../../src/utils/storage.js';
-import { official } from './official.js';
+import { readJSON, writeJSON, isObject } from '../utils/storage.js';
+import { official } from './store.js';
 
 const SITE = 'https://fr.wiktionary.org';
-const KEY = 'lexilouhette:v8:senses';
+const KEY = 'dicorama:v1:senses';
 
 const saved = readJSON(KEY, {}, isObject);
 const pending = new Map();

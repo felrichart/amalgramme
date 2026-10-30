@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "lab": "vite --config lab/vite.config.js",
-    "lab:levels": "node lab/lexilouhette/scripts/build-levels.mjs",
-    "lab:dico": "node lab/lexilouhette/scripts/build-dictionary.mjs",
+    "dicorama:levels": "node src/dicorama/scripts/build-levels.mjs",
+    "dicorama:dico": "node src/dicorama/scripts/build-dictionary.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

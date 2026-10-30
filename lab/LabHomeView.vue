@@ -3,14 +3,8 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
-const GAMES = [
-  {
-    path: '/lexilouhette',
-    name: 'Lexilouhette',
-    pitch: 'Trouve tous les mots qui épousent la silhouette.',
-    tint: 'var(--violet)',
-  },
-];
+// Lexilouhette graduated to the app as Dicorama (src/dicorama).
+const GAMES = [];
 </script>
 
 <template>
@@ -33,6 +27,7 @@ const GAMES = [
           </span>
         </button>
       </li>
+      <li v-if="!GAMES.length" class="empty">Aucun jeu en test pour l'instant.</li>
     </ul>
   </div>
 </template>
