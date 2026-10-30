@@ -81,6 +81,9 @@ const master = (key, form) => (draft.value = setMaster(draft.value, key, form));
 const banOne = (key, form) => (draft.value = ban(draft.value, key, form));
 const unbanOne = (form) => (draft.value = unban(draft.value, form));
 const banned = computed(() => bannedOf(draft.value));
+// The list must hold exactly GOAL families to save.
+const listCount = computed(() => level.value.families.filter((f) => f.main).length);
+const listOk = computed(() => listCount.value === GOAL);
 
 async function save(as) {
   if (as === 'valid' && !date.value) date.value = freeDay();
@@ -224,13 +227,21 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
     </div>
 
     <footer class="foot">
-      <p v-if="message" class="message" :class="message.tone">{{ message.text }}</p>
+      <p v-if="!listOk" class="message bad">
+        La liste doit avoir {{ GOAL }} familles ({{ listCount }} pour l'instant).
+      </p>
+      <p v-else-if="message" class="message" :class="message.tone">{{ message.text }}</p>
       <div class="actions">
         <template v-if="status === 'valid'">
-          <button class="cta ghost press" type="button" @click="save('draft')">
+          <button class="cta ghost press" type="button" :disabled="!listOk" @click="save('draft')">
             Repasser en brouillon
           </button>
-          <button class="cta press" type="button" :disabled="!dirty" @click="save('valid')">
+          <button
+            class="cta press"
+            type="button"
+            :disabled="!dirty || !listOk"
+            @click="save('valid')"
+          >
             Enregistrer
           </button>
         </template>
@@ -238,12 +249,19 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
           <button
             class="cta ghost press"
             type="button"
-            :disabled="status && !dirty"
+            :disabled="(status && !dirty) || !listOk"
             @click="save('draft')"
           >
             Enregistrer le brouillon
           </button>
-          <button class="cta validate press" type="button" @click="save('valid')">Valider</button>
+          <button
+            class="cta validate press"
+            type="button"
+            :disabled="!listOk"
+            @click="save('valid')"
+          >
+            Valider
+          </button>
         </template>
       </div>
       <button v-if="status" class="remove" type="button" @click="confirming = true">
@@ -356,7 +374,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   font-size: 0.8rem;
   color: var(--muted);
 }
-/* The list holds GOAL families: any other count shows. */
+/* The list holds GOAL families: any other count shows, and blocks saving. */
 .count.off {
   color: var(--danger);
 }
