@@ -237,7 +237,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
             Repasser en brouillon
           </button>
           <button
-            class="cta press"
+            class="cta validate press"
             type="button"
             :disabled="!dirty || !listOk"
             @click="save('valid')"
