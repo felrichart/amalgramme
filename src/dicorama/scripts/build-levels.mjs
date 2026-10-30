@@ -36,6 +36,9 @@ const KNOWN_FREQ = 1;
 const MIN_KNOWN = 5;
 // Share of families whose words are all plurals, at most (…ES, …ÉS farms).
 const MAX_PLURALS = 0.5;
+// Verb forms that fit a level (conjugations, present participles), fewer than
+// this: the player's told they're no answer, so a …AIS festival isn't a level.
+const MAX_CONJUGATED = 200;
 // Frequency (per million) given to words added by hand.
 const ADDED_FREQ = 1;
 
@@ -77,7 +80,9 @@ function labelOf(form, sense, femBases) {
 }
 
 /*
- * The playable words by length, one per unaccented spelling (what's typed).
+ * The playable words by length, one per unaccented spelling (what's typed), and
+ * `verbForms`, the typed keys (uppercase) of the spellings that are only verb
+ * forms, by length.
  *
  * A spelling (with its accents) counts all its uses, playable or not (tigres: tu
  * tigres too), since the lexicon splits them unreliably between its readings, and
@@ -119,6 +124,12 @@ function loadDictionary(path) {
     const label = labelOf(sp.form, sp.sense, femBases);
     byKey.get(key).push({ ...sp, base: sp.sense.lemma, label });
   }
+  const verbForms = new Map(LENGTHS.map((len) => [len, new Set()]));
+  for (const sp of spellings.values()) {
+    const key = keyOf(sp.form);
+    if (sp.sense || !LENGTHS.includes(key.length) || byKey.has(key.toLowerCase())) continue;
+    verbForms.get(key.length).add(key);
+  }
   const byLength = new Map(LENGTHS.map((len) => [len, []]));
   for (const [key, all] of byKey) {
     all.sort((a, b) => a.sense.rank - b.sense.rank || b.freq - a.freq);
@@ -137,7 +148,7 @@ function loadDictionary(path) {
       plural: isPlural(master.sense.tags),
     });
   }
-  return byLength;
+  return { byLength, verbForms };
 }
 
 /* Every set of shown positions in `len` allowed by the blank rules. */
@@ -187,14 +198,16 @@ function familiesIn(words) {
   });
 }
 
-/* The level for `pattern`, or null when it fails a threshold. */
-function evaluate(pattern, words) {
+/* The level for `pattern`, or null when it fails a threshold. `conjugated`: the
+ * verb forms that fit it. */
+function evaluate(pattern, words, conjugated) {
+  if (conjugated.length >= MAX_CONJUGATED) return null;
   const families = familiesIn(words);
   const spots = families.filter((f) => wordPoints(round(f.freq)) < RARE_POINTS).length;
   if (spots < MIN_SPOTS || spots > MAX_SPOTS) return null;
   if (families.filter((f) => f.freq >= KNOWN_FREQ).length < MIN_KNOWN) return null;
   if (families.filter((f) => f.plural).length > families.length * MAX_PLURALS) return null;
-  return { pattern, families };
+  return { pattern, families, conjugated };
 }
 
 /* The levels no other level narrows down: A___E goes when A__TE is a level. */
@@ -216,21 +229,30 @@ function mostSpecific(levels) {
 /* Every silhouette that passes the thresholds and that no other one narrows down, by
  * length then pattern: each mask groups the words by the letters it shows, and each
  * group is a candidate. */
-function candidates(byLength) {
+function candidates({ byLength, verbForms }) {
   const found = [];
   for (const [len, words] of byLength) {
     for (const mask of masks(len)) {
+      const patternOf = (key) =>
+        [...key].map((ch, i) => (mask.includes(i) ? ch.toUpperCase() : '_')).join('');
       const groups = new Map();
       for (const e of words) {
-        const pattern = [...e.key]
-          .map((ch, i) => (mask.includes(i) ? ch.toUpperCase() : '_'))
-          .join('');
+        const pattern = patternOf(e.key);
         if (!groups.has(pattern)) groups.set(pattern, []);
         groups.get(pattern).push(e);
       }
+      const forms = new Map();
+      for (const key of verbForms.get(len)) {
+        const pattern = patternOf(key);
+        if (groups.has(pattern)) forms.set(pattern, [...(forms.get(pattern) ?? []), key]);
+      }
       for (const [pattern, group] of groups) {
         if (group.length < MIN_SPOTS || isSkipped(pattern)) continue;
-        const level = evaluate(pattern, curate(pattern, group));
+        const curated = curate(pattern, group);
+        // Not a word added by hand.
+        const added = new Set(curated.map((w) => w.key.toUpperCase()));
+        const conjugated = (forms.get(pattern) ?? []).filter((k) => !added.has(k)).sort();
+        const level = evaluate(pattern, curated, conjugated);
         if (level) found.push(level);
       }
     }
@@ -258,7 +280,11 @@ const familyRows = (families) =>
 const levels = candidates(loadDictionary(tsvPath));
 // One level per line (too big for prettier).
 const lines = levels.map((l) =>
-  JSON.stringify({ pattern: l.pattern, words: familyRows(l.families) }),
+  JSON.stringify({
+    pattern: l.pattern,
+    words: familyRows(l.families),
+    ...(l.conjugated.length && { conjugated: l.conjugated }),
+  }),
 );
 writeFileSync(file('bank.json'), `[\n${lines.join(',\n')}\n]\n`);
 

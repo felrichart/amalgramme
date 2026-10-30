@@ -63,13 +63,16 @@ Les mots jouables : tout ce qui n'est pas un verbe, les infinitifs et les
 participes passés qui s'accordent (fatigué, fatiguée ; pas dormi). Les
 conjugaisons et les participes présents sont exclus : le lexique ne sait pas
 distinguer « il cogne » d'« un cogne », et un participe présent employé comme
-adjectif a sa propre entrée (fatigant, portant).
+adjectif a sa propre entrée (fatigant, portant). Le générateur garde pourtant
+les formes de verbe qui remplissent chaque motif (`conjugated`) : les taper
+répond « pas de conjugaison », pas « mot inconnu ».
 
 Les niveaux sont tous les motifs qui passent les seuils (en tête de
 `scripts/build-levels.mjs`) : 10 à 25 familles courantes (les rares en plus), de 4 à 7
 lettres, au moins 2 lettres visibles, 2 cases vides pour 4
 lettres et 3 ou 4 sinon, au moins 5 familles connues (1 par million ou plus), pas
-plus de moitié de familles qui ne sont que des pluriels. Quand un niveau en précise
+plus de moitié de familles qui ne sont que des pluriels, moins de 200 formes de
+verbe qui le remplissent (pas de ____AIS). Quand un niveau en précise
 un autre (A__TE dans A___E), seul le plus précis reste.
 
 ## Banque et niveaux officiels
@@ -85,8 +88,11 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.
   au moins 11 familles pour enregistrer (une étoile, puis deux) ;
 - changer le maître mot d'une saisie : le mot suit la base de son nouveau maître
   mot, dans sa famille (créée au besoin, la famille vidée disparaît) ;
-- bannir une orthographe du niveau (✕), rétablie depuis « Bannis » ; un maître mot
-  banni cède sa place à l'orthographe suivante ;
+- bannir une orthographe du niveau (✕), pour une raison : conjugaison passée
+  entre les mailles, mot invalide ou mot offensant, ce que le joueur lit en la
+  tapant ; elle se rétablit depuis « Bannis », rangé par raison avec les
+  conjugaisons du générateur ; un maître mot banni cède sa place à l'orthographe
+  suivante ;
 - choisir le sens du Wiktionnaire d'une base, enregistré tout de suite et valable
   dans tous les niveaux ;
 - choisir son jour (« prochain jour libre » par défaut à la validation).
@@ -94,7 +100,9 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.
 « Enregistrer le brouillon » le garde pour l'admin seul, « Valider » le donne aux
 joueurs à son jour. Les niveaux officiels et les sens choisis vivent dans la base
 D1 du Worker (`dicorama_levels`, `dicorama_definitions`, migration 0012, qui y
-reprend les niveaux du labo en brouillons sans date) ;
+reprend les niveaux du labo en brouillons sans date ; les raisons et les formes
+de verbe : 0015, que `scripts/conjugated-sql.mjs` remplit pour les niveaux déjà
+enregistrés) ;
 `store.js` les garde aussi sur l'appareil. L'admin trouve les niveaux à venir et
 les brouillons à `/dicorama/a-venir`.
 

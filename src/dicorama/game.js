@@ -88,8 +88,12 @@ export function storedWord(spellings, base) {
  * RARE_POINTS; the others are the list. `banned` spellings are left out,
  * and with them a word or family left without any. Each answer is keyed by its
  * unaccented spelling.
+ *
+ * `refused` maps what's typed to why it isn't an answer (see REASONS): the
+ * `conjugated` keys (verb forms that fit, found by the generator), then each
+ * banned spelling by its `reasons` ('invalid' when it has none).
  */
-export function buildLevel({ pattern, words, rare, banned = [] }) {
+export function buildLevel({ pattern, words, rare, banned = [], conjugated = [], reasons = {} }) {
   const answers = new Map();
   const families = [];
   for (const [freq, base, ...raw] of words) {
@@ -106,12 +110,25 @@ export function buildLevel({ pattern, words, rare, banned = [] }) {
     const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
     families.push({ id, base, freq, points, rare: isRare, keys });
   }
-  return { pattern, answers, families };
+  const refused = new Map(conjugated.map((k) => [k, 'conj']));
+  for (const form of banned) {
+    const key = keyOf(form);
+    if (!answers.has(key)) refused.set(key, reasons[form] ?? 'invalid');
+  }
+  return { pattern, answers, families, refused };
 }
 
-/* What a fully typed word gets: 'new', 'dup' (already found) or 'unknown'. */
+/* Why a word is banned from a level, and what the player is told. */
+export const REASONS = {
+  conj: 'pas de conjugaison',
+  invalid: 'mot invalide',
+  offensive: 'mot offensant',
+};
+
+/* What a fully typed word gets: 'new', 'dup' (already found), a reason it's
+ * refused (see REASONS) or 'unknown'. */
 export function judge(level, key, found) {
-  if (!level.answers.has(key)) return 'unknown';
+  if (!level.answers.has(key)) return level.refused.get(key) ?? 'unknown';
   return found.includes(key) ? 'dup' : 'new';
 }
 

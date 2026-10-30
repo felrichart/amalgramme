@@ -15,7 +15,7 @@ import { getToday } from '../../utils/today.js';
 import { addDays } from '../../utils/date.js';
 import { bank } from '../levels.js';
 import { official, officialLevel, saveLevel, removeLevel } from '../store.js';
-import { buildLevel, LIST_MIN } from '../game.js';
+import { buildLevel, LIST_MIN, REASONS } from '../game.js';
 import { draftFrom, setRare, setMaster, ban, unban, bannedOf } from '../editor.js';
 import { dayColor, longDayLabel } from '../days.js';
 import DicoSenses from '../components/DicoSenses.vue';
@@ -25,12 +25,16 @@ const router = useRouter();
 const pattern = route.params.pattern;
 
 const stored = officialLevel(pattern);
-// A plain copy: the stored level is reactive, which structuredClone refuses.
-const draft = ref(
-  draftFrom(
-    stored ? JSON.parse(JSON.stringify(stored)) : bank().find((l) => l.pattern === pattern),
-  ),
-);
+const fromBank = bank().find((l) => l.pattern === pattern);
+/* A plain copy: the stored level is reactive, which structuredClone refuses. A
+ * level saved before the generator listed its verb forms takes the bank's. */
+function source() {
+  if (!stored) return fromBank;
+  const level = JSON.parse(JSON.stringify(stored));
+  if (!level.conjugated?.length) level.conjugated = fromBank?.conjugated ?? [];
+  return level;
+}
+const draft = ref(draftFrom(source()));
 const status = ref(stored?.status ?? null);
 
 /* The first day from today no other level holds. */
@@ -74,9 +78,25 @@ const KINDS = [
 ];
 const move = (base, rare) => (draft.value = setRare(draft.value, base, rare));
 const master = (key, form) => (draft.value = setMaster(draft.value, key, form));
-const banOne = (key, form) => (draft.value = ban(draft.value, key, form));
+const REASON_LABELS = { conj: 'conjugaison', invalid: 'mot invalide', offensive: 'mot offensant' };
+// The spelling whose ✕ was tapped, its reason to pick.
+const banning = ref(null);
+function banOne(key, form, reason) {
+  draft.value = ban(draft.value, key, form, reason);
+  banning.value = null;
+}
 const unbanOne = (form) => (draft.value = unban(draft.value, form));
 const banned = computed(() => bannedOf(draft.value));
+/* The banned spellings by reason; the generator's verb forms with the
+ * conjugations, typed as they are (no accents). */
+const bannedBy = computed(() =>
+  Object.keys(REASONS).map((reason) => ({
+    reason,
+    spellings: banned.value.filter((sp) => sp.reason === reason),
+    found: reason === 'conj' ? draft.value.conjugated.map((k) => k.toLowerCase()) : [],
+  })),
+);
+const bannedCount = computed(() => banned.value.length + draft.value.conjugated.length);
 const listCount = computed(() => level.value.families.filter((f) => !f.rare).length);
 const listOk = computed(() => listCount.value >= LIST_MIN);
 
@@ -190,10 +210,22 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
                     type="button"
                     :aria-label="`bannir ${sp.form}`"
                     title="bannir du niveau"
-                    @click="banOne(w.key, sp.form)"
+                    :aria-expanded="banning === sp.form"
+                    @click="banning = banning === sp.form ? null : sp.form"
                   >
                     ✕
                   </button>
+                  <span v-if="banning === sp.form" class="reasons" role="group" aria-label="raison">
+                    <button
+                      v-for="(_, reason) in REASONS"
+                      :key="reason"
+                      class="reason"
+                      type="button"
+                      @click="banOne(w.key, sp.form, reason)"
+                    >
+                      {{ REASON_LABELS[reason] }}
+                    </button>
+                  </span>
                 </span>
               </div>
               <DicoSenses v-for="b in w.others" :key="b" class="other-def" :word="b" />
@@ -203,21 +235,29 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
       </section>
       <section class="section">
         <h2 class="heading">
-          Bannis <span class="count">{{ banned.length }}</span>
+          Bannis <span class="count">{{ bannedCount }}</span>
         </h2>
-        <p v-if="!banned.length" class="none">Aucun : ✕ sur un mot l'écarte du niveau.</p>
-        <div v-else class="spellings">
-          <button
-            v-for="sp in banned"
-            :key="sp.form"
-            class="spelling form banned"
-            type="button"
-            title="rétablir"
-            @click="unbanOne(sp.form)"
-          >
-            <s>{{ sp.form }}</s> <span class="label">rétablir</span>
-          </button>
-        </div>
+        <p v-if="!bannedCount" class="none">Aucun : ✕ sur un mot l'écarte du niveau.</p>
+        <template v-for="g in bannedBy" :key="g.reason">
+          <div v-if="g.spellings.length || g.found.length" class="banned-group">
+            <h3 class="subheading">{{ REASON_LABELS[g.reason] }}</h3>
+            <div v-if="g.spellings.length" class="spellings">
+              <button
+                v-for="sp in g.spellings"
+                :key="sp.form"
+                class="spelling form banned"
+                type="button"
+                title="rétablir"
+                @click="unbanOne(sp.form)"
+              >
+                <s>{{ sp.form }}</s> <span class="label">rétablir</span>
+              </button>
+            </div>
+            <p v-if="g.found.length" class="found">
+              <span class="label">trouvées par le générateur :</span> {{ g.found.join(', ') }}
+            </p>
+          </div>
+        </template>
       </section>
     </div>
 
@@ -497,6 +537,40 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
 }
 .ban:hover {
   color: var(--danger);
+}
+/* A ✕ tapped: the reasons to ban for, one tap bans. */
+.reasons {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0 0.3rem 0 0;
+}
+.reason {
+  padding: 0.15rem 0.45rem;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--danger);
+  background: none;
+  border: 1.5px solid var(--danger);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.banned-group + .banned-group {
+  margin-top: 0.7rem;
+}
+.subheading {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.found {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
 }
 /* A banned spelling: struck out, tapping it brings it back. */
 .form.banned {

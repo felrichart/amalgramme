@@ -351,7 +351,13 @@ describe('editor', () => {
   };
 
   it('starts from a bank level and its rare families', () => {
-    expect(draftFrom(tigre)).toEqual({ ...tigre, rare: ['ogre'], banned: [] });
+    expect(draftFrom(tigre)).toEqual({
+      ...tigre,
+      rare: ['ogre'],
+      banned: [],
+      reasons: {},
+      conjugated: [],
+    });
     expect(setRare(draftFrom(tigre), 'ogre', false).rare).toEqual([]);
     expect(setRare(draftFrom(tigre), 'tigre', true).rare).toEqual(['ogre', 'tigre']);
   });
@@ -387,7 +393,23 @@ describe('editor', () => {
     const draft = ban(draftFrom(tigre), 'OGRES', 'ogres');
     const built = buildLevel(draft);
     expect(built.families.map((f) => [f.id, f.base])).toEqual([[0, 'tigre']]);
-    expect(judge(built, 'OGRES', [])).toBe('unknown');
+    expect(judge(built, 'OGRES', [])).toBe('invalid');
+  });
+
+  it('tells why a banned word or a verb form is no answer', () => {
+    const draft = ban(
+      { ...draftFrom(tigre), conjugated: ['TIGRAIT'] },
+      'OGRES',
+      'ogres',
+      'offensive',
+    );
+    const built = buildLevel(draft);
+    expect(judge(built, 'OGRES', [])).toBe('offensive');
+    expect(judge(built, 'TIGRAIT', [])).toBe('conj');
+    expect(bannedOf(draft).map((sp) => sp.reason)).toEqual(['offensive']);
+    expect(unban(draft, 'ogres').reasons).toEqual({});
+    // Banned before reasons existed.
+    expect(judge(buildLevel({ ...tigre, banned: ['ogres'] }), 'OGRES', [])).toBe('invalid');
   });
 
   it('drops a family left empty from the rare ones', () => {

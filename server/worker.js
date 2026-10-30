@@ -723,13 +723,23 @@ const dicoLevel = (r) => ({
   words: JSON.parse(r.words),
   rare: JSON.parse(r.rare),
   banned: JSON.parse(r.banned),
+  reasons: JSON.parse(r.reasons),
+  conjugated: JSON.parse(r.conjugated),
 });
+
+// Why a spelling is banned (see REASONS, src/dicorama/game.js).
+const DICO_REASONS = ['conj', 'invalid', 'offensive'];
+const isReasons = (v) =>
+  !!v &&
+  typeof v === 'object' &&
+  !Array.isArray(v) &&
+  Object.values(v).every((x) => DICO_REASONS.includes(x));
 
 /* Players get validated levels up to tomorrow (Paris), so no timezone misses its
  * day; the client keeps the ones up to its own today. */
 async function getDicorama({ request, env }) {
   const user = await sessionUser(env, request);
-  const cols = 'pattern, status, date, words, rare, banned';
+  const cols = 'pattern, status, date, words, rare, banned, reasons, conjugated';
   const levels =
     user?.username === ADMIN_NAME
       ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
@@ -752,6 +762,8 @@ async function saveDicoLevel({ request, env, params }) {
   if (!body) return fail('bad_json', 400);
   const { pattern } = params;
   const { status, words, rare, banned } = body;
+  const reasons = body.reasons ?? {};
+  const conjugated = body.conjugated ?? [];
   const date = body.date ?? null;
   if (!DICO_PATTERN.test(pattern) || !pattern.includes('_')) return fail('bad_pattern', 422);
   if (status !== 'draft' && status !== 'valid') return fail('invalid', 422);
@@ -759,7 +771,8 @@ async function saveDicoLevel({ request, env, params }) {
   if (status === 'valid' && !date) return fail('bad_date', 422);
   if (!Array.isArray(words) || !words.length || !isStrings(rare) || !isStrings(banned))
     return fail('invalid', 422);
-  const stored = [words, rare, banned].map((v) => JSON.stringify(v));
+  if (!isReasons(reasons) || !isStrings(conjugated)) return fail('invalid', 422);
+  const stored = [words, rare, banned, reasons, conjugated].map((v) => JSON.stringify(v));
   if (stored.join('').length > DICO_MAX_BYTES) return fail('invalid', 422);
   if (date) {
     const taken = await env.DB.prepare(
@@ -771,15 +784,17 @@ async function saveDicoLevel({ request, env, params }) {
   }
 
   await env.DB.prepare(
-    `INSERT INTO dicorama_levels (pattern, status, date, words, rare, banned, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO dicorama_levels
+       (pattern, status, date, words, rare, banned, reasons, conjugated, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(pattern) DO UPDATE SET status = excluded.status, date = excluded.date,
        words = excluded.words, rare = excluded.rare, banned = excluded.banned,
+       reasons = excluded.reasons, conjugated = excluded.conjugated,
        updated_at = excluded.updated_at`,
   )
     .bind(pattern, status, date, ...stored, Date.now())
     .run();
-  return json({ pattern, status, date, words, rare, banned });
+  return json({ pattern, status, date, words, rare, banned, reasons, conjugated });
 }
 
 async function deleteDicoLevel({ env, params }) {

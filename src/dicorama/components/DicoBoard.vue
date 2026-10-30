@@ -9,7 +9,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { isAdmin } from '../../composables/useAccount.js';
-import { scoreOf } from '../game.js';
+import { scoreOf, REASONS } from '../game.js';
 import { useDicorama } from '../useDicorama.js';
 import DicoConfirm from './DicoConfirm.vue';
 import DicoScore from './DicoScore.vue';
@@ -31,6 +31,7 @@ const nudge = computed(() => g.marked.value && { key: g.marked.value, n: g.wave.
 
 const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
+  if (REASONS[g.message.value]) return { text: REASONS[g.message.value], tone: 'bad' };
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
   const { stars } = g.progress.value;
   if (g.phase.value || stars < 2) return null;

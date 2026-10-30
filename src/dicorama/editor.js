@@ -1,7 +1,7 @@
 /*
  * Edits an admin makes to a level before it's official. A draft is a level as
- * the Worker stores it: `{ pattern, words, rare, banned }` (see buildLevel in
- * game.js). Every edit returns a new draft.
+ * the Worker stores it: `{ pattern, words, rare, banned, reasons, conjugated }`
+ * (see buildLevel in game.js). Every edit returns a new draft.
  */
 import { buildLevel, keyOf, spellingsOf, storedWord, wordPoints, RARE_POINTS } from './game.js';
 
@@ -18,6 +18,8 @@ export function draftFrom(level) {
     words: structuredClone(level.words),
     rare,
     banned: level.banned ?? [],
+    reasons: level.reasons ?? {},
+    conjugated: level.conjugated ?? [],
   };
 }
 
@@ -32,28 +34,33 @@ const familiesOf = (draft) =>
 const wordOf = (families, key) =>
   families.flatMap((f) => f.words).find((w) => keyOf(w[0].form) === key);
 
-/* Leaves the spelling `form` of the word typed `key` out of the level. A banned
- * master gives way to the word's next spelling (see setMaster). */
-export function ban(draft, key, form) {
+/* Leaves the spelling `form` of the word typed `key` out of the level, for
+ * `reason` (see REASONS in game.js). A banned master gives way to the word's next
+ * spelling (see setMaster). */
+export function ban(draft, key, form, reason = 'invalid') {
   const banned = [...draft.banned, form];
   const word = wordOf(familiesOf(draft), key);
   const next = word.find((sp) => !banned.includes(sp.form));
   const moved = word[0].form === form && next ? setMaster(draft, key, next.form) : draft;
-  return { ...moved, banned };
+  return { ...moved, banned, reasons: { ...draft.reasons, [form]: reason } };
 }
 
-export const unban = (draft, form) => ({
-  ...draft,
-  banned: draft.banned.filter((f) => f !== form),
-});
+export function unban(draft, form) {
+  const { [form]: _, ...reasons } = draft.reasons;
+  return { ...draft, banned: draft.banned.filter((f) => f !== form), reasons };
+}
 
-/* The banned spellings, with the word (typed `key`) they're of. */
+/* The banned spellings, with the word (typed `key`) they're of and their reason. */
 export const bannedOf = (draft) =>
   familiesOf(draft).flatMap((f) =>
     f.words.flatMap((w) =>
       w
         .filter((sp) => draft.banned.includes(sp.form))
-        .map((sp) => ({ ...sp, key: keyOf(sp.form) })),
+        .map((sp) => ({
+          ...sp,
+          key: keyOf(sp.form),
+          reason: draft.reasons[sp.form] ?? 'invalid',
+        })),
     ),
   );
 

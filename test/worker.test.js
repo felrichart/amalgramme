@@ -536,6 +536,12 @@ describe('dicorama', () => {
     expect((await put('B___N', level())).status).toBe(409);
     expect((await put('B___N', level({ date: null }))).status).toBe(422);
     expect((await put('PERLE', level({ date: '2026-02-02' }))).status).toBe(422);
+    const refused = { reasons: { perle: 'conj' }, conjugated: ['PERLAIT'] };
+    expect((await put('P__L_', level(refused))).status).toBe(200);
+    expect((await read(env, admin)).levels.find((l) => l.pattern === 'P__L_')).toMatchObject(
+      refused,
+    );
+    expect((await put('P__L_', level({ reasons: { perle: 'nope' } }))).status).toBe(422);
     // Any day, past ones too.
     expect((await put('B___N', level({ date: '2001-01-01' }))).status).toBe(200);
   });
