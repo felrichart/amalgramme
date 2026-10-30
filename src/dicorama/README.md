@@ -85,8 +85,9 @@ officiels** validés, un par jour, jusqu'à aujourd'hui.
 
 Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.js`) :
 
-- passer une famille de courante à rare et inversement (les 10 plus fréquentes
-  des courantes forment la liste, section « Liste », les autres « En plus ») ;
+- ranger chaque famille dans la liste (« Liste », 10 attendues), parmi les autres
+  courantes (« En plus ») ou les rares ; par défaut, la liste est les 10 courantes
+  les plus fréquentes ;
 - changer le maître mot d'une saisie : le mot suit la base de son nouveau maître
   mot, dans sa famille (créée au besoin, la famille vidée disparaît) ;
 - bannir une orthographe du niveau (✕), rétablie depuis « Bannis » ; un maître mot
@@ -98,9 +99,9 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.
 « Enregistrer le brouillon » le garde pour l'admin seul, « Valider » le donne aux
 joueurs à son jour. Les niveaux officiels et les sens choisis vivent dans la base
 D1 du Worker (`dicorama_levels`, `dicorama_definitions`, migration 0012, qui y
-reprend les niveaux du labo en brouillons sans date) ; `store.js` les garde aussi
-sur l'appareil. L'admin trouve les niveaux à venir et les brouillons à
-`/dicorama/a-venir`.
+reprend les niveaux du labo en brouillons sans date ; la liste choisie : 0013) ;
+`store.js` les garde aussi sur l'appareil. L'admin trouve les niveaux à venir et
+les brouillons à `/dicorama/a-venir`.
 
 ```
 npm run dev                       # /dicorama (banque : /dicorama/banque, admin)

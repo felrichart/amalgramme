@@ -13,7 +13,7 @@ import {
 } from '../src/dicorama/game.js';
 import BANK from '../src/dicorama/bank.json';
 import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
-import { draftFrom, toggleRare, setMaster, ban, unban, bannedOf } from '../src/dicorama/editor.js';
+import { draftFrom, setKind, setMaster, ban, unban, bannedOf } from '../src/dicorama/editor.js';
 import { useDicorama } from '../src/dicorama/useDicorama.js';
 import { pageTitles } from '../src/dicorama/definitions.js';
 import { dayColor, dayLabel, longDayLabel } from '../src/dicorama/days.js';
@@ -348,10 +348,23 @@ describe('editor', () => {
     ],
   };
 
-  it('starts from a bank level and its rare families', () => {
-    expect(draftFrom(tigre)).toEqual({ ...tigre, rare: ['ogre'], banned: [] });
-    expect(toggleRare(draftFrom(tigre), 'ogre').rare).toEqual([]);
-    expect(toggleRare(draftFrom(tigre), 'tigre').rare).toEqual(['ogre', 'tigre']);
+  it('starts from a bank level, its rare and list families', () => {
+    expect(draftFrom(tigre)).toEqual({ ...tigre, rare: ['ogre'], main: ['tigre'], banned: [] });
+  });
+
+  it('puts a family in the list, among the other common ones or the rare ones', () => {
+    const kinds = (draft) => buildLevel(draft).families.map((f) => [f.base, f.main, f.rare]);
+    const extra = setKind(draftFrom(tigre), 'tigre', 'extra');
+    expect(kinds(extra)).toEqual([
+      ['tigre', false, false],
+      ['ogre', false, true],
+    ]);
+    const main = setKind(extra, 'ogre', 'main');
+    expect(main).toMatchObject({ rare: [], main: ['ogre'] });
+    expect(kinds(setKind(main, 'tigre', 'rare'))).toEqual([
+      ['tigre', false, true],
+      ['ogre', true, false],
+    ]);
   });
 
   it('moves a word into the family of its new master', () => {
@@ -388,9 +401,9 @@ describe('editor', () => {
     expect(judge(built, 'OGRES', [])).toBe('unknown');
   });
 
-  it('drops a family left empty from the rare ones', () => {
+  it('drops a family left empty from the rare and list ones', () => {
     const rare = { ...draftFrom(tigre), rare: ['tigre'] };
-    expect(setMaster(rare, 'TIGRES', 'tigrés').rare).toEqual([]);
+    expect(setMaster(rare, 'TIGRES', 'tigrés')).toMatchObject({ rare: [], main: [] });
   });
 });
 

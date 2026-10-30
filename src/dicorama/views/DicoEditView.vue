@@ -1,7 +1,8 @@
 <script setup>
 /*
  * The admin's level editor: a bank level, or an official one, to save as a draft
- * or validate on a day. Each family can be made rare or normal, each word given
+ * or validate on a day. Each family can be put in the list, among the other
+ * common ones or the rare ones, each word given
  * another master spelling (it then follows that spelling's base), each spelling
  * banned from the level, and each base its Wiktionnaire definition (saved at
  * once, for every level).
@@ -14,8 +15,8 @@ import { getToday } from '../../utils/today.js';
 import { addDays } from '../../utils/date.js';
 import { bank } from '../levels.js';
 import { official, officialLevel, saveLevel, removeLevel } from '../store.js';
-import { buildLevel } from '../game.js';
-import { draftFrom, toggleRare, setMaster, ban, unban, bannedOf } from '../editor.js';
+import { buildLevel, GOAL } from '../game.js';
+import { draftFrom, setKind, setMaster, ban, unban, bannedOf } from '../editor.js';
 import { dayColor, longDayLabel } from '../days.js';
 import DicoSenses from '../components/DicoSenses.vue';
 
@@ -26,11 +27,9 @@ const pattern = route.params.pattern;
 const stored = officialLevel(pattern);
 // A plain copy: the stored level is reactive, which structuredClone refuses.
 const draft = ref(
-  stored
-    ? (({ pattern, words, rare, banned = [] }) => ({ pattern, words, rare, banned }))(
-        JSON.parse(JSON.stringify(stored)),
-      )
-    : draftFrom(bank().find((l) => l.pattern === pattern)),
+  draftFrom(
+    stored ? JSON.parse(JSON.stringify(stored)) : bank().find((l) => l.pattern === pattern),
+  ),
 );
 const status = ref(stored?.status ?? null);
 
@@ -65,13 +64,19 @@ const sections = computed(() => {
     }),
   });
   return [
-    { title: 'Liste', families: sorted.filter((f) => f.main).map(withWords) },
+    { title: 'Liste', goal: GOAL, families: sorted.filter((f) => f.main).map(withWords) },
     { title: 'En plus', families: sorted.filter((f) => !f.main && !f.rare).map(withWords) },
     { title: 'Rares', families: sorted.filter((f) => f.rare).map(withWords) },
   ];
 });
 
-const rare = (base) => (draft.value = toggleRare(draft.value, base));
+const KINDS = [
+  ['main', 'Liste'],
+  ['extra', 'En plus'],
+  ['rare', 'Rare'],
+];
+const kindOf = (f) => (f.rare ? 'rare' : f.main ? 'main' : 'extra');
+const move = (base, kind) => (draft.value = setKind(draft.value, base, kind));
 const master = (key, form) => (draft.value = setMaster(draft.value, key, form));
 const banOne = (key, form) => (draft.value = ban(draft.value, key, form));
 const unbanOne = (form) => (draft.value = unban(draft.value, form));
@@ -137,16 +142,29 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
     <div class="sections">
       <section v-for="s in sections" :key="s.title" class="section">
         <h2 class="heading">
-          {{ s.title }} <span class="count">{{ s.families.length }}</span>
+          {{ s.title }}
+          <span class="count" :class="{ off: s.goal && s.families.length !== s.goal }">
+            {{ s.families.length }}<template v-if="s.goal"> / {{ s.goal }}</template>
+          </span>
         </h2>
         <p v-if="!s.families.length" class="none">Aucune.</p>
         <article v-for="f in s.families" :key="f.base" class="family" :class="{ rare: f.rare }">
           <header class="family-top">
             <span class="note" title="note de rareté">{{ f.points }}</span>
             <DicoSenses class="family-def" :word="f.base" />
-            <button class="pill swap" type="button" @click="rare(f.base)">
-              {{ f.rare ? '→ courant' : '→ rare' }}
-            </button>
+            <div class="kinds" role="group" aria-label="sorte de famille">
+              <button
+                v-for="[kind, label] in KINDS"
+                :key="kind"
+                class="kind"
+                :class="{ on: kindOf(f) === kind }"
+                type="button"
+                :aria-pressed="kindOf(f) === kind"
+                @click="move(f.base, kind)"
+              >
+                {{ label }}
+              </button>
+            </div>
           </header>
           <ul class="words">
             <li v-for="w in f.words" :key="w.key" class="word">
@@ -338,6 +356,10 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   font-size: 0.8rem;
   color: var(--muted);
 }
+/* The list holds GOAL families: any other count shows. */
+.count.off {
+  color: var(--danger);
+}
 .none {
   margin: 0;
   font-size: 0.85rem;
@@ -381,12 +403,33 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   flex: 1;
   min-width: 0;
 }
-.pill.swap {
+/* The family's kind: in the list, among the other common ones, or rare. */
+.kinds {
   flex: none;
-  min-width: 0;
-  height: 1.9rem;
-  padding: 0 0.6rem;
-  font-size: 0.75rem;
+  display: flex;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.kind {
+  padding: 0.25rem 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.kind + .kind {
+  border-left: 1.5px solid var(--line);
+}
+.kind.on {
+  color: var(--on-color);
+  background: var(--ink);
+}
+.rare .kind.on {
+  background: var(--rare);
 }
 .words {
   list-style: none;

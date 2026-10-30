@@ -85,10 +85,12 @@ export function storedWord(spellings, base) {
  * the base: ["dures", "fém. plur."]) or `[form, label, base, freq]` (a homonym of
  * another base, as common as `freq`: ["tigrés", "part. passé plur.", "tigrer",
  * 0.05]). `rare` lists the rare families' bases; without it, a family is rare from
- * RARE_POINTS. `banned` spellings are left out, and with them a word or family
- * left without any. Each answer is keyed by its unaccented spelling.
+ * RARE_POINTS. `main` lists the list's families' bases (rare ones aside); without
+ * it, the list is the GOAL most common families. `banned` spellings are left out,
+ * and with them a word or family left without any. Each answer is keyed by its
+ * unaccented spelling.
  */
-export function buildLevel({ pattern, words, rare, banned = [] }) {
+export function buildLevel({ pattern, words, rare, main, banned = [] }) {
   const answers = new Map();
   const families = [];
   for (const [freq, base, ...raw] of words) {
@@ -105,12 +107,12 @@ export function buildLevel({ pattern, words, rare, banned = [] }) {
     const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
     families.push({ id, base, freq, points, rare: isRare, main: false, keys });
   }
-  // The list: the most common families, the word's own base first on a tie.
-  families
-    .filter((f) => !f.rare)
-    .sort((a, b) => b.freq - a.freq || a.base.localeCompare(b.base, 'fr'))
-    .slice(0, GOAL)
-    .forEach((f) => (f.main = true));
+  const common = families.filter((f) => !f.rare);
+  const listed = main
+    ? common.filter((f) => main.includes(f.base))
+    : // By default, the most common families, the word's own base first on a tie.
+      common.sort((a, b) => b.freq - a.freq || a.base.localeCompare(b.base, 'fr')).slice(0, GOAL);
+  listed.forEach((f) => (f.main = true));
   return { pattern, answers, families };
 }
 
@@ -215,3 +217,11 @@ export const deBefore = (word) => (VOWEL.test(word) ? 'd’' : 'de ');
 /* The marks a level's progress won: 0, 1 (the star, finished), 2 (the trophy,
  * complete), 3 (the crown, perfect). */
 export const marksOf = (p) => (p.perfect ? 3 : p.complete ? 2 : p.finished ? 1 : 0);
+
+/* The score as shown: over the goal, rare words counting (stage 1); then over
+ * every common word, the rare ones found as a bonus on top (19 /17+2). */
+export function scoreOf(p, stage = p.finished ? 2 : 1) {
+  return stage === 1
+    ? { value: p.score, max: p.goal, bonus: 0 }
+    : { value: p.score, max: p.total - p.rare, bonus: p.rare };
+}
