@@ -146,15 +146,6 @@ describe('list', () => {
       ['variant', 'tigrer'],
     ]);
   });
-
-  it('shows the families still to find once revealed', () => {
-    expect(shown(listOf(level, ['PASSIFS'], true))).toEqual([
-      ['main', 1, 'passion', false],
-      ['main', 2, 'passifs', true],
-      ['main', 3, 'piscine', false],
-      ['rare', null, 'posting', false],
-    ]);
-  });
 });
 
 describe('answers', () => {
@@ -279,7 +270,6 @@ describe('useDicorama', () => {
     typeAll(g, 'otng');
     expect(g.progress.value.perfect).toBe(true);
     expect(g.celebration.value).toBe('perfect');
-    expect(g.playing.value).toBe(true);
     await Promise.resolve();
     expect(loadProgress(level.pattern).found).toHaveLength(5);
   });
@@ -303,18 +293,14 @@ describe('useDicorama', () => {
     expect(g.celebration.value).toBe('perfect');
   });
 
-  it('stops at the solutions and starts over', async () => {
+  it('starts over', async () => {
     const g = useDicorama(level);
     typeAll(g, 'icne');
-    g.reveal();
-    expect(g.playing.value).toBe(false);
-    g.type('a');
-    expect(typed(g)).toBe('P_S_I__');
+    expect(g.state.found).toEqual(['PISCINE']);
     g.reset();
     expect(g.state.found).toEqual([]);
-    expect(g.playing.value).toBe(true);
     await Promise.resolve();
-    expect(loadProgress(level.pattern)).toEqual({ found: [], revealed: false });
+    expect(loadProgress(level.pattern)).toEqual({ found: [] });
   });
 });
 

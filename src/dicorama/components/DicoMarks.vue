@@ -6,7 +6,7 @@
  * (which then doesn't reach a row it sits in), shows what it's won for in a
  * bubble above it. `pop` animates the mark just won on mount.
  */
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import DicoStar from './DicoStar.vue';
 
 defineProps({
@@ -31,6 +31,21 @@ const tip = ref(null);
 const hover = (name) => (e) => e.pointerType === 'mouse' && (tip.value = name);
 const unhover = (e) => e.pointerType === 'mouse' && (tip.value = null);
 const tap = (name) => (tip.value = tip.value === name ? null : name);
+
+/* How far the bubble moves sideways to stay on the screen, its tail kept on the
+ * mark. */
+const EDGE = 8;
+let bubbleEl = null;
+const setBubble = (el) => (bubbleEl = el);
+const shift = ref(0);
+watch(tip, async () => {
+  shift.value = 0;
+  await nextTick();
+  if (!bubbleEl || !tip.value) return;
+  const r = bubbleEl.getBoundingClientRect();
+  const right = document.documentElement.clientWidth - EDGE;
+  shift.value = r.left < EDGE ? EDGE - r.left : r.right > right ? right - r.right : 0;
+});
 
 const root = ref(null);
 const outside = (e) => !root.value?.contains(e.target) && (tip.value = null);
@@ -85,7 +100,14 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
         <path d="M4 19.2h16v2.4H4z" fill="currentColor" />
         <circle cx="12" cy="13.6" r="1.4" fill="var(--dc-yellow-ink)" />
       </svg>
-      <span v-if="tip === name" class="bubble" role="tooltip">{{ TIPS[name] }}</span>
+      <span
+        v-if="tip === name"
+        :ref="setBubble"
+        class="bubble"
+        role="tooltip"
+        :style="{ '--shift': `${shift}px` }"
+        >{{ TIPS[name] }}</span
+      >
     </span>
   </span>
 </template>
@@ -131,13 +153,14 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
   white-space: nowrap;
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
   pointer-events: none;
+  translate: var(--shift, 0) 0;
   animation: dico-appear 0.14s ease-out both;
 }
 .bubble::after {
   content: '';
   position: absolute;
   top: 100%;
-  right: 11px;
+  right: calc(11px + var(--shift, 0px));
   border: 5px solid transparent;
   border-top-color: var(--dc-ink);
 }

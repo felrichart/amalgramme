@@ -30,10 +30,7 @@ const CELEBRATE_MS = 250;
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
-  const state = reactive({
-    found: saved.found.filter((k) => level.answers.has(k)),
-    revealed: saved.revealed,
-  });
+  const state = reactive({ found: saved.found.filter((k) => level.answers.has(k)) });
   watch(state, () => saveProgress(level.pattern, { ...state }), { deep: true });
 
   const blanks = [...level.pattern].flatMap((ch, i) => (ch === BLANK ? [i] : []));
@@ -73,10 +70,9 @@ export function useDicorama(level) {
   onScopeDispose(() => timers.forEach(clearTimeout));
   let messageTimer = null;
 
-  const playing = computed(() => !state.revealed);
   const busy = computed(() => ['checking', 'flip', 'out'].includes(phase.value));
   const cursor = computed(() => {
-    if (busy.value || !playing.value) return null;
+    if (busy.value) return null;
     if (picked.value != null) return picked.value;
     const empty = cells.value.findIndex((c) => !c);
     return empty >= 0 ? empty : blanks.length - 1;
@@ -84,8 +80,8 @@ export function useDicorama(level) {
 
   const progress = computed(() => progressOf(level, state.found));
   greeted.value = progress.value.finished;
-  const stage = computed(() => (greeted.value || state.revealed ? 2 : 1));
-  const list = computed(() => listOf(level, state.found, state.revealed));
+  const stage = computed(() => (greeted.value ? 2 : 1));
+  const list = computed(() => listOf(level, state.found));
   const latest = computed(() => marked.value ?? state.found[0] ?? null);
 
   /* Every pattern position: a fixed letter, or blank `b` and what's typed there. */
@@ -127,7 +123,7 @@ export function useDicorama(level) {
 
   /* Takes back the last letter of the word, wherever the cursor is. */
   function backspace() {
-    if (busy.value || !playing.value) return;
+    if (busy.value) return;
     const last = cells.value.findLastIndex(Boolean);
     if (last < 0) return;
     quiet();
@@ -135,13 +131,13 @@ export function useDicorama(level) {
   }
 
   function clear() {
-    if (busy.value || !playing.value) return;
+    if (busy.value) return;
     quiet();
     setCells(blanks.map(() => null));
   }
 
   function pick(b) {
-    if (busy.value || !playing.value) return;
+    if (busy.value) return;
     picked.value = b;
   }
 
@@ -193,18 +189,11 @@ export function useDicorama(level) {
     greeted.value = progress.value.finished;
   }
 
-  function reveal() {
-    quiet();
-    state.revealed = true;
-    setCells(blanks.map(() => null));
-  }
-
   /* Forgets the level's progress, to play it again. */
   function reset() {
     quiet();
     dismiss();
     state.found = [];
-    state.revealed = false;
     setCells(blanks.map(() => null));
   }
 
@@ -223,13 +212,11 @@ export function useDicorama(level) {
     stage,
     celebration,
     list,
-    playing,
     type,
     backspace,
     clear,
     pick,
     step,
-    reveal,
     reset,
     dismiss,
   };

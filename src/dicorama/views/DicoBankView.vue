@@ -18,7 +18,7 @@ const PAGE = 150;
 const STATUS = { draft: 'brouillon', valid: 'validé' };
 
 const rows = bank().map((l) => {
-  const { found, revealed } = loadProgress(l.pattern);
+  const { found } = loadProgress(l.pattern);
   const level = buildLevel(l);
   const row = {
     pattern: l.pattern,
@@ -26,10 +26,10 @@ const rows = bank().map((l) => {
     status: STATUS[officialLevel(l.pattern)?.status],
     words: new Set([...level.answers.keys(), ...level.families.map((f) => keyOf(f.base))]),
   };
-  if (!found.length && !revealed) return row;
+  if (!found.length) return row;
   const progress = progressOf(level, found);
   const max = progress.finished ? progress.total : progress.goal;
-  return { ...row, progress, max, done: revealed || progress.complete };
+  return { ...row, progress, max, done: progress.complete };
 });
 
 const length = ref(null);

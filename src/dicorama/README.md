@@ -32,12 +32,17 @@ niveau cache en tout. Il est **complet** (le trophée) quand toutes les familles
 courantes sont trouvées, avec une seconde fenêtre (« il ne reste que des mots
 rares » s'affiche alors sous la saisie). Il est **parfait** (une couronne, montrée
 seulement une fois gagnée) quand les rares le sont aussi, avec une troisième
-fenêtre. Le score, en haut, est sur 10, puis sur toutes les familles courantes, les
-rares trouvées en bonus en plus du dénominateur (`19/17+2`). L'accueil reprend le
-score (les rares à côté, une fois le niveau fini) et ses marques : une étoile (fini)
-et un trophée (complet), gris jusqu'à les gagner puis jaunes, et la couronne
-(parfait). Chaque jour passé tient sur deux lignes : la date et les marques, puis le
-motif et le score ; pas commencé, il n'a pas de score.
+fenêtre. Le score, en tête de la colonne des mots, est sur 10, puis sur toutes les
+familles courantes, les rares trouvées en bonus en plus du dénominateur (`19/17+2`) ;
+son ⋮ propose de recommencer le niveau. Les marques : une étoile (fini) et un trophée
+(complet), gris jusqu'à les gagner puis jaunes, et la couronne (parfait).
+
+Il n'y a pas d'accueil : `/dicorama` mène au niveau du jour (`/dicorama/<date>`, le
+dernier jour joué). En haut, la frise des jours joués, du plus ancien à gauche à
+aujourd'hui : le jour de la semaine, la date dans la couleur du jour, le mois et les
+marques gagnées. Ses flèches fines, ou un swipe sur l'écran (à droite : la veille),
+changent de jour, et l'URL suit. À gauche des mots, le résumé du jour (sa date et ses
+marques) et les ligues, à venir.
 
 La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
 dernière. Un mot complet est vérifié tout de suite, sans bouton ; refusé, il reste
@@ -94,8 +99,8 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.
 joueurs à son jour. Les niveaux officiels et les sens choisis vivent dans la base
 D1 du Worker (`dicorama_levels`, `dicorama_definitions`, migration 0012, qui y
 reprend les niveaux du labo en brouillons sans date) ; `store.js` les garde aussi
-sur l'appareil. L'accueil `/dicorama` montre à l'admin les niveaux à venir et les
-brouillons.
+sur l'appareil. L'admin trouve les niveaux à venir et les brouillons à
+`/dicorama/a-venir`.
 
 ```
 npm run dev                       # /dicorama (banque : /dicorama/banque, admin)

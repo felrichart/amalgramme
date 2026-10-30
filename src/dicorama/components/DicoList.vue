@@ -1,13 +1,13 @@
 <script setup>
 /*
- * The level's words on the cream board, a slot each (see listOf), in 2 columns
- * of a fixed size, scrolling once they outgrow it: fades and a bobbing arrow show
- * there's more above or below. Left of a slot: its number for the list, a dot for another common
- * word, a plus in a disc for a rare one. A found word is a light card in its slot;
- * tapping it shows its definition, and opens its sub-list (homonyms, then its
- * family's later finds) when it has one, one at a time; its bubble opens beside
- * it. A word landing in a sub-list opens it. The yellow arrow points at the word
- * last tapped, else the latest one.
+ * The level's words, a slot each (see listOf), in one column filling its parent
+ * (the cream board), scrolling once they outgrow it: fades show there's more
+ * above or below. Left of a slot: its number for the list, a dot for another
+ * common word, a plus in a disc for a rare one. A found word is a light card in
+ * its slot; tapping it shows its definition, and opens its sub-list (homonyms,
+ * then its family's later finds) when it has one, one at a time; its bubble opens
+ * over it. A word landing in a sub-list opens it. The yellow arrow points at the
+ * word last tapped, else the latest one.
  */
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { deBefore } from '../game.js';
@@ -29,10 +29,9 @@ const props = defineProps({
 const ROW = 34;
 const KID = 22;
 const KID_GAP = 4;
-const COLS = 2;
 
 const boardEl = ref(null);
-const columnsEl = ref(null);
+const rowsEl = ref(null);
 /* Whether words are hidden above or below. Checked on scroll and whenever the
  * board or its content resizes (a word landing, a sub-list opening). */
 const above = ref(false);
@@ -51,13 +50,9 @@ let resizes = null;
 onMounted(() => {
   resizes = new ResizeObserver(measure);
   resizes.observe(boardEl.value);
-  resizes.observe(columnsEl.value);
+  resizes.observe(rowsEl.value);
 });
 onUnmounted(() => resizes?.disconnect());
-const columns = computed(() => {
-  const per = Math.ceil(props.rows.length / COLS);
-  return Array.from({ length: COLS }, (_, c) => props.rows.slice(c * per, (c + 1) * per));
-});
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const pad = (n) => String(n).padStart(2, '0');
@@ -66,33 +61,30 @@ const open = ref(null);
 const tip = ref(null);
 const definitions = reactive({});
 
-// The bubble's width, and the room it keeps from the board's edges and the word.
-const TIP_W = 196;
-const TIP_MIN_W = 120;
+// The room the bubble keeps from the board's sides and the screen's top, and
+// from the word.
 const TIP_MARGIN = 6;
+const TIP_GAP = 7;
 const tipEl = ref(null);
 
-/* Beside the word's line, on the side with room for it (the bubble narrows when
- * neither has), its tail at the word's height. */
+/* Over the word, as wide as the board, free to spill out of it (fixed on the
+ * screen; a scroll closes it), its tail pointing at the word's start. Under the
+ * word only when there's no room above it on the screen. */
 async function placeTip(el) {
   const board = boardEl.value;
-  const line = el.closest('.line');
-  if (!board || !line) return;
+  if (!board) return;
   const b = board.getBoundingClientRect();
-  const l = line.getBoundingClientRect();
   const w = el.getBoundingClientRect();
-  const right = b.right - TIP_MARGIN - l.right;
-  const left = l.left - b.left - TIP_MARGIN;
-  const onRight = right >= TIP_W || right >= left;
-  const width = Math.max(TIP_MIN_W, Math.min(TIP_W, onRight ? right : left));
-  const x = onRight ? l.right - b.left + TIP_MARGIN / 2 : l.left - b.left - width - TIP_MARGIN / 2;
-  const middle = w.top + w.height / 2 - b.top + board.scrollTop;
-  tip.value.box = { x: Math.max(TIP_MARGIN, x), y: middle - 18, width, middle, onRight };
+  const width = b.width - 2 * TIP_MARGIN;
+  const tailX = Math.min(width - 18, Math.max(14, w.left - b.left - TIP_MARGIN + 22));
+  // Measured off screen first, then put in place.
+  tip.value.box = { x: b.left + TIP_MARGIN, y: -9999, width, tailX, above: true };
   await nextTick();
-  const h = tipEl.value?.offsetHeight ?? 0;
-  const bottom = board.scrollTop + board.clientHeight - TIP_MARGIN;
   const box = tip.value?.box;
-  if (box && box.y + h > bottom) box.y = Math.max(board.scrollTop + TIP_MARGIN, bottom - h);
+  if (!box) return;
+  const h = tipEl.value?.offsetHeight ?? 0;
+  const over = w.top - TIP_GAP - h;
+  Object.assign(box, over >= TIP_MARGIN ? { y: over } : { y: w.bottom + TIP_GAP, above: false });
 }
 
 function loadDefinition(base) {
@@ -225,72 +217,70 @@ const nudged = (key) => props.nudge?.key === key;
 </script>
 
 <template>
-  <section ref="boardEl" class="dc-board board" @scroll="onScroll">
+  <section ref="boardEl" class="board" @scroll="onScroll">
     <div class="less" :class="{ shown: above }" aria-hidden="true" />
-    <div ref="columnsEl" class="columns">
-      <div v-for="(column, ci) in columns" :key="ci" class="column">
-        <div v-for="(r, ri) in column" :key="r.id" class="line">
-          <span class="mark" aria-hidden="true">
-            <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
-              pad(r.num)
-            }}</span>
-            <span v-else-if="r.kind === 'rare'" class="plus-disc rare" />
-            <span v-else class="extra" />
-          </span>
-          <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
-            <template v-if="r.answer">
-              <button
-                v-for="(kid, i) in r.kids"
-                :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
-                class="word kid"
-                type="button"
-                :tabindex="open === r.id ? 0 : -1"
-                :class="{
-                  shown: open === r.id,
-                  variant: kid.kind === 'variant',
-                  arrive: kid.kind === 'variant' && kid.key === arrival,
-                  nudge: kid.kind === 'variant' && nudged(kid.key),
-                }"
-                :style="{
-                  top: `${kidTop(i)}px`,
-                  transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
-                  animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
-                }"
-                @click="tapKid(r, kid, $event)"
-                @pointerenter="hover(r, kid.spelling)($event)"
-                @pointerleave="unhover"
-              >
-                <span class="text">{{ cap(kid.spelling.form) }}</span>
-              </button>
-              <button
-                :key="nudgeKey(r.answer.key)"
-                class="word card"
-                :class="{
-                  missed: !r.found,
-                  arrive: r.answer.key === arrival,
-                  nudge: nudged(r.answer.key),
-                }"
-                type="button"
-                :aria-expanded="r.kids.length ? open === r.id : undefined"
-                :aria-label="
-                  r.kids.length
-                    ? `${r.answer.display}, ${r.kids.length + 1} formes`
-                    : r.answer.display
-                "
-                @click="tapWord(r, $event)"
-                @pointerenter="hover(r, r.answer.spellings[0])($event)"
-                @pointerleave="unhover"
-              >
-                <span class="text">{{ cap(r.answer.display) }}</span>
-                <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
-              </button>
-            </template>
-            <span v-else class="sr-only">mot à trouver</span>
-          </div>
-          <span class="pointer">
-            <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
-          </span>
+    <div ref="rowsEl" class="rows">
+      <div v-for="r in rows" :key="r.id" class="line">
+        <span class="mark" aria-hidden="true">
+          <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
+            pad(r.num)
+          }}</span>
+          <span v-else-if="r.kind === 'rare'" class="plus-disc rare" />
+          <span v-else class="extra" />
+        </span>
+        <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
+          <template v-if="r.answer">
+            <button
+              v-for="(kid, i) in r.kids"
+              :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
+              class="word kid"
+              type="button"
+              :tabindex="open === r.id ? 0 : -1"
+              :class="{
+                shown: open === r.id,
+                variant: kid.kind === 'variant',
+                arrive: kid.kind === 'variant' && kid.key === arrival,
+                nudge: kid.kind === 'variant' && nudged(kid.key),
+              }"
+              :style="{
+                top: `${kidTop(i)}px`,
+                transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
+                animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
+              }"
+              @click="tapKid(r, kid, $event)"
+              @pointerenter="hover(r, kid.spelling)($event)"
+              @pointerleave="unhover"
+            >
+              <span class="text">{{ cap(kid.spelling.form) }}</span>
+            </button>
+            <button
+              :key="nudgeKey(r.answer.key)"
+              class="word card"
+              :class="{
+                missed: !r.found,
+                arrive: r.answer.key === arrival,
+                nudge: nudged(r.answer.key),
+              }"
+              type="button"
+              :aria-expanded="r.kids.length ? open === r.id : undefined"
+              :aria-label="
+                r.kids.length
+                  ? `${r.answer.display}, ${r.kids.length + 1} formes`
+                  : r.answer.display
+              "
+              @click="tapWord(r, $event)"
+              @pointerenter="hover(r, r.answer.spellings[0])($event)"
+              @pointerleave="unhover"
+            >
+              <span class="text">{{ cap(r.answer.display) }}</span>
+              <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
+            </button>
+          </template>
+          <span v-else class="sr-only">mot à trouver</span>
         </div>
+        <span class="pointer">
+          <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
+        </span>
       </div>
     </div>
     <div
@@ -298,12 +288,12 @@ const nudged = (key) => props.nudge?.key === key;
       ref="tipEl"
       :key="tip.spelling.form"
       class="tip"
-      :class="{ left: !tip.box.onRight }"
+      :class="{ below: !tip.box.above }"
       :style="{
         left: `${tip.box.x}px`,
         top: `${tip.box.y}px`,
         width: `${tip.box.width}px`,
-        '--tail-y': `${tip.box.middle - tip.box.y}px`,
+        '--tail-x': `${tip.box.tailX}px`,
       }"
       role="tooltip"
     >
@@ -320,9 +310,7 @@ const nudged = (key) => props.nudge?.key === key;
       </span>
       <span class="tail" />
     </div>
-    <div class="more" :class="{ shown: below }" aria-hidden="true">
-      <span class="dc-arrow-down" />
-    </div>
+    <div class="more" :class="{ shown: below }" aria-hidden="true" />
   </section>
 </template>
 
@@ -331,10 +319,10 @@ const nudged = (key) => props.nudge?.key === key;
   position: relative;
   flex: 1;
   min-height: 0;
-  margin: 0 12px;
-  padding: 14px 12px 14px 10px;
+  padding: 14px 8px 14px 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-width: thin;
   scrollbar-color: var(--dc-dash) transparent;
 }
@@ -343,8 +331,8 @@ const nudged = (key) => props.nudge?.key === key;
 .more {
   position: sticky;
   z-index: 2;
-  margin-left: -10px;
-  margin-right: -12px;
+  margin-left: -4px;
+  margin-right: -8px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s;
@@ -355,30 +343,20 @@ const nudged = (key) => props.nudge?.key === key;
   margin-top: -14px;
   margin-bottom: -16px;
   background: linear-gradient(to top, transparent, var(--dc-board) 70%);
-  border-radius: 18px 18px 0 0;
 }
+/* A faint shade at the foot, over the words further down. */
 .more {
   bottom: -14px;
-  height: 56px;
-  margin-top: -56px;
+  height: 28px;
+  margin-top: -28px;
   margin-bottom: -14px;
-  background: linear-gradient(to bottom, transparent, var(--dc-board) 65%);
-  border-radius: 0 0 18px 18px;
+  background: linear-gradient(to bottom, transparent, rgb(42 38 32 / 0.07));
 }
 .less.shown,
 .more.shown {
   opacity: 1;
 }
-.more .dc-arrow-down {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-}
-.more.shown .dc-arrow-down {
-  animation: dico-bob 0.55s ease-in-out infinite alternate;
-}
-.columns {
+.rows {
   --row: 34px;
   --card: 27px;
   --num-w: 22px;
@@ -390,16 +368,10 @@ const nudged = (key) => props.nudge?.key === key;
   --row-gap: 8px;
   --kid: 22px;
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.column {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   flex-direction: column;
   gap: var(--row-gap);
 }
+
 .line {
   position: relative;
   display: flex;
@@ -553,7 +525,7 @@ const nudged = (key) => props.nudge?.key === key;
 }
 /* The definition: a paper slip beside the word, banded like its card. */
 .tip {
-  position: absolute;
+  position: fixed;
   z-index: 20;
   padding: 8px 10px 9px 13px;
   border-radius: 4px 9px 9px 4px;
@@ -625,21 +597,21 @@ const nudged = (key) => props.nudge?.key === key;
   font-weight: 700;
   color: var(--day);
 }
-/* Points at the word, from the bubble's side facing it. */
+/* Points down at the word, or up when the bubble is under it. */
 .tail {
   position: absolute;
-  top: calc(var(--tail-y) - 5px);
-  left: -4px;
+  bottom: -4px;
+  left: var(--tail-x);
   width: 9px;
   height: 9px;
-  background: var(--day);
+  background: #fffdf8;
+  box-shadow: 1px 1px 0 rgb(42 38 32 / 0.08);
   transform: rotate(45deg);
 }
-.left .tail {
-  left: auto;
-  right: -4px;
-  background: #fffdf8;
-  box-shadow: 1px -1px 0 rgb(42 38 32 / 0.08);
+.below .tail {
+  top: -4px;
+  bottom: auto;
+  box-shadow: -1px -1px 0 rgb(42 38 32 / 0.08);
 }
 
 .sr-only {

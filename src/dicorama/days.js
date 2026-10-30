@@ -40,3 +40,34 @@ export function longDayLabel(iso) {
   const [, m, d] = parts(iso);
   return `${WEEKDAYS[weekday(iso)]} ${d} ${MONTHS[m - 1]}`;
 }
+
+/* "ve", the weekday on two letters. */
+export const shortWeekday = (iso) => WEEKDAYS[weekday(iso)].slice(0, 2);
+
+const SHORT_MONTHS = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
+
+/* "oct.", the month abbreviated. */
+export const shortMonth = (iso) => SHORT_MONTHS[parts(iso)[1] - 1];
+
+export const dayOfMonth = (iso) => parts(iso)[2];
+
+/* "aujourd'hui", "hier", else the weekday: a day of the last week, from `today`. */
+export function relativeDay(iso, today) {
+  if (iso === today) return "aujourd'hui";
+  const [y, m, d] = parts(today);
+  const yesterday = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+  return iso === yesterday ? 'hier' : WEEKDAYS[weekday(iso)];
+}

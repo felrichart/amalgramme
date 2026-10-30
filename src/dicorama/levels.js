@@ -36,13 +36,10 @@ export function levelFor(source, param) {
 
 const key = (pattern) => `dicorama:v1:level:${pattern}`;
 
-/* `found` lists answer keys, newest first; `revealed` once solutions were shown. */
+/* `found` lists answer keys, newest first. */
 export function loadProgress(pattern) {
   const p = readJSON(key(pattern), null, isObject);
-  return {
-    found: Array.isArray(p?.found) ? p.found.filter((k) => typeof k === 'string') : [],
-    revealed: p?.revealed === true,
-  };
+  return { found: Array.isArray(p?.found) ? p.found.filter((k) => typeof k === 'string') : [] };
 }
 
 export function saveProgress(pattern, progress) {

@@ -160,10 +160,9 @@ export function progressOf(level, found) {
  * by its first find, and a row per other family found: 'extra' for a common one,
  * 'rare' for a rare one. A row's `kids` are its word's homonyms then its family's
  * later finds (`variant`, with their own homonyms), oldest first; `keys`, every
- * word it shows. Once `revealed`, the families still to find show their first
- * word, not `found`.
+ * word it shows.
  */
-export function listOf(level, found, revealed = false) {
+export function listOf(level, found) {
   const firstWord = (f) => level.answers.get(f.keys[0]);
   const sorted = [...level.families].sort((a, b) =>
     firstWord(a).display.localeCompare(firstWord(b).display, 'fr'),
@@ -181,7 +180,7 @@ export function listOf(level, found, revealed = false) {
   const rows = [];
   for (const f of sorted) {
     const [key, ...later] = finds.get(f.id) ?? [];
-    const answer = key ? level.answers.get(key) : revealed ? firstWord(f) : null;
+    const answer = key ? level.answers.get(key) : null;
     const kind = f.main ? 'main' : f.rare ? 'rare' : 'extra';
     if (!f.main && !answer) continue;
     const kids = !key
@@ -212,3 +211,7 @@ const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 
 /* "de" before a word, elided before a vowel (d’aimer). */
 export const deBefore = (word) => (VOWEL.test(word) ? 'd’' : 'de ');
+
+/* The marks a level's progress won: 0, 1 (the star, finished), 2 (the trophy,
+ * complete), 3 (the crown, perfect). */
+export const marksOf = (p) => (p.perfect ? 3 : p.complete ? 2 : p.finished ? 1 : 0);

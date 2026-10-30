@@ -14,7 +14,7 @@ const props = defineProps({
   // See progressOf (game.js).
   progress: { type: Object, required: true },
 });
-const emit = defineEmits(['more', 'menu']);
+const emit = defineEmits(['more']);
 
 const all = computed(() => props.kind === 'all');
 const perfect = computed(() => props.kind === 'perfect');
@@ -94,7 +94,6 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
         <button class="dc-button" type="button" @click="emit('more')">
           {{ moreLabel }}
         </button>
-        <button class="dc-button quiet" type="button" @click="emit('menu')">Revenir au menu</button>
       </div>
     </div>
   </div>
