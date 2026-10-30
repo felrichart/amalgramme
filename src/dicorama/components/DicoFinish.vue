@@ -71,9 +71,8 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
             >, dont {{ rares }}</template
           >.
         </p>
-        <p class="text">
-          Ce niveau en cache <strong>{{ common }}</strong> en tout.<br />Plus que
-          <strong>{{ left }}</strong> pour obtenir le trophée.
+        <p class="text nudge">
+          Plus que <strong>{{ left }}</strong> pour obtenir le trophée.
         </p>
       </template>
       <template v-else-if="perfect">
@@ -151,6 +150,9 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
 }
 .text strong {
   color: var(--dc-day-ink);
+}
+.text.nudge {
+  font-style: italic;
 }
 .text.quiet {
   font-style: italic;
