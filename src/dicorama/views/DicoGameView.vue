@@ -33,7 +33,7 @@ const back = props.source === 'bank' ? '/dicorama/banque' : '/dicorama';
 
 // Only while it lands: a card remade later (retyped) mustn't slide in again.
 const arrival = computed(() => (g.phase.value === 'in' ? g.state.found[0] : null));
-const nudge = computed(() => g.marked.value && { key: g.marked.value, n: g.shake.value });
+const nudge = computed(() => g.marked.value && { key: g.marked.value, n: g.wave.value });
 
 const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
@@ -143,6 +143,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             :phase="g.phase.value"
             :round="g.round.value"
             :shake="g.shake.value"
+            :wave="g.wave.value"
             @pick="g.pick"
           />
           <p

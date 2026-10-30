@@ -4,9 +4,9 @@ import { BLANK, judge, scoreOf, listOf, isDone } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
 
 // Timings, in ms. A full word is answered at REPLY_AT, once its last card has
-// settled: a wrong one shakes; a found one's letters dip left to right, WAVE_STAGGER apart, each for WAVE_MS (the typed
+// settled: an unknown one shakes; a found one's letters dip left to right, WAVE_STAGGER apart, each for WAVE_MS (the typed
 // ones turning over; see DicoInput), then slide out for OUT_MS; it's in the list after, while
-// the fixed letters rise again for IN_MS.
+// the fixed letters rise again for IN_MS. One already found only dips.
 const REPLY_AT = 110;
 export const WAVE_STAGGER = 45;
 export const WAVE_MS = 320;
@@ -43,6 +43,8 @@ export function useDicorama(level) {
   // 'unknown' | 'dup'
   const message = ref(null);
   const shake = ref(0);
+  // Counts the words retyped, so each one's wave plays.
+  const wave = ref(0);
   // The word just retyped, pointed at in the list until the next letter.
   const marked = ref(null);
 
@@ -147,8 +149,10 @@ export function useDicorama(level) {
     if (kind !== 'new') {
       return later(() => {
         phase.value = null;
-        shake.value++;
-        if (kind === 'dup') marked.value = key;
+        if (kind === 'dup') {
+          wave.value++;
+          marked.value = key;
+        } else shake.value++;
         say(kind);
       }, REPLY_AT);
     }
@@ -188,6 +192,7 @@ export function useDicorama(level) {
     round,
     message,
     shake,
+    wave,
     latest,
     marked,
     score,

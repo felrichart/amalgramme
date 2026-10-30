@@ -4,7 +4,7 @@
  * colour, typed ones light cards rising into their slot (falling out when erased
  * or replaced). A found word's cards dip into their slots in a wave, the typed
  * ones turning over to the day's colour, then slide out to the right through the
- * slots; the fixed letters rise again after.
+ * slots; the fixed letters rise again after. A word already found only dips.
  *
  * Each slot shows, through its window, the whole row of cards shifted to its
  * place, so a card sliding right crosses the next slots.
@@ -19,6 +19,8 @@ const props = defineProps({
   phase: { type: String, default: null },
   round: { type: Number, default: 0 },
   shake: { type: Number, default: 0 },
+  // Counts the words retyped, each answered with a wave.
+  wave: { type: Number, default: 0 },
 });
 const emit = defineEmits(['pick']);
 
@@ -63,18 +65,37 @@ watch(
   },
 );
 
+/*
+ * The last retyped word's wave: the cards there then are remade to dip once, and
+ * keep that class after so their rise doesn't replay.
+ */
+const waved = ref(null);
+watch(
+  () => props.wave,
+  (n) => {
+    const gen = Math.max(0, ...props.slots.map((s) => s.gen ?? 0));
+    waved.value = { n, round: props.round, gen };
+  },
+);
+
 const cards = computed(() => {
+  const w = waved.value?.round === props.round ? waved.value : null;
   const list = props.slots.flatMap((s, j) => {
+    const delay = j * WAVE_STAGGER;
     if (s.fixed) {
-      const cls = ['fixed', { dip: props.phase === 'flip', 'rise-late': props.phase === 'in' }];
-      return [{ id: `f${j}-${props.round}`, j, ch: s.ch, cls, delay: j * WAVE_STAGGER }];
+      // Remade per wave, a found word's or the last retyped one's, so each plays once.
+      const wave = ['flip', 'out'].includes(props.phase) ? 'win' : w && `w${w.n}`;
+      const cls = ['fixed', { dip: !!wave, 'rise-late': props.phase === 'in' }];
+      return [{ id: `f${j}-${props.round}-${wave || ''}`, j, ch: s.ch, cls, delay }];
     }
     if (!s.ch) return [];
+    const inWave = w && s.gen <= w.gen;
     const cls = [
       'typed',
-      props.phase === 'flip' ? 'flip' : props.phase === 'out' ? 'solid' : 'rise',
+      props.phase === 'flip' ? 'flip' : props.phase === 'out' ? 'solid' : inWave ? 'dip' : 'rise',
     ];
-    return [{ id: `t${j}-${s.gen}`, j, ch: s.ch, cls, delay: j * WAVE_STAGGER }];
+    const id = `t${j}-${s.gen}${inWave ? `-w${w.n}` : ''}`;
+    return [{ id, j, ch: s.ch, cls, delay }];
   });
   return [
     ...falling.value.map((f) => ({ id: `x${f.id}`, j: f.j, ch: f.ch, cls: ['typed', 'fall'] })),
