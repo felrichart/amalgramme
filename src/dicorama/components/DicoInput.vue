@@ -24,8 +24,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['pick']);
 
-// How long an erased card takes to fall, in ms.
-const FALL_MS = 240;
+// How long an erased card takes to fall, in ms (its animation's, and a margin).
+const FALL_MS = 180;
 
 const cursorAt = computed(() =>
   props.cursor == null ? -1 : props.slots.findIndex((s) => s.b === props.cursor),
@@ -271,8 +271,9 @@ const label = (s, i) => (s.fixed ? `lettre fixe ${s.ch}` : `case ${i + 1}, ${s.c
 .card.rise {
   animation: dico-rise 0.24s cubic-bezier(0.25, 0.8, 0.3, 1) both;
 }
+/* It moves at once, as a typed card does, or erasing feels late. */
 .card.fall {
-  animation: dico-fall 0.2s cubic-bezier(0.5, 0, 0.75, 0.4) both;
+  animation: dico-fall 0.15s cubic-bezier(0.25, 0.6, 0.4, 1) both;
 }
 .card.flip {
   animation: dico-flip var(--wave) var(--delay) both;

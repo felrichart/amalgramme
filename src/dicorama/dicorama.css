@@ -189,19 +189,19 @@
     transform: translateX(0);
   }
   12% {
-    transform: translateX(-16%);
+    transform: translateX(-11%);
   }
   28% {
-    transform: translateX(14%);
+    transform: translateX(9.5%);
   }
   44% {
-    transform: translateX(-10%);
+    transform: translateX(-7%);
   }
   60% {
-    transform: translateX(6%);
+    transform: translateX(4%);
   }
   76% {
-    transform: translateX(-3%);
+    transform: translateX(-2%);
   }
 }
 @keyframes dico-dip {
