@@ -3,7 +3,7 @@
  * (GET /dicorama) and kept on the device, so the game opens offline. Only the
  * admin writes them.
  *
- * `levels`: `{ pattern, status: 'draft' | 'valid', date, words, rare, banned, main }` (see
+ * `levels`: `{ pattern, status: 'draft' | 'valid', date, words, rare, banned }` (see
  * buildLevel in game.js). Players get the validated ones up to today, one a day;
  * the admin gets them all. `definitions`: base → `{ index, text }`, the
  * Wiktionnaire sense picked for that word, in every level.
@@ -75,11 +75,9 @@ const MESSAGES = {
 
 /* Saves a level as `status`, played on `date` (required to validate). */
 export async function saveLevel(draft, status, date) {
-  const { pattern, words, rare, banned, main } = draft;
+  const { pattern, words, rare, banned } = draft;
   // A plain copy, not the editor's reactive draft.
-  const body = JSON.parse(
-    JSON.stringify({ status, date: date || null, words, rare, banned, main: main ?? null }),
-  );
+  const body = JSON.parse(JSON.stringify({ status, date: date || null, words, rare, banned }));
   const res = await mutate(`/dicorama/levels/${pattern}`, {
     method: 'PUT',
     body,

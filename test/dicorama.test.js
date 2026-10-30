@@ -9,11 +9,12 @@ import {
   opens,
   listOf,
   deBefore,
+  scoreOf,
   GOAL,
 } from '../src/dicorama/game.js';
 import BANK from '../src/dicorama/bank.json';
 import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
-import { draftFrom, setKind, setMaster, ban, unban, bannedOf } from '../src/dicorama/editor.js';
+import { draftFrom, setRare, setMaster, ban, unban, bannedOf } from '../src/dicorama/editor.js';
 import { useDicorama } from '../src/dicorama/useDicorama.js';
 import { pageTitles } from '../src/dicorama/definitions.js';
 import { dayColor, dayLabel, longDayLabel } from '../src/dicorama/days.js';
@@ -47,25 +48,28 @@ describe('progress', () => {
       score: 2,
       rare: 0,
       rareTotal: 1,
+      listed: 2,
+      listTotal: 3,
       goal: 3,
-      total: 3,
-      finished: false,
-      complete: false,
-      perfect: false,
+      stars: 0,
     });
     const withRare = progressOf(level, ['POSTING', 'PISCINE']);
-    expect(withRare).toMatchObject({ score: 2, rare: 1, total: 4 });
+    expect(withRare).toMatchObject({ score: 2, rare: 1, listed: 1 });
   });
 
-  it('finishes at the goal, rare words counting, and completes with every common one', () => {
-    expect(progressOf(level, ['POSTING', 'PASSION', 'PISCINE'])).toMatchObject({
-      finished: true,
-      complete: false,
-    });
-    expect(progressOf(level, ['PASSIVE', 'PASSION', 'PISCINE'])).toMatchObject({
-      finished: true,
-      complete: true,
-    });
+  it('wins a star at the goal, rare words counting, two with the list, three with all', () => {
+    const stars = (found) => progressOf(level, found).stars;
+    expect(stars(['POSTING', 'PASSION', 'PISCINE'])).toBe(1);
+    expect(stars(['PASSIVE', 'PASSION', 'PISCINE'])).toBe(2);
+    expect(stars(['PASSIVE', 'PASSION', 'PISCINE', 'POSTING'])).toBe(3);
+  });
+
+  it('shows the score over the goal until its star, then alone', () => {
+    const p = progressOf(level, ['PISCINE']);
+    expect(scoreOf(p)).toEqual({ value: 1, max: 3 });
+    const won = progressOf(level, ['PASSIVE', 'PASSION', 'PISCINE']);
+    expect(scoreOf(won)).toEqual({ value: 3, max: null });
+    expect(scoreOf(won, 1)).toEqual({ value: 3, max: 3 });
   });
 
   it('makes families rare from 75 points, unless told which', () => {
@@ -99,19 +103,17 @@ describe('list', () => {
     ]);
   });
 
-  it('makes the most common families the list, the others showing once found', () => {
+  it('gives every common family a spot, a rare one showing once found', () => {
     const words = Array.from({ length: GOAL + 2 }, (_, i) => {
       const word = `mot${String.fromCharCode(97 + i)}`;
       return [GOAL + 2 - i, word, word];
     });
-    const many = buildLevel({ pattern: 'MOT_', words, rare: [] });
-    expect(many.families.filter((f) => f.main).map((f) => f.base)).toEqual(
-      words.slice(0, GOAL).map((w) => w[1]),
-    );
+    const many = buildLevel({ pattern: 'MOT_', words, rare: ['motl'] });
+    expect(listOf(many, [])).toHaveLength(GOAL + 1);
     const rows = listOf(many, ['MOTL']);
-    expect(rows).toHaveLength(GOAL + 1);
-    expect(shown(rows).at(-1)).toEqual(['extra', null, 'motl', true]);
-    expect(progressOf(many, ['MOTL'])).toMatchObject({ score: 1, goal: GOAL, total: GOAL + 2 });
+    expect(rows).toHaveLength(GOAL + 2);
+    expect(shown(rows).at(-1)).toEqual(['rare', null, 'motl', true]);
+    expect(progressOf(many, ['MOTL'])).toMatchObject({ score: 1, goal: GOAL, listTotal: GOAL + 1 });
   });
 
   it("fills a spot with its first find, its family's later ones under it", () => {
@@ -258,30 +260,30 @@ describe('useDicorama', () => {
     expect(g.message.value).toBe(null);
   });
 
-  it('scores a family once and is complete once every common one is found', async () => {
+  it('scores a family once and wins two stars once the list is found', async () => {
     const g = useDicorama(level);
     for (const letters of ['ícné', 'asfs', 'asve']) typeAll(g, letters);
     expect(g.progress.value.score).toBe(2);
-    expect(g.progress.value.complete).toBe(false);
+    expect(g.progress.value.stars).toBe(0);
     typeAll(g, 'asôn');
-    expect(g.progress.value.complete).toBe(true);
+    expect(g.progress.value.stars).toBe(2);
     expect(g.celebration.value).toBe('all');
     g.dismiss();
     typeAll(g, 'otng');
-    expect(g.progress.value.perfect).toBe(true);
+    expect(g.progress.value.stars).toBe(3);
     expect(g.celebration.value).toBe('perfect');
     await Promise.resolve();
     expect(loadProgress(level.pattern).found).toHaveLength(5);
   });
 
-  it('celebrates the goal, then shows the second stage once that is over', () => {
+  it('celebrates the first star, then drops the goal once that is over', () => {
     const g = useDicorama(level);
     for (const letters of ['otng', 'icne']) typeAll(g, letters);
     expect(g.stage.value).toBe(1);
     expect(g.celebration.value).toBe(null);
     [...'ason'].forEach((ch) => g.type(ch));
     vi.advanceTimersByTime(1200);
-    expect(g.progress.value.finished).toBe(true);
+    expect(g.progress.value.stars).toBe(1);
     expect(g.stage.value).toBe(1);
     vi.advanceTimersByTime(800);
     expect(g.celebration.value).toBe('goal');
@@ -348,23 +350,10 @@ describe('editor', () => {
     ],
   };
 
-  it('starts from a bank level, its rare and list families', () => {
-    expect(draftFrom(tigre)).toEqual({ ...tigre, rare: ['ogre'], main: ['tigre'], banned: [] });
-  });
-
-  it('puts a family in the list, among the other common ones or the rare ones', () => {
-    const kinds = (draft) => buildLevel(draft).families.map((f) => [f.base, f.main, f.rare]);
-    const extra = setKind(draftFrom(tigre), 'tigre', 'extra');
-    expect(kinds(extra)).toEqual([
-      ['tigre', false, false],
-      ['ogre', false, true],
-    ]);
-    const main = setKind(extra, 'ogre', 'main');
-    expect(main).toMatchObject({ rare: [], main: ['ogre'] });
-    expect(kinds(setKind(main, 'tigre', 'rare'))).toEqual([
-      ['tigre', false, true],
-      ['ogre', true, false],
-    ]);
+  it('starts from a bank level and its rare families', () => {
+    expect(draftFrom(tigre)).toEqual({ ...tigre, rare: ['ogre'], banned: [] });
+    expect(setRare(draftFrom(tigre), 'ogre', false).rare).toEqual([]);
+    expect(setRare(draftFrom(tigre), 'tigre', true).rare).toEqual(['ogre', 'tigre']);
   });
 
   it('moves a word into the family of its new master', () => {
@@ -401,9 +390,9 @@ describe('editor', () => {
     expect(judge(built, 'OGRES', [])).toBe('unknown');
   });
 
-  it('drops a family left empty from the rare and list ones', () => {
+  it('drops a family left empty from the rare ones', () => {
     const rare = { ...draftFrom(tigre), rare: ['tigre'] };
-    expect(setMaster(rare, 'TIGRES', 'tigrés')).toMatchObject({ rare: [], main: [] });
+    expect(setMaster(rare, 'TIGRES', 'tigrés').rare).toEqual([]);
   });
 });
 

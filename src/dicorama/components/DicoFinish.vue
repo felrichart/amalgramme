@@ -1,13 +1,13 @@
 <script setup>
 /*
- * The celebration over the board: 'goal' when the level is finished, its star
- * won, telling how many words the level holds in all; 'all' when it's complete,
- * its trophy won; 'perfect' once the rare words are all found too, its medal won. Tiles burst out over it.
+ * The celebration over the board, a star won: 'goal' at 10 words, 'all' once
+ * the list is found, 'perfect' once the rare words are too. Tiles burst out over
+ * it.
  */
 import { computed } from 'vue';
 import DicoStar from './DicoStar.vue';
 import DicoMarks from './DicoMarks.vue';
-import DicoBonus from './DicoBonus.vue';
+import DicoSparkle from './DicoSparkle.vue';
 
 const props = defineProps({
   kind: { type: String, required: true },
@@ -16,23 +16,16 @@ const props = defineProps({
 });
 const emit = defineEmits(['more']);
 
-const all = computed(() => props.kind === 'all');
-const perfect = computed(() => props.kind === 'perfect');
+const STARS = { goal: 1, all: 2, perfect: 3 };
+const TITLES = { goal: 'Bravo !', all: 'Liste complète !', perfect: 'Absolument tout !' };
+const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+// The words of the list still to find, the second star's price.
+const left = computed(() => props.progress.listTotal - props.progress.listed);
 const rareLeft = computed(() => props.progress.rare < props.progress.rareTotal);
-const TITLES = { goal: 'Bravo !', all: 'Tout trouvé !', perfect: 'Absolument tout !' };
-const LEVELS = { goal: 1, all: 2, perfect: 3 };
-const common = computed(() => props.progress.total - props.progress.rare);
-// The common words still to find, the trophy's price.
-const left = computed(() => common.value - (props.progress.score - props.progress.rare));
-const rareWord = computed(() => (props.progress.rare > 1 ? 'rares' : 'rare'));
-const rares = computed(() => {
-  const n = props.progress.rare;
-  return n ? `${n} rare${n > 1 ? 's' : ''}` : '';
-});
 const moreLabel = computed(() =>
   props.kind === 'goal'
     ? 'Trouver plus de mots'
-    : all.value && rareLeft.value
+    : props.kind === 'all' && rareLeft.value
       ? 'Chercher les rares'
       : 'Revoir la liste',
 );
@@ -63,33 +56,30 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
       </span>
     </div>
     <div class="card" role="dialog" aria-modal="true" :aria-label="TITLES[kind]">
-      <DicoMarks class="marks" :level="LEVELS[kind]" pop />
+      <DicoMarks class="marks" :stars="STARS[kind]" pop />
       <h2 class="title">{{ TITLES[kind] }}</h2>
       <template v-if="kind === 'goal'">
         <p class="text">
-          <strong>{{ progress.goal }} mots</strong> trouvés.
+          Vous avez trouvé <strong>{{ progress.goal }} mots</strong>.
         </p>
-        <p class="text nudge">
-          Plus que <strong>{{ left }}</strong> pour obtenir le trophée.
+        <p v-if="left" class="text nudge">
+          Plus que <strong>{{ left }}</strong> pour compléter la liste.
         </p>
       </template>
-      <template v-else-if="perfect">
+      <template v-else-if="kind === 'all'">
         <p class="text">
-          Les <strong>{{ common }} mots</strong> du niveau et les <strong>{{ rares }}</strong
-          >&#8239;: il n'y a plus rien à trouver.
+          Les <strong>{{ progress.listTotal }} mots</strong> de la liste, trouvés.
+        </p>
+        <p v-if="rareLeft" class="text rare-line">
+          <DicoSparkle class="sparkle" />Il reste des mots rares à trouver…
         </p>
       </template>
-      <template v-else>
-        <p class="text">
-          Les <strong>{{ common }} mots</strong> du niveau, trouvés.
-        </p>
-        <p v-if="rares" class="text rare-line">
-          <DicoBonus class="tag-bonus" :count="progress.rare" />
-          <strong>{{ rareWord }}</strong
-          >&nbsp;en prime&#8239;!
-        </p>
-        <p v-if="rareLeft" class="text quiet">Des mots rares se cachent peut-être encore…</p>
-      </template>
+      <p v-else class="text">
+        Les <strong>{{ progress.listTotal }} mots</strong> de la liste
+        <template v-if="progress.rareTotal">
+          et les <strong>{{ plural(progress.rareTotal, 'rare') }}</strong></template
+        >&#8239;: il n'y a plus rien à trouver.
+      </p>
       <div class="actions">
         <button class="dc-button" type="button" @click="emit('more')">
           {{ moreLabel }}
@@ -151,18 +141,15 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
 .text.nudge {
   font-style: italic;
 }
-.text.quiet {
-  font-style: italic;
-  color: var(--dc-faint);
-}
 .rare-line {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  font-style: italic;
 }
-.tag-bonus {
-  margin-right: 5px;
-  font-size: 18px;
+.sparkle {
+  font-size: 16px;
 }
 .actions {
   align-self: stretch;

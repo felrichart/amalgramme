@@ -533,11 +533,6 @@ describe('dicorama', () => {
     const put = (pattern, body) => call(env, 'PUT', `/dicorama/levels/${pattern}`, body, admin);
     expect((await put('P__L_', level())).status).toBe(200);
     expect((await put('P__L_', level({ rare: ['perle'] }))).status).toBe(200);
-    expect((await put('P__L_', level({ main: [1] }))).status).toBe(422);
-    expect((await put('P__L_', level({ main: ['perle'] }))).status).toBe(200);
-    expect((await read(env, admin)).levels.find((l) => l.pattern === 'P__L_').main).toEqual([
-      'perle',
-    ]);
     expect((await put('B___N', level())).status).toBe(409);
     expect((await put('B___N', level({ date: null }))).status).toBe(422);
     expect((await put('PERLE', level({ date: '2026-02-02' }))).status).toBe(422);

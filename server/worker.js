@@ -723,14 +723,13 @@ const dicoLevel = (r) => ({
   words: JSON.parse(r.words),
   rare: JSON.parse(r.rare),
   banned: JSON.parse(r.banned),
-  main: r.main === null ? null : JSON.parse(r.main),
 });
 
 /* Players get validated levels up to tomorrow (Paris), so no timezone misses its
  * day; the client keeps the ones up to its own today. */
 async function getDicorama({ request, env }) {
   const user = await sessionUser(env, request);
-  const cols = 'pattern, status, date, words, rare, banned, main';
+  const cols = 'pattern, status, date, words, rare, banned';
   const levels =
     user?.username === ADMIN_NAME
       ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
@@ -754,17 +753,14 @@ async function saveDicoLevel({ request, env, params }) {
   const { pattern } = params;
   const { status, words, rare, banned } = body;
   const date = body.date ?? null;
-  const main = body.main ?? null;
   if (!DICO_PATTERN.test(pattern) || !pattern.includes('_')) return fail('bad_pattern', 422);
   if (status !== 'draft' && status !== 'valid') return fail('invalid', 422);
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad_date', 422);
   if (status === 'valid' && !date) return fail('bad_date', 422);
   if (!Array.isArray(words) || !words.length || !isStrings(rare) || !isStrings(banned))
     return fail('invalid', 422);
-  if (main !== null && !isStrings(main)) return fail('invalid', 422);
   const stored = [words, rare, banned].map((v) => JSON.stringify(v));
-  if (stored.join('').length + JSON.stringify(main).length > DICO_MAX_BYTES)
-    return fail('invalid', 422);
+  if (stored.join('').length > DICO_MAX_BYTES) return fail('invalid', 422);
   if (date) {
     const taken = await env.DB.prepare(
       'SELECT 1 FROM dicorama_levels WHERE date = ? AND pattern != ?',
@@ -775,15 +771,15 @@ async function saveDicoLevel({ request, env, params }) {
   }
 
   await env.DB.prepare(
-    `INSERT INTO dicorama_levels (pattern, status, date, words, rare, banned, main, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO dicorama_levels (pattern, status, date, words, rare, banned, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(pattern) DO UPDATE SET status = excluded.status, date = excluded.date,
        words = excluded.words, rare = excluded.rare, banned = excluded.banned,
-       main = excluded.main, updated_at = excluded.updated_at`,
+       updated_at = excluded.updated_at`,
   )
-    .bind(pattern, status, date, ...stored, main && JSON.stringify(main), Date.now())
+    .bind(pattern, status, date, ...stored, Date.now())
     .run();
-  return json({ pattern, status, date, words, rare, banned, main });
+  return json({ pattern, status, date, words, rare, banned });
 }
 
 async function deleteDicoLevel({ env, params }) {

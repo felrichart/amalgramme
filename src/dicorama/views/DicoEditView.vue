@@ -1,11 +1,11 @@
 <script setup>
 /*
  * The admin's level editor: a bank level, or an official one, to save as a draft
- * or validate on a day. Each family can be put in the list, among the other
- * common ones or the rare ones, each word given
- * another master spelling (it then follows that spelling's base), each spelling
- * banned from the level, and each base its Wiktionnaire definition (saved at
- * once, for every level).
+ * or validate on a day. Each family can be put in the list or among the rare
+ * ones, each word given another master spelling (it then follows that spelling's
+ * base), each spelling banned from the level, and each base its Wiktionnaire
+ * definition (saved at once, for every level). The list needs LIST_MIN families,
+ * so each of the first two stars has its own moment.
  */
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -15,8 +15,8 @@ import { getToday } from '../../utils/today.js';
 import { addDays } from '../../utils/date.js';
 import { bank } from '../levels.js';
 import { official, officialLevel, saveLevel, removeLevel } from '../store.js';
-import { buildLevel, GOAL } from '../game.js';
-import { draftFrom, setKind, setMaster, ban, unban, bannedOf } from '../editor.js';
+import { buildLevel, LIST_MIN } from '../game.js';
+import { draftFrom, setRare, setMaster, ban, unban, bannedOf } from '../editor.js';
 import { dayColor, longDayLabel } from '../days.js';
 import DicoSenses from '../components/DicoSenses.vue';
 
@@ -48,8 +48,7 @@ const dirty = computed(() => snapshot() !== savedAs.value);
 const message = ref(null);
 
 const level = computed(() => buildLevel(draft.value));
-/* The families, the list's (the most common), the other common ones, then the
- * rare ones, each alphabetical by its first word, with its words' spellings and
+/* The families, the list's then the rare ones, each alphabetical by its first word, with its words' spellings and
  * the other bases they're homonyms of. */
 const sections = computed(() => {
   const { answers, families } = level.value;
@@ -64,26 +63,22 @@ const sections = computed(() => {
     }),
   });
   return [
-    { title: 'Liste', goal: GOAL, families: sorted.filter((f) => f.main).map(withWords) },
-    { title: 'En plus', families: sorted.filter((f) => !f.main && !f.rare).map(withWords) },
+    { title: 'Liste', min: LIST_MIN, families: sorted.filter((f) => !f.rare).map(withWords) },
     { title: 'Rares', families: sorted.filter((f) => f.rare).map(withWords) },
   ];
 });
 
 const KINDS = [
-  ['main', 'Liste'],
-  ['extra', 'En plus'],
-  ['rare', 'Rare'],
+  [false, 'Liste'],
+  [true, 'Rare'],
 ];
-const kindOf = (f) => (f.rare ? 'rare' : f.main ? 'main' : 'extra');
-const move = (base, kind) => (draft.value = setKind(draft.value, base, kind));
+const move = (base, rare) => (draft.value = setRare(draft.value, base, rare));
 const master = (key, form) => (draft.value = setMaster(draft.value, key, form));
 const banOne = (key, form) => (draft.value = ban(draft.value, key, form));
 const unbanOne = (form) => (draft.value = unban(draft.value, form));
 const banned = computed(() => bannedOf(draft.value));
-// The list must hold exactly GOAL families to save.
-const listCount = computed(() => level.value.families.filter((f) => f.main).length);
-const listOk = computed(() => listCount.value === GOAL);
+const listCount = computed(() => level.value.families.filter((f) => !f.rare).length);
+const listOk = computed(() => listCount.value >= LIST_MIN);
 
 async function save(as) {
   if (as === 'valid' && !date.value) date.value = freeDay();
@@ -146,8 +141,8 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
       <section v-for="s in sections" :key="s.title" class="section">
         <h2 class="heading">
           {{ s.title }}
-          <span class="count" :class="{ off: s.goal && s.families.length !== s.goal }">
-            {{ s.families.length }}<template v-if="s.goal"> / {{ s.goal }}</template>
+          <span class="count" :class="{ off: s.families.length < s.min }">
+            {{ s.families.length }}<template v-if="s.min"> (au moins {{ s.min }})</template>
           </span>
         </h2>
         <p v-if="!s.families.length" class="none">Aucune.</p>
@@ -157,13 +152,13 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
             <DicoSenses class="family-def" :word="f.base" />
             <div class="kinds" role="group" aria-label="sorte de famille">
               <button
-                v-for="[kind, label] in KINDS"
-                :key="kind"
+                v-for="[rare, label] in KINDS"
+                :key="label"
                 class="kind"
-                :class="{ on: kindOf(f) === kind }"
+                :class="{ on: f.rare === rare }"
                 type="button"
-                :aria-pressed="kindOf(f) === kind"
-                @click="move(f.base, kind)"
+                :aria-pressed="f.rare === rare"
+                @click="move(f.base, rare)"
               >
                 {{ label }}
               </button>
@@ -228,7 +223,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
 
     <footer class="foot">
       <p v-if="!listOk" class="message bad">
-        La liste doit avoir {{ GOAL }} familles ({{ listCount }} pour l'instant).
+        La liste doit avoir au moins {{ LIST_MIN }} familles ({{ listCount }} pour l'instant).
       </p>
       <p v-else-if="message" class="message" :class="message.tone">{{ message.text }}</p>
       <div class="actions">
@@ -374,7 +369,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   font-size: 0.8rem;
   color: var(--muted);
 }
-/* The list holds GOAL families: any other count shows, and blocks saving. */
+/* A list under LIST_MIN families shows, and blocks saving. */
 .count.off {
   color: var(--danger);
 }
@@ -421,7 +416,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   flex: 1;
   min-width: 0;
 }
-/* The family's kind: in the list, among the other common ones, or rare. */
+/* The family's kind: in the list, or rare. */
 .kinds {
   flex: none;
   display: flex;

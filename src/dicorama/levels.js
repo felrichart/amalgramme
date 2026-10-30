@@ -1,6 +1,6 @@
 /* Dicorama's levels, the bank's and the official ones, built to play, and their
  * saved progress (on the device only). */
-import { buildLevel, progressOf, marksOf, scoreOf } from './game.js';
+import { buildLevel, progressOf, scoreOf } from './game.js';
 import { officialLevel, levelOn } from './store.js';
 import { readJSON, writeJSON, isObject } from '../utils/storage.js';
 
@@ -46,8 +46,8 @@ export function saveProgress(pattern, progress) {
   writeJSON(key(pattern), progress);
 }
 
-/* What the device won on an official level: its marks and score. */
+/* What the device won on an official level: its stars and score. */
 export function resultOf(l) {
   const p = progressOf(buildLevel(l), loadProgress(l.pattern).found);
-  return { marks: marksOf(p), score: scoreOf(p) };
+  return { stars: p.stars, score: scoreOf(p) };
 }

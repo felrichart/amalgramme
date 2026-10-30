@@ -32,10 +32,11 @@ const nudge = computed(() => g.marked.value && { key: g.marked.value, n: g.wave.
 const message = computed(() => {
   if (g.message.value === 'unknown') return { text: 'mot inconnu', tone: 'bad' };
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
-  const p = g.progress.value;
-  if (p.complete && p.rare === p.rareTotal && !g.phase.value)
-    return { text: 'tout est trouvé, bravo !', tone: 'day' };
-  return null;
+  const { stars } = g.progress.value;
+  if (g.phase.value || stars < 2) return null;
+  return stars === 3
+    ? { text: 'tout est trouvé, bravo !', tone: 'day' }
+    : { text: 'il reste des mots rares à trouver', tone: 'day' };
 });
 
 const menu = ref(false);
@@ -126,7 +127,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         :latest="g.latest.value"
         :arrival="arrival"
         :nudge="nudge"
-        :common="g.stage.value === 2 ? score.max : null"
       />
     </div>
 

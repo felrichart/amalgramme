@@ -16,17 +16,17 @@ const IN_MS = 560;
 const MESSAGE_MS = 2400;
 // The pause between a word settling in the list and the level's celebration.
 const CELEBRATE_MS = 250;
+// The celebration of each star.
+const CELEBRATIONS = [null, 'goal', 'all', 'perfect'];
 
 /*
  * One Dicorama level being played: the blanks being typed (fixed letters stay
  * put), the found words and the score. The cursor is on the blank picked, else
  * the first empty one, else the last one, so a full word's last letter can be
  * retyped at once. A full word is checked as soon as its last letter is typed; a
- * rejected one stays on screen. The word that finishes the level, then the one
- * that completes it, then the one that finds the rare ones too, is celebrated
- * (`celebration`: 'goal' | 'all' | 'perfect'); the progress
- * shows its second stage, to completion, once the first celebration is over.
- * Auto-saves.
+ * rejected one stays on screen. The word that wins a star is celebrated
+ * (`celebration`: 'goal' | 'all' | 'perfect', for one, two or three); the score
+ * drops its goal (`stage` 2) once the first celebration is over. Auto-saves.
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
@@ -79,7 +79,7 @@ export function useDicorama(level) {
   });
 
   const progress = computed(() => progressOf(level, state.found));
-  greeted.value = progress.value.finished;
+  greeted.value = progress.value.stars > 0;
   const stage = computed(() => (greeted.value ? 2 : 1));
   const list = computed(() => listOf(level, state.found));
   const latest = computed(() => marked.value ?? state.found[0] ?? null);
@@ -175,18 +175,14 @@ export function useDicorama(level) {
     round.value++;
     setCells(blanks.map(() => null));
     later(() => phase.value === 'in' && (phase.value = null), IN_MS);
-    const now = progress.value;
-    const reached = [
-      ['perfect', 'perfect'],
-      ['complete', 'all'],
-      ['finished', 'goal'],
-    ].find(([step]) => !before[step] && now[step])?.[1];
-    if (reached) later(() => (celebration.value = reached), IN_MS + CELEBRATE_MS);
+    const { stars } = progress.value;
+    if (stars > before.stars)
+      later(() => (celebration.value = CELEBRATIONS[stars]), IN_MS + CELEBRATE_MS);
   }
 
   function dismiss() {
     celebration.value = null;
-    greeted.value = progress.value.finished;
+    greeted.value = progress.value.stars > 0;
   }
 
   /* Forgets the level's progress, to play it again. */

@@ -2,8 +2,8 @@
 /*
  * The level's words, a slot each (see listOf), in one column filling its parent
  * (the cream board), scrolling once they outgrow it: fades show there's more
- * above or below. Left of a slot: its number for the list, a dot for another
- * common word, a plus in a disc for a rare one. A found word is a light card in
+ * above or below. Left of a slot: its number for the list, a sparkle for a rare
+ * word. A found word is a light card in
  * its slot; tapping it shows its definition, and opens its sub-list (homonyms,
  * then its family's later finds) when it has one, one at a time; its bubble opens
  * over it. A word landing in a sub-list opens it. The yellow arrow points at the
@@ -12,6 +12,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { deBefore } from '../game.js';
 import { definitionOf } from '../definitions.js';
+import DicoSparkle from './DicoSparkle.vue';
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -21,8 +22,6 @@ const props = defineProps({
   arrival: { type: String, default: null },
   // `{ key, n }`: the word typed again, nudged on each retry.
   nudge: { type: Object, default: null },
-  // The common words to find, once rare ones are a bonus on top (stage 2).
-  common: { type: Number, default: null },
 });
 
 // Sizes in px: row, sub-word and the gap between sub-words (as in the CSS).
@@ -173,17 +172,14 @@ watch(
   },
 );
 
-/* What a found word is worth, when it's not the usual point: a rare family's
- * bonus, or nothing for a word's homonyms and a family's later finds. */
+/* What a found word is, when it's not a word of the list: a rare one, or worth
+ * nothing for a word's homonyms and a family's later finds. */
 function worthOf(row, spelling) {
   if (!row?.found) return null;
   const kid = row.kids.find((k) => k.spelling === spelling);
   if (kid?.kind === 'homonym') return { text: 'Homonyme (0 point)' };
   if (kid) return { text: `Même famille que ${row.answer.display} (0 point)` };
-  if (row.kind === 'rare') {
-    const note = props.common ? `en plus des ${props.common} mots` : null;
-    return { text: 'Mot rare', bonus: true, note };
-  }
+  if (row.kind === 'rare') return { text: 'Mot rare', rare: true };
   return null;
 }
 
@@ -225,8 +221,7 @@ const nudged = (key) => props.nudge?.key === key;
           <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
             pad(r.num)
           }}</span>
-          <span v-else-if="r.kind === 'rare'" class="plus-disc rare" />
-          <span v-else class="extra" />
+          <DicoSparkle v-else class="sparkle" />
         </span>
         <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
           <template v-if="r.answer">
@@ -303,10 +298,9 @@ const nudged = (key) => props.nudge?.key === key;
       </div>
       <div class="tip-def" :class="{ loading: tipText.loading }">{{ tipText.definition }}</div>
       <span v-if="tipText.worth" class="worth-line">
-        <span class="worth" :class="{ bonus: tipText.worth.bonus }"
-          ><span v-if="tipText.worth.bonus" class="plus-disc" />{{ tipText.worth.text }}</span
+        <span class="worth" :class="{ rare: tipText.worth.rare }"
+          ><DicoSparkle v-if="tipText.worth.rare" />{{ tipText.worth.text }}</span
         >
-        <span v-if="tipText.worth.note" class="worth-note">{{ tipText.worth.note }}</span>
       </span>
       <span class="tail" />
     </div>
@@ -403,29 +397,9 @@ const nudged = (key) => props.nudge?.key === key;
 .num.on {
   color: var(--day);
 }
-/* The rare words' mark: a small disc in the day's colour, a cream plus drawn in
- * its centre. */
-.plus-disc {
-  display: block;
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background:
-    linear-gradient(var(--dc-cream), var(--dc-cream)) center / 6px 1.6px no-repeat,
-    linear-gradient(var(--dc-cream), var(--dc-cream)) center / 1.6px 6px no-repeat,
-    var(--day);
-}
-.rare {
-  margin-right: 2px;
-}
-.extra {
-  display: block;
-  width: 5px;
-  height: 5px;
-  margin-right: 4px;
-  border-radius: 50%;
-  background: var(--day);
+.sparkle {
+  margin-right: 1px;
+  font-size: 14px;
 }
 .slot {
   position: relative;
@@ -572,7 +546,7 @@ const nudged = (key) => props.nudge?.key === key;
 .tip-def.loading {
   font-style: italic;
 }
-/* What the word is worth, at the foot of its bubble: the rare bonus stands out. */
+/* What the word is worth, at the foot of its bubble: a rare word stands out. */
 .worth-line {
   display: flex;
   flex-wrap: wrap;
@@ -580,18 +554,13 @@ const nudged = (key) => props.nudge?.key === key;
   gap: 2px 7px;
   margin-top: 3px;
 }
-.worth-note {
-  font-size: 11.5px;
-  font-style: italic;
-  color: var(--dc-faint);
-}
 .worth {
   font-size: 11.5px;
   font-style: italic;
   font-weight: 600;
   color: var(--dc-faint);
 }
-.worth.bonus {
+.worth.rare {
   display: flex;
   align-items: center;
   gap: 5px;

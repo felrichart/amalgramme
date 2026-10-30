@@ -9,7 +9,7 @@ import '../theme.js';
 import { getToday } from '../../utils/today.js';
 import { bank, loadProgress } from '../levels.js';
 import { officialLevel } from '../store.js';
-import { buildLevel, progressOf, keyOf } from '../game.js';
+import { buildLevel, progressOf, scoreOf, keyOf } from '../game.js';
 import { dayColor } from '../days.js';
 
 const router = useRouter();
@@ -28,8 +28,7 @@ const rows = bank().map((l) => {
   };
   if (!found.length) return row;
   const progress = progressOf(level, found);
-  const max = progress.finished ? progress.total : progress.goal;
-  return { ...row, progress, max, done: progress.complete };
+  return { ...row, score: scoreOf(progress), done: progress.stars >= 2 };
 });
 
 const length = ref(null);
@@ -112,9 +111,8 @@ function playRandom() {
         <button class="row press" :class="{ done: r.done }" type="button" @click="play(r.pattern)">
           <span class="pattern">{{ r.pattern.replaceAll('_', '·') }}</span>
           <span v-if="r.status" class="status">{{ r.status }}</span>
-          <span v-if="r.progress" class="score"
-            >{{ r.progress.score }}<span class="max">/{{ r.max }}</span
-            ><span v-if="r.progress.rare" class="rare">+{{ r.progress.rare }}</span></span
+          <span v-if="r.score" class="score"
+            >{{ r.score.value }}<span v-if="r.score.max" class="max">/{{ r.score.max }}</span></span
           >
           <span v-else class="size">{{ r.size }}</span>
         </button>
@@ -241,12 +239,6 @@ function playRandom() {
 .size {
   font-weight: 800;
   opacity: 0.7;
-}
-.rare {
-  color: var(--rare);
-}
-.row.done .rare {
-  color: inherit;
 }
 .pill.bank {
   min-width: 0;

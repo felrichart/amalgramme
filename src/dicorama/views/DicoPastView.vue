@@ -1,5 +1,5 @@
 <script setup>
-/* The days played, newest first, each with its pattern, score and marks: a tap
+/* The days played, newest first, each with its pattern, score and stars: a tap
  * plays it. */
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -9,7 +9,6 @@ import { official, playedLevels } from '../store.js';
 import { resultOf } from '../levels.js';
 import { dayColor, dayOfMonth, shortMonth, shortWeekday } from '../days.js';
 import DicoMarks from '../components/DicoMarks.vue';
-import DicoBonus from '../components/DicoBonus.vue';
 
 const router = useRouter();
 const today = getToday();
@@ -74,12 +73,14 @@ const back = () => (window.history.state?.back ? router.back() : router.push('/d
               }}</span>
             </span>
             <span class="result">
-              <span class="score" :aria-label="`score ${d.score.value} sur ${d.score.max}`">
+              <span
+                class="score"
+                :aria-label="`score ${d.score.value}` + (d.score.max ? ` sur ${d.score.max}` : '')"
+              >
                 <span class="value">{{ pad(d.score.value) }}</span>
-                <span class="max">/{{ d.score.max }}</span>
-                <DicoBonus v-if="d.score.bonus" class="max" :count="d.score.bonus" />
+                <span v-if="d.score.max" class="max">/{{ d.score.max }}</span>
               </span>
-              <DicoMarks class="marks" :level="d.marks" />
+              <DicoMarks class="marks" :stars="d.stars" />
             </span>
           </button>
         </li>

@@ -1,20 +1,22 @@
 /*
  * Edits an admin makes to a level before it's official. A draft is a level as
- * the Worker stores it: `{ pattern, words, rare, main, banned }` (see buildLevel in
+ * the Worker stores it: `{ pattern, words, rare, banned }` (see buildLevel in
  * game.js). Every edit returns a new draft.
  */
 import { buildLevel, keyOf, spellingsOf, storedWord, wordPoints, RARE_POINTS } from './game.js';
 
-/* A level as a draft, its rare and list families named: those it names, else
- * its defaults. */
+/* A level as a draft, its rare families named: those it names, else those of
+ * the bank. */
 export function draftFrom(level) {
-  const { families } = buildLevel(level);
-  const bases = (kind) => families.filter((f) => f[kind]).map((f) => f.base);
+  const rare =
+    level.rare ??
+    buildLevel(level)
+      .families.filter((f) => f.rare)
+      .map((f) => f.base);
   return {
     pattern: level.pattern,
     words: structuredClone(level.words),
-    rare: level.rare ?? bases('rare'),
-    main: level.main ?? bases('main'),
+    rare,
     banned: level.banned ?? [],
   };
 }
@@ -55,15 +57,10 @@ export const bannedOf = (draft) =>
     ),
   );
 
-/* Puts the family of `base` in the list ('main'), among the other common ones
- * ('extra') or the rare ones ('rare'). */
-export function setKind(draft, base, kind) {
-  const without = (bases) => bases.filter((b) => b !== base);
-  return {
-    ...draft,
-    rare: kind === 'rare' ? [...without(draft.rare), base] : without(draft.rare),
-    main: kind === 'main' ? [...without(draft.main), base] : without(draft.main),
-  };
+/* Makes the family of `base` rare, or puts it in the list. */
+export function setRare(draft, base, rare) {
+  const others = draft.rare.filter((b) => b !== base);
+  return { ...draft, rare: rare ? [...others, base] : others };
 }
 
 /*
@@ -94,11 +91,9 @@ export function setMaster(draft, key, form) {
   }
 
   const kept = families.filter((f) => f.words.length);
-  const isKept = (b) => kept.some((f) => f.base === b);
   return {
     ...draft,
     words: kept.map((f) => [f.freq, f.base, ...f.words.map((w) => storedWord(w, f.base))]),
-    rare: rare.filter(isKept),
-    main: draft.main.filter(isKept),
+    rare: rare.filter((b) => kept.some((f) => f.base === b)),
   };
 }

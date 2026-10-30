@@ -20,27 +20,24 @@ Trois niveaux de regroupement :
   suivantes rejoignent sa sous-liste, après ses homonymes, sans compter (la
   sous-liste s'ouvre à leur arrivée).
 
-Chaque famille trouvée compte, de trois sortes. Les **10 plus fréquentes** forment
-la liste : une place numérotée chacune (01, 02…), dans l'ordre alphabétique, qui
-aide à les chercher. Les **autres familles courantes** comptent pareil mais n'ont
-pas de place : leur ligne apparaît une fois trouvée, marquée d'un point. Une
-famille **rare** compte aussi, en bonus : un « + » devant le mot.
+Chaque famille trouvée compte, de deux sortes. Les familles **courantes** forment
+la liste : une place numérotée chacune (01, 02…), vide au départ, dans l'ordre
+alphabétique, qui aide à les chercher. Une famille **rare** n'a pas de place : sa
+ligne apparaît une fois trouvée, marquée d'une petite étoile à quatre branches.
 
-Trois étapes : le niveau est **fini** (l'étoile) à 10 familles trouvées, rares
-comprises ; une fenêtre « Bravo » l'annonce et dit combien de mots courants le
-niveau cache en tout. Il est **complet** (le trophée) quand toutes les familles
-courantes sont trouvées, avec une seconde fenêtre. Il est **parfait** (une couronne, montrée
-seulement une fois gagnée) quand les rares le sont aussi, avec une troisième
-fenêtre. Le score, à gauche des mots, est sur 10, puis sur toutes les
-familles courantes, les rares trouvées en bonus en plus du dénominateur (`19/17+2`) ;
-Les marques : une étoile (fini) et un trophée
-(complet), gris jusqu'à les gagner puis jaunes, et la couronne (parfait).
+Trois étoiles, rien d'affiché avant la première : **une** à 10 familles trouvées,
+rares comprises (« Bravo, vous avez trouvé 10 mots ») ; **deux** quand toute la
+liste est trouvée (les rares n'y comptent pas) ; **trois** quand les rares le sont
+aussi. Chacune a sa fenêtre de félicitations. Le score, à gauche des mots, est le
+nombre de familles trouvées : sur 10 jusqu'à la première étoile, seul ensuite. Liste
+complète, « il reste des mots rares à trouver » s'affiche sous la saisie tant qu'il
+en reste.
 
 Il n'y a pas d'accueil : `/dicorama` mène au niveau du jour (`/dicorama/<date>`, le
 dernier jour joué). La date du jour, en petit, est en haut à droite ; les mots
-prennent toute la hauteur à droite ; à gauche, le score en grand, les marques, puis
+prennent toute la hauteur à droite ; à gauche, le score en grand, les étoiles, puis
 « niveaux passés » et le ⋯ du niveau (remettre à zéro). « Niveaux passés » (`/dicorama/jours`) liste
-les jours joués, du plus récent au plus ancien, avec leur score et leurs marques ; en
+les jours joués, du plus récent au plus ancien, avec leur score et leurs étoiles ; en
 toucher un le rouvre.
 
 La saisie : le curseur va à la case touchée, sinon à la première vide, sinon à la
@@ -84,9 +81,8 @@ officiels** validés, un par jour, jusqu'à aujourd'hui.
 
 Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.js`) :
 
-- ranger chaque famille dans la liste (« Liste », 10 attendues), parmi les autres
-  courantes (« En plus ») ou les rares ; par défaut, la liste est les 10 courantes
-  les plus fréquentes ;
+- passer une famille de la liste aux rares et inversement ; la liste doit garder
+  au moins 11 familles pour enregistrer (une étoile, puis deux) ;
 - changer le maître mot d'une saisie : le mot suit la base de son nouveau maître
   mot, dans sa famille (créée au besoin, la famille vidée disparaît) ;
 - bannir une orthographe du niveau (✕), rétablie depuis « Bannis » ; un maître mot
@@ -98,7 +94,7 @@ Depuis la banque, ✎ ouvre l'éditeur d'un niveau (`DicoEditView.vue`, `editor.
 « Enregistrer le brouillon » le garde pour l'admin seul, « Valider » le donne aux
 joueurs à son jour. Les niveaux officiels et les sens choisis vivent dans la base
 D1 du Worker (`dicorama_levels`, `dicorama_definitions`, migration 0012, qui y
-reprend les niveaux du labo en brouillons sans date ; la liste choisie : 0013) ;
+reprend les niveaux du labo en brouillons sans date) ;
 `store.js` les garde aussi sur l'appareil. L'admin trouve les niveaux à venir et
 les brouillons à `/dicorama/a-venir`.
 

@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import '../theme.js';
 import { isAdmin } from '../../composables/useAccount.js';
 import { getToday } from '../../utils/today.js';
-import { progressOf, marksOf } from '../game.js';
+import { progressOf } from '../game.js';
 import { levelFor, loadProgress } from '../levels.js';
 import { dayColor, dayOfMonth, shortMonth, shortWeekday } from '../days.js';
 import DicoBoard from '../components/DicoBoard.vue';
@@ -24,9 +24,9 @@ const level = computed(() => (picked.value ? levelFor('day', picked.value) : nul
 // The progress while playing here, else the saved one.
 const live = ref(null);
 watch(picked, () => (live.value = null));
-const marks = computed(() => {
+const stars = computed(() => {
   const l = level.value;
-  return l ? marksOf(live.value ?? progressOf(l, loadProgress(l.pattern).found)) : 0;
+  return l ? (live.value ?? progressOf(l, loadProgress(l.pattern).found)).stars : 0;
 });
 
 // "ve 30 oct.", or "aujourd'hui".
@@ -63,7 +63,7 @@ const dateLabel = computed(() =>
 
       <DicoBoard v-if="level" :key="level.pattern" :level="level" @progress="(p) => (live = p)">
         <template #side>
-          <DicoMarks class="marks" :level="marks" />
+          <DicoMarks class="marks" :stars="stars" />
         </template>
         <template #foot>
           <button

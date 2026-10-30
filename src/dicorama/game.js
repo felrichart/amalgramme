@@ -4,11 +4,10 @@
  * A word is what's typed (without accents): its master spelling, shown, and its
  * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
  * durs) form a family: its first find counts once, its later ones join it
- * without counting. Every family found counts, in three kinds: the GOAL most
- * common ones are the list, a numbered spot each; the other common ones count
- * the same but show only once found; a rare family is a bonus on top. The level
- * is finished at GOAL families found (any kind), complete once every common one
- * is.
+ * without counting. Every family found counts, of two kinds: the common ones
+ * are the list, a numbered spot each; a rare one shows only once found. A level
+ * wins a star at GOAL families found (rare ones too), two once the list is
+ * found, three once every family is.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
@@ -31,8 +30,9 @@ export const RARE_POINTS = 75;
 const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, RARE_POINTS, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
 
-// Families to find to finish a level, and the list's numbered spots.
+// Families to find for the first star; the list holds more, for the second.
 export const GOAL = 10;
+export const LIST_MIN = GOAL + 1;
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
@@ -85,12 +85,11 @@ export function storedWord(spellings, base) {
  * the base: ["dures", "fém. plur."]) or `[form, label, base, freq]` (a homonym of
  * another base, as common as `freq`: ["tigrés", "part. passé plur.", "tigrer",
  * 0.05]). `rare` lists the rare families' bases; without it, a family is rare from
- * RARE_POINTS. `main` lists the list's families' bases (rare ones aside); without
- * it, the list is the GOAL most common families. `banned` spellings are left out,
+ * RARE_POINTS; the others are the list. `banned` spellings are left out,
  * and with them a word or family left without any. Each answer is keyed by its
  * unaccented spelling.
  */
-export function buildLevel({ pattern, words, rare, main, banned = [] }) {
+export function buildLevel({ pattern, words, rare, banned = [] }) {
   const answers = new Map();
   const families = [];
   for (const [freq, base, ...raw] of words) {
@@ -105,14 +104,8 @@ export function buildLevel({ pattern, words, rare, main, banned = [] }) {
     if (!keys.length) continue;
     const points = wordPoints(freq);
     const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
-    families.push({ id, base, freq, points, rare: isRare, main: false, keys });
+    families.push({ id, base, freq, points, rare: isRare, keys });
   }
-  const common = families.filter((f) => !f.rare);
-  const listed = main
-    ? common.filter((f) => main.includes(f.base))
-    : // By default, the most common families, the word's own base first on a tie.
-      common.sort((a, b) => b.freq - a.freq || a.base.localeCompare(b.base, 'fr')).slice(0, GOAL);
-  listed.forEach((f) => (f.main = true));
   return { pattern, answers, families };
 }
 
@@ -132,37 +125,35 @@ export function opens(level, found, key) {
 
 /*
  * Where a player stands, the words in `found` being found: `score`, the families
- * found (`rare` of them rare, out of `rareTotal`); `goal`, the families that
- * finish the level; `total`, every common family plus the rare ones found, the
- * score that completes it. `perfect` once every family is found, rare ones too
- * (a level without any is just complete).
+ * found, `rare` of them rare (out of `rareTotal`), the others of the list (`listed`
+ * of `listTotal`); `goal`, the score of the first star; `stars`, 0 to 3.
  */
 export function progressOf(level, found) {
   const opened = new Set(found.map((k) => familyOf(level, k)));
   const families = level.families.filter((f) => opened.has(f.id));
   const score = families.length;
   const rare = families.filter((f) => f.rare).length;
-  const common = level.families.filter((f) => !f.rare).length;
-  const goal = Math.min(GOAL, common);
-  const rareTotal = level.families.length - common;
+  const listTotal = level.families.filter((f) => !f.rare).length;
+  const goal = Math.min(GOAL, listTotal);
+  const stars =
+    score === level.families.length ? 3 : score - rare === listTotal ? 2 : score >= goal ? 1 : 0;
   return {
     score,
     rare,
-    rareTotal,
+    rareTotal: level.families.length - listTotal,
+    listed: score - rare,
+    listTotal,
     goal,
-    total: common + rare,
-    finished: score >= goal,
-    complete: score - rare === common,
-    perfect: rareTotal > 0 && score === level.families.length,
+    stars,
   };
 }
 
 /*
- * The level's list, alphabetical: a numbered spot per family of the list, filled
- * by its first find, and a row per other family found: 'extra' for a common one,
- * 'rare' for a rare one. A row's `kids` are its word's homonyms then its family's
- * later finds (`variant`, with their own homonyms), oldest first; `keys`, every
- * word it shows.
+ * The level's list, alphabetical: a numbered spot per family of the list
+ * ('main'), filled by its first find, and a row per rare family found ('rare').
+ * A row's `kids` are its word's homonyms then its family's later finds
+ * (`variant`, with their own homonyms), oldest first; `keys`, every word it
+ * shows.
  */
 export function listOf(level, found) {
   const firstWord = (f) => level.answers.get(f.keys[0]);
@@ -183,8 +174,7 @@ export function listOf(level, found) {
   for (const f of sorted) {
     const [key, ...later] = finds.get(f.id) ?? [];
     const answer = key ? level.answers.get(key) : null;
-    const kind = f.main ? 'main' : f.rare ? 'rare' : 'extra';
-    if (!f.main && !answer) continue;
+    if (f.rare && !answer) continue;
     const kids = !key
       ? []
       : [
@@ -196,14 +186,14 @@ export function listOf(level, found) {
         ];
     rows.push({
       id: `f${f.id}`,
-      kind,
-      num: f.main ? ++num : null,
+      kind: f.rare ? 'rare' : 'main',
+      num: f.rare ? null : ++num,
       answer,
       found: !!key,
       keys: key ? [key, ...later] : [],
       kids,
       // A spot stays put whichever word fills it.
-      sort: f.main ? firstWord(f).display : answer.display,
+      sort: f.rare ? answer.display : firstWord(f).display,
     });
   }
   return rows.sort((a, b) => a.sort.localeCompare(b.sort, 'fr'));
@@ -214,14 +204,8 @@ const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;
 /* "de" before a word, elided before a vowel (d’aimer). */
 export const deBefore = (word) => (VOWEL.test(word) ? 'd’' : 'de ');
 
-/* The marks a level's progress won: 0, 1 (the star, finished), 2 (the trophy,
- * complete), 3 (the crown, perfect). */
-export const marksOf = (p) => (p.perfect ? 3 : p.complete ? 2 : p.finished ? 1 : 0);
-
-/* The score as shown: over the goal, rare words counting (stage 1); then over
- * every common word, the rare ones found as a bonus on top (19 /17+2). */
-export function scoreOf(p, stage = p.finished ? 2 : 1) {
-  return stage === 1
-    ? { value: p.score, max: p.goal, bonus: 0 }
-    : { value: p.score, max: p.total - p.rare, bonus: p.rare };
-}
+/* The score as shown: over the goal until its star is won (`stage` 1), then alone. */
+export const scoreOf = (p, stage = p.stars ? 2 : 1) => ({
+  value: p.score,
+  max: stage === 1 ? p.goal : null,
+});
