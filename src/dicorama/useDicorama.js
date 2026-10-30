@@ -23,13 +23,13 @@ const CELEBRATIONS = [null, 'one', 'two', 'all'];
 
 /*
  * One Dicorama level being played: the blanks being typed (fixed letters stay
- * put), the found words and the score. The cursor is on the blank picked, else
- * the first empty one, else the last one, so a full word's last letter can be
- * retyped at once. A full word is checked as soon as its last letter is typed; a
- * rejected one stays on screen. The word that wins a star is celebrated
- * (`celebration`: 'one' | 'two' | 'all', for one, two or three stars), as is the last
- * rare one ('book'); the marks shown follow the badges `greeted`, once each
- * celebration is over. Auto-saves.
+ * put), the found words and the score. The cursor is on the blank picked (or the
+ * next empty one after a letter), else the first empty one, else the last one,
+ * so a full word's last letter can be retyped at once. A full word is checked as
+ * soon as its last letter is typed; a rejected one stays on screen. The word that
+ * wins a star is celebrated (`celebration`: 'one' | 'two' | 'all', for one, two or
+ * three stars), as is the last rare one ('book'); the marks shown follow the
+ * badges `greeted`, once each celebration is over. Auto-saves.
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
@@ -110,9 +110,9 @@ export function useDicorama(level) {
     messageTimer = later(() => (message.value = null), MESSAGE_MS);
   }
 
-  function setCells(next) {
+  function setCells(next, at = null) {
     cells.value = next;
-    picked.value = null;
+    picked.value = at;
   }
 
   function type(raw) {
@@ -122,17 +122,21 @@ export function useDicorama(level) {
     quiet();
     const next = [...cells.value];
     next[at] = { ch, gen: ++gen };
-    setCells(next);
+    const ahead = next.findIndex((c, b) => b > at && !c);
+    setCells(next, ahead >= 0 ? ahead : null);
     if (next.every(Boolean)) check();
   }
 
-  /* Takes back the last letter of the word, wherever the cursor is. */
+  /* Erases the letter under the cursor, else steps back, erasing the one there. */
   function backspace() {
-    if (busy.value) return;
-    const last = cells.value.findLastIndex(Boolean);
-    if (last < 0) return;
+    const at = cursor.value;
+    if (at == null) return;
+    const b = cells.value[at] ? at : Math.max(0, at - 1);
     quiet();
-    setCells(cells.value.map((c, b) => (b === last ? null : c)));
+    setCells(
+      cells.value.map((c, i) => (i === b ? null : c)),
+      b,
+    );
   }
 
   function clear() {

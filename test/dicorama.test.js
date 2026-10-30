@@ -241,14 +241,36 @@ describe('useDicorama', () => {
     expect(g.cursor.value).toBe(2);
   });
 
-  it('erases the last letter, or all of them', () => {
+  it('erases the letter on the cursor, else the one before, else steps back', () => {
     const g = useDicorama(level);
     ['i', 'c', 'n'].forEach(g.type);
-    g.pick(0);
     g.backspace();
     expect(typed(g)).toBe('PISCI__');
+    expect(g.cursor.value).toBe(2);
+    g.pick(0);
+    g.backspace();
+    expect(typed(g)).toBe('P_SCI__');
+    expect(g.cursor.value).toBe(0);
+    g.pick(3);
+    g.backspace();
+    expect(typed(g)).toBe('P_SCI__');
+    expect(g.cursor.value).toBe(2);
+    g.backspace();
+    expect(typed(g)).toBe('P_S_I__');
+    expect(g.cursor.value).toBe(1);
+    g.type('i');
     g.clear();
     expect(typed(g)).toBe('P_S_I__');
+  });
+
+  it('moves on after a letter, past an empty blank before it', () => {
+    const g = useDicorama(level);
+    g.pick(2);
+    g.type('n');
+    expect(g.cursor.value).toBe(3);
+    g.type('e');
+    expect(typed(g)).toBe('P_S_INE');
+    expect(g.cursor.value).toBe(0);
   });
 
   it('points at a word typed again', () => {
