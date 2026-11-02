@@ -74,7 +74,7 @@ précis reste.
 
 ## Banque et niveaux officiels
 
-Ce que génère `dicorama:levels` est la **banque** (`bank.json`, environ 15 Mo),
+Ce que génère `dicorama:levels` est la **banque** (`bank.json`, environ 15 Mo, lue en JSON),
 réservée à l'admin (le compte `cara+`) : elle n'est chargée qu'à l'ouverture de la
 banque ou de l'éditeur, jamais par les joueurs. Ses niveaux n'ont pas d'énigmes :
 jouée depuis la banque, un niveau prend ses 6 mots les plus courants, une base

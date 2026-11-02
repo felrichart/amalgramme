@@ -2,14 +2,16 @@
 /* The bank, every level the generator found (admin only), to play any or edit it
  * into an official one: filter by length, by a piece of pattern ("RE_E", blanks
  * typed as _ . or space) or by a word it holds (frivole, also matching the
- * words of its base: frivoles), or draw one at random. */
-import { ref, computed } from 'vue';
+ * words of its base: frivoles), or draw one at random. The search box has the
+ * focus on arrival. */
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import '../theme.js';
 import { getToday } from '../../utils/today.js';
-import { bank, loadProgress, withRiddles } from '../levels.js';
+import { keysWithPrefix } from '../../utils/storage.js';
+import { bank, bankIndex, loadProgress, withRiddles, progressKey } from '../levels.js';
 import { officialLevel } from '../store.js';
-import { buildLevel, progressOf, keyOf } from '../game.js';
+import { progressOf, keyOf } from '../game.js';
 import { dayColor } from '../days.js';
 
 const router = useRouter();
@@ -17,16 +19,17 @@ const LENGTHS = [4, 5, 6, 7, 8, 9];
 const PAGE = 150;
 const STATUS = { draft: 'brouillon', valid: 'validé' };
 
-const rows = bank().map((l) => {
-  const { found } = loadProgress(l.pattern);
-  const level = buildLevel(l);
-  const bases = [...level.answers.values()].flatMap((a) => a.spellings.map((sp) => keyOf(sp.base)));
+const { sizes, byKey } = bankIndex();
+// Only the levels played on this device have a score to show.
+const played = new Set(keysWithPrefix(progressKey('')));
+const rows = bank().map((l, i) => {
   const row = {
+    i,
     pattern: l.pattern,
-    size: `${level.answers.size} mots`,
+    size: `${sizes[i]} mots`,
     status: STATUS[officialLevel(l.pattern)?.status],
-    words: new Set([...level.answers.keys(), ...bases]),
   };
+  const { found } = played.has(progressKey(l.pattern)) ? loadProgress(l.pattern) : { found: [] };
   if (!found.length) return row;
   const progress = progressOf(withRiddles(l), found);
   return {
@@ -36,18 +39,21 @@ const rows = bank().map((l) => {
   };
 });
 
+const queryEl = ref(null);
+onMounted(() => queryEl.value?.focus());
 const length = ref(null);
 const query = ref('');
 const shown = ref(PAGE);
 const needle = computed(() => query.value.toUpperCase().replace(/[.·\s]/g, '_'));
 const word = computed(() => keyOf(query.value.trim()));
-const filtered = computed(() =>
-  rows.filter(
+const filtered = computed(() => {
+  const holding = new Set(byKey.get(word.value));
+  return rows.filter(
     (r) =>
       (!length.value || r.pattern.length === length.value) &&
-      (r.pattern.includes(needle.value) || r.words.has(word.value)),
-  ),
-);
+      (r.pattern.includes(needle.value) || holding.has(r.i)),
+  );
+});
 
 function setLength(len) {
   length.value = length.value === len ? null : len;
@@ -97,6 +103,7 @@ function playRandom() {
       </div>
       <div class="search">
         <input
+          ref="queryEl"
           v-model="query"
           class="query"
           type="search"

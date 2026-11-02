@@ -7,7 +7,6 @@
  * words, and the riddles' homonyms, are bonus words, kept apart. Every riddle
  * found wins the star, every word found the trophy.
  */
-import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
 export const POINTS_MIN = 25;
@@ -32,7 +31,12 @@ export const TIERS = TIER_FLOORS.length;
 export const CLUES_MIN = 6;
 export const CLUES_MAX = 12;
 
-export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
+// As normalizeChar on each letter, the whole word at once (much faster on the bank).
+export const keyOf = (word) =>
+  word
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
 
 const sigmoid = (z) => 1 / (1 + Math.exp(-z));
 // The S-curve on [0, 1], stretched to go from 0 to 1.

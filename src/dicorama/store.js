@@ -27,6 +27,10 @@ export const official = reactive({
 });
 // When it was last fetched, and whether as the admin (who gets the drafts too).
 let fetched = { at: saved.fetchedAt ?? 0, admin: saved.admin === true };
+// A failed fetch isn't tried again before RETRY_MS (unless forced): an unreachable
+// Worker would otherwise hold every navigation for its whole timeout.
+const RETRY_MS = 30_000;
+let failedAt = 0;
 
 function keep() {
   writeJSON(KEY, { ...official, fetchedAt: fetched.at, admin: fetched.admin });
@@ -37,10 +41,10 @@ function keep() {
 export async function loadOfficial(maxAgeMs = CACHE_MS) {
   if (!API_URL) return;
   const fresh = Date.now() - fetched.at < maxAgeMs && fetched.admin === isAdmin.value;
-  if (maxAgeMs > 0 && fresh) return;
+  if (maxAgeMs > 0 && (fresh || Date.now() - failedAt < RETRY_MS)) return;
   try {
     const res = await request('/dicorama', { timeout: 5000 });
-    if (!res.ok) return;
+    if (!res.ok) return void (failedAt = Date.now());
     const data = await res.json();
     official.levels = Array.isArray(data.levels) ? data.levels : [];
     official.definitions = isObject(data.definitions) ? data.definitions : {};
@@ -48,6 +52,7 @@ export async function loadOfficial(maxAgeMs = CACHE_MS) {
     keep();
   } catch {
     // Offline: keep the device's copy.
+    failedAt = Date.now();
   }
 }
 

@@ -12,7 +12,7 @@ import {
   storedSpelling,
 } from '../src/dicorama/game.js';
 import BANK from '../src/dicorama/bank.json';
-import { loadBank, bankLevel, loadProgress } from '../src/dicorama/levels.js';
+import { loadBank, bankLevel, bankIndex, loadProgress } from '../src/dicorama/levels.js';
 import {
   draftFrom,
   setRiddle,
@@ -174,6 +174,7 @@ describe('list', () => {
 describe('judge', () => {
   it('matches without accents and flags repeats', () => {
     expect(keyOf('Piscîne')).toBe('PISCINE');
+    expect(keyOf('cœur')).toBe('CŒUR');
     expect(judge(level, 'PISCINE', [])).toBe('new');
     expect(judge(level, 'PISCINE', ['PISCINE'])).toBe('dup');
     expect(judge(level, 'POSTIER', [])).toBe('unknown');
@@ -355,11 +356,21 @@ describe('levels', () => {
   }, 60_000);
 
   it('plays a bank level by its pattern, with its default riddles', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => BANK }));
     await loadBank();
+    vi.unstubAllGlobals();
     const l = bankLevel(BANK[0].pattern);
     expect(l.pattern).toBe(BANK[0].pattern);
     expect(l.riddles).toHaveLength(6);
     expect(bankLevel('ZZZZZ')).toBe(null);
+  });
+
+  it('indexes the bank by word and by base', () => {
+    const { sizes, byKey } = bankIndex();
+    const i = BANK.findIndex((l) => l.pattern === 'CHA__ANT');
+    expect(sizes[i]).toBe(buildLevel(BANK[i]).answers.size);
+    expect(byKey.get('CHASSANT')).toContain(i);
+    expect(byKey.get('CHASSER')).toContain(i);
   });
 });
 
