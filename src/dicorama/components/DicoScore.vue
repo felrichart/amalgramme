@@ -1,5 +1,5 @@
 <script setup>
-/* The score on two digits, in the day's colour, over `max` (a number, or "?");
+/* The score, in the day’s colour, over `max` (a number, or "?");
  * `stacked` puts the max under the digits. A changed digit rolls up, then the
  * score pops. */
 import { ref, computed, watch } from 'vue';
@@ -9,8 +9,6 @@ const props = defineProps({
   max: { type: [Number, String], required: true },
   stacked: { type: Boolean, default: false },
 });
-
-const pad = (n) => String(n).padStart(2, '0');
 
 /* `changes` counts the changes, to replay the animation; `from` is the old value. */
 function rolling(source) {
@@ -26,8 +24,9 @@ const score = rolling(() => props.value);
 const top = rolling(() => props.max);
 
 const digits = computed(() => {
-  const now = pad(props.value);
-  const old = pad(score.from.value);
+  const now = String(props.value);
+  // Right-aligned on the new value: a digit appearing rolls up from blank.
+  const old = String(score.from.value).padStart(now.length, ' ').slice(-now.length);
   return [...now].map((ch, i) => ({
     chars: score.changes.value && old[i] !== ch ? [old[i], ch] : [ch],
   }));

@@ -17,7 +17,6 @@ import DicoBook from '../components/DicoBook.vue';
 
 const router = useRouter();
 const today = getToday();
-const pad = (n) => String(n).padStart(2, '0');
 
 // Recomputed when the levels refresh; newest first.
 const days = computed(() =>
@@ -87,7 +86,7 @@ const play = (d) => router.push(`/dicorama/${d.date}`);
             >
           </span>
           <p v-if="started(todays)" class="progress">
-            <span class="big-score">{{ pad(todays.score) }}</span>
+            <span class="big-score">{{ todays.score }}</span>
             <span class="big-max">/{{ todays.total }}</span>
             <span v-if="todays.bonus" class="bonus big" :aria-label="`${todays.bonus} mots bonus`">
               <DicoBook />{{ todays.bonus }}
@@ -125,7 +124,7 @@ const play = (d) => router.push(`/dicorama/${d.date}`);
                   class="score"
                   :aria-label="`score ${d.score} sur ${d.total}`"
                 >
-                  <span class="value">{{ pad(d.score) }}</span>
+                  <span class="value">{{ d.score }}</span>
                   <span class="max">/{{ d.total }}</span>
                   <span v-if="d.bonus" class="bonus" :aria-label="`${d.bonus} mots bonus`">
                     <DicoBook />{{ d.bonus }}

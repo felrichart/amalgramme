@@ -34,18 +34,21 @@ const unhover = (e) => e.pointerType === 'mouse' && (tip.value = null);
 const tap = (i) => (tip.value = tip.value === i ? null : i);
 
 /* How far the bubble moves sideways to stay on the screen, its tail kept on the
- * star. */
+ * star, and whether it goes under the star, for want of room above it. */
 const EDGE = 8;
 let bubbleEl = null;
 const setBubble = (el) => (bubbleEl = el);
 const shift = ref(0);
+const under = ref(false);
 watch(tip, async () => {
   shift.value = 0;
+  under.value = false;
   await nextTick();
   if (!bubbleEl || tip.value == null) return;
   const r = bubbleEl.getBoundingClientRect();
   const right = document.documentElement.clientWidth - EDGE;
   shift.value = r.left < EDGE ? EDGE - r.left : r.right > right ? right - r.right : 0;
+  under.value = r.top < EDGE;
 });
 
 const root = ref(null);
@@ -83,6 +86,7 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
         v-if="tip === i"
         :ref="setBubble"
         class="bubble"
+        :class="{ under }"
         role="tooltip"
         :style="{ '--shift': `${shift}px` }"
         >{{ b.tip }}</span
@@ -114,8 +118,8 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
   color: var(--dc-day-soft);
   filter: none;
 }
-/* Above the star, its tail at the star's middle, the text running left: the
- * stars often sit at the right of a row. */
+/* Above the star (under it at the top of the screen), its tail at the star's
+ * middle, the text running left: the stars often sit at the right of a row. */
 .bubble {
   position: absolute;
   right: calc(50% - 16px);
@@ -142,6 +146,16 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
   right: calc(11px + var(--shift, 0px));
   border: 5px solid transparent;
   border-top-color: var(--dc-ink);
+}
+.bubble.under {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+.under::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--dc-ink);
 }
 .pop .mark.fresh {
   animation: mark-in 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 0.25s both;
