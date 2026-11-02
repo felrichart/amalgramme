@@ -2,3 +2,5 @@
 # link returned as `devMail` instead of being sent.
 MAIL_MODE=log
 APP_URL=http://localhost:5173
+# Everyone is the admin, signed in or not.
+ADMIN_ALL=1

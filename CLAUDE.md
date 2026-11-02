@@ -79,7 +79,8 @@ test/                          vitest: puzzle, word, gamestate, migration, daili
   to add email + password. Signed in, every save syncs to the account
   (`services/sync.js`, debounced); merging never loses progress, so the only
   question (`SyncPrompt`) is at sign-in when the device holds outside progress —
-  declining stashes it until logout.
+  declining stashes it until logout. In dev everyone is the admin: `npm run dev`
+  (`isAdmin`) and `wrangler dev` with `ADMIN_ALL=1` in `server/.dev.vars`.
 - **Stats** (`services/stats.js`): one attempt/solve per (puzzle, player); the
   player is the account when signed in, else the device id, and signing in claims
   the device's anonymous plays (`claimPlays`). Server keeps running counters.

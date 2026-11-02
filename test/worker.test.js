@@ -560,6 +560,13 @@ describe('dicorama', () => {
     expect((await put(level({ status: 'draft', clues: { PERLE: '' } }))).status).toBe(200);
   });
 
+  it('makes everyone the admin with ADMIN_ALL, signed in or not', async () => {
+    const env = { ...fakeEnv(), ADMIN_ALL: '1' };
+    const put = await call(env, 'PUT', '/dicorama/levels/P__L_', level({ status: 'draft' }));
+    expect(put.status).toBe(200);
+    expect((await read(env)).levels).toHaveLength(1);
+  });
+
   it('lets only the admin write, levels and definitions', async () => {
     const env = fakeEnv();
     const bob = await signup(env, 'bob');

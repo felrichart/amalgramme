@@ -15,7 +15,10 @@ export const user = ref(token.value && isObject(saved.user) ? saved.user : null)
 
 export const username = computed(() => user.value?.username ?? '');
 export const connected = computed(() => !!token.value && !!user.value);
-export const isAdmin = computed(() => username.value === ADMIN_NAME);
+// `npm run dev`: everyone is the admin (the dev Worker too, see ADMIN_ALL in server/).
+export const isAdmin = computed(
+  () => import.meta.env.MODE === 'development' || username.value === ADMIN_NAME,
+);
 /* A PIN-only account that must add an email + password before its deadline. */
 export const needsSecuring = computed(() => !!user.value?.legacy);
 export const needsVerification = computed(

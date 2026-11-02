@@ -210,9 +210,18 @@ const signedIn = (handler) => async (ctx) => {
   return handler({ ...ctx, user });
 };
 
+/* `wrangler dev` with ADMIN_ALL=1 (.dev.vars, never deployed): everyone is the
+ * admin, signed in or not. */
+const everyoneAdmin = (env) => env.ADMIN_ALL === '1';
+const isAdminUser = (env, user) => everyoneAdmin(env) || user?.username === ADMIN_NAME;
+
 /* Same, restricted to the admin account. */
-const adminOnly = (handler) =>
-  signedIn((ctx) => (ctx.user.username === ADMIN_NAME ? handler(ctx) : fail('forbidden', 403)));
+function adminOnly(handler) {
+  const checked = signedIn((ctx) =>
+    isAdminUser(ctx.env, ctx.user) ? handler(ctx) : fail('forbidden', 403),
+  );
+  return (ctx) => (everyoneAdmin(ctx.env) ? handler(ctx) : checked(ctx));
+}
 
 /* Mint a one-shot email token (replacing pending ones of its kind) and mail it.
  * Returns { devMail: link } when mail is only logged (dev), else {}. */
@@ -542,7 +551,7 @@ async function deleteLevel({ env, params, user }) {
     .first();
   if (!level) return fail('not_found', 404);
   const owner = user.username === level.author && level.created_at >= user.created_at;
-  if (!owner && user.username !== ADMIN_NAME) return fail('forbidden', 403);
+  if (!owner && !isAdminUser(env, user)) return fail('forbidden', 403);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM levels WHERE id = ?').bind(params.id),
     ...forgetPuzzle(env, 'com-' + params.id),
@@ -758,7 +767,7 @@ const isReasons = (v) =>
 async function getDicorama({ request, env }) {
   const user = await sessionUser(env, request);
   const cols = 'pattern, status, date, words, clues, banned, reasons, conjugated';
-  const levels = user?.username === ADMIN_NAME
+  const levels = isAdminUser(env, user)
     ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
     : env.DB.prepare(
         `SELECT ${cols} FROM dicorama_levels WHERE status = 'valid' AND date <= ? ORDER BY date`,
