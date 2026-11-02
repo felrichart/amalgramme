@@ -2,23 +2,21 @@
  * Dicorama rules: a silhouette (`P_S_I__`) and every word that fits it.
  *
  * A word is what's typed (without accents): its master spelling, shown, and its
- * homonyms (tigres, tigrés), found together. Words sharing a base (dur: dure,
- * durs) form a family: its first find counts once, its later ones join it
- * without counting. The common families are the list, a numbered spot each,
- * the score counting them; the rare ones are kept apart, found as a bonus. A
- * level wins a star at a third of the list, two at two thirds, three with all
- * of it, and the golden book once every rare family is found.
+ * homonyms (tigres, tigrés), found together. A level's riddles are a few of its
+ * words, each with a clue, a numbered spot each; the score counts them. Its other
+ * words, and the riddles' homonyms, are bonus words, kept apart. Every riddle
+ * found wins the star, every word found the trophy.
  */
 import { normalizeChar } from '../../shared/word-rules.js';
 
 export const BLANK = '_';
 export const POINTS_MIN = 25;
 export const POINTS_MAX = 99;
-/* A family's points, its rarity on a scale (never shown to players), which makes
- * it rare by default from RARE_POINTS: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
+/* A base's points, its rarity on a scale (never shown to players), common below
+ * RARE_POINTS: POINTS_MIN down to FREQ_COMMON (per million), POINTS_MAX from
  * FREQ_RARE, and in between they follow an S-curve of the word's rarity (its log
  * frequency): slow near both ends, fastest at CENTRE (0 = FREQ_COMMON, 1 =
- * FREQ_RARE), more so the higher STEEPNESS. Tuned so the families of the 5 to
+ * FREQ_RARE), more so the higher STEEPNESS. Tuned so the bases of the 5 to
  * 7-letter levels split about 5/30/35/25/5 % across the tiers (`npm run
  * dicorama:levels` prints it). */
 const FREQ_COMMON = 66;
@@ -30,8 +28,9 @@ export const RARE_POINTS = 75;
 const TIER_FLOORS = [POINTS_MIN, POINTS_MIN + 1, 50, RARE_POINTS, POINTS_MAX];
 export const TIERS = TIER_FLOORS.length;
 
-// The fewest families a list can hold, so its stars come one at a time.
-export const LIST_MIN = 11;
+// Riddles per level.
+export const CLUES_MIN = 6;
+export const CLUES_MAX = 12;
 
 export const keyOf = (word) => [...word].map(normalizeChar).join('').toUpperCase();
 
@@ -57,64 +56,84 @@ export function tierLabel(tier) {
   return low === high ? `${low}` : `${low}–${high}`;
 }
 
-/*
- * A stored word (see buildLevel) of the family of `base` (as common as `freq`), as
- * its spellings, each with its base's frequency.
- */
-export function spellingsOf(word, base, freq) {
-  return (Array.isArray(word) ? word : [word]).map((sp) => {
-    const [form, label = '', of = base, ofFreq = freq] = Array.isArray(sp) ? sp : [sp];
-    return { form, label, base: of, freq: ofFreq };
-  });
+/* A spelling as a level stores it (see buildLevel). */
+export function storedSpelling({ form, freq, baseFreq, label = '', base = form }) {
+  if (base !== form) return [form, freq, baseFreq, label, base];
+  return label ? [form, freq, baseFreq, label] : [form, freq, baseFreq];
 }
 
-/* Spellings as a word of the family of `base` stores them. */
-export function storedWord(spellings, base) {
-  if (spellings.length === 1 && spellings[0].form === base && !spellings[0].label) return base;
-  return spellings.map(({ form, label, base: of, freq }) => {
-    if (of !== base) return [form, label, of, freq];
-    return label ? [form, label] : form;
-  });
-}
+const spellingOf = ([form, freq, baseFreq, label = '', base = form]) => ({
+  form,
+  freq,
+  baseFreq,
+  label,
+  base,
+});
 
 /*
- * A level as bank.json (and the Worker) stores it: `[freq, base, ...words]`
- * per family, a word being its spellings, master first, or `base` alone when that's
- * its only one. A spelling is `form` (the base itself), `[form, label]` (a form of
- * the base: ["dures", "fém. plur."]) or `[form, label, base, freq]` (a homonym of
- * another base, as common as `freq`: ["tigrés", "part. passé plur.", "tigrer",
- * 0.05]). `rare` lists the rare families' bases; without it, a family is rare from
- * RARE_POINTS; the others are the list. `banned` spellings are left out,
- * and with them a word or family left without any. Each answer is keyed by its
- * unaccented spelling.
+ * A level as bank.json (and the Worker) stores it: `words`, every spelling as
+ * `[form, freq, baseFreq, label, base]` (as common as `freq`, per million; its
+ * base as common as `baseFreq`, all its forms counted), `label` ("fém. plur.")
+ * and `base` left out when empty or the form itself. Spellings typed alike make
+ * a word, the first its master. `clues` maps the riddles' typed keys to their
+ * clue. `banned` spellings are left out, and with them a word without any. Each
+ * answer is keyed by its unaccented spelling; its `points` are its master's
+ * base's rarity.
  *
  * `refused` maps what's typed to why it isn't an answer (see REASONS): the
  * `conjugated` keys (verb forms that fit, found by the generator), then each
  * banned spelling by its `reasons` ('invalid' when it has none).
  */
-export function buildLevel({ pattern, words, rare, banned = [], conjugated = [], reasons = {} }) {
+export function buildLevel({
+  pattern,
+  words,
+  clues = {},
+  banned = [],
+  conjugated = [],
+  reasons = {},
+}) {
   const answers = new Map();
-  const families = [];
-  for (const [freq, base, ...raw] of words) {
-    const id = families.length;
-    const keys = raw.flatMap((w) => {
-      const spellings = spellingsOf(w, base, freq).filter((sp) => !banned.includes(sp.form));
-      if (!spellings.length) return [];
-      const key = keyOf(spellings[0].form);
-      answers.set(key, { key, display: spellings[0].form, spellings, family: id });
-      return [key];
-    });
-    if (!keys.length) continue;
-    const points = wordPoints(freq);
-    const isRare = rare ? rare.includes(base) : points >= RARE_POINTS;
-    families.push({ id, base, freq, points, rare: isRare, keys });
+  for (const stored of words) {
+    const sp = spellingOf(stored);
+    if (banned.includes(sp.form)) continue;
+    const key = keyOf(sp.form);
+    const answer = answers.get(key);
+    if (answer) answer.spellings.push(sp);
+    else
+      answers.set(key, {
+        key,
+        display: sp.form,
+        spellings: [sp],
+        freq: sp.freq,
+        points: wordPoints(sp.baseFreq),
+        clue: clues[key] ?? null,
+      });
   }
+  const riddles = [...answers.values()]
+    .filter((a) => a.clue != null)
+    .sort((a, b) => a.display.localeCompare(b.display, 'fr'))
+    .map((a) => a.key);
   const refused = new Map(conjugated.map((k) => [k, 'conj']));
   for (const form of banned) {
     const key = keyOf(form);
     if (!answers.has(key)) refused.set(key, reasons[form] ?? 'invalid');
   }
-  return { pattern, answers, families, refused };
+  return { pattern, answers, riddles, refused };
+}
+
+/* A bank level's riddles, unclued: its CLUES_MIN commonest words, a base each
+ * while there are enough. */
+export function defaultClues(level) {
+  const words = [...buildLevel(level).answers.values()].sort((a, b) => b.freq - a.freq);
+  const bases = new Set();
+  const firsts = words.filter((w) => {
+    const base = w.spellings[0].base;
+    if (bases.has(base)) return false;
+    bases.add(base);
+    return true;
+  });
+  const picked = [...firsts, ...words.filter((w) => !firsts.includes(w))].slice(0, CLUES_MIN);
+  return Object.fromEntries(picked.map((w) => [w.key, '']));
 }
 
 /* Why a word is banned from a level, and what the player is told. */
@@ -131,99 +150,70 @@ export function judge(level, key, found) {
   return found.includes(key) ? 'dup' : 'new';
 }
 
-const familyOf = (level, key) => level.answers.get(key)?.family;
-
-/* Whether `key` is its family's first find, the words in `found` being found. */
-export function opens(level, found, key) {
-  const id = familyOf(level, key);
-  return !found.some((k) => k !== key && familyOf(level, k) === id);
-}
-
-/* The list words found to win each star, out of `total`. */
-export const starSteps = (total) => [Math.ceil(total / 3), Math.ceil((total * 2) / 3), total];
+export const isRiddle = (level, key) => level.answers.get(key)?.clue != null;
 
 /*
- * Where a player stands, the words in `found` being found: `score`, the list's
- * families found, out of `total`; `rare` families found, out of `rareTotal`;
- * `steps`, the score of each star; `stars`, 0 to 3; `book`, every rare family
- * found (there being some).
+ * The level's list: a numbered spot per riddle ('clue'), alphabetical, then a row
+ * per bonus word found ('bonus'), alphabetical, shown apart: a word that's no
+ * riddle, or a riddle's homonyms (`of`: its key and display), the first of them
+ * on the card.
+ * A bonus row's `kids` are its card's homonyms; `keys`, the words it shows.
+ */
+export function listOf(level, found) {
+  const kidsOf = (key, spellings) => spellings.map((spelling) => ({ key, spelling }));
+  const clueRows = level.riddles.map((key, i) => {
+    const answer = level.answers.get(key);
+    const isFound = found.includes(key);
+    return {
+      id: `c${key}`,
+      kind: 'clue',
+      num: i + 1,
+      clue: answer.clue,
+      answer,
+      found: isFound,
+      keys: isFound ? [key] : [],
+      kids: [],
+    };
+  });
+  const bonusRows = found.flatMap((key) => {
+    const answer = level.answers.get(key);
+    if (!answer) return [];
+    if (answer.clue == null) {
+      const kids = kidsOf(key, answer.spellings.slice(1));
+      return [{ id: `b${key}`, kind: 'bonus', answer, found: true, keys: [key], kids }];
+    }
+    const [, first, ...rest] = answer.spellings;
+    if (!first) return [];
+    const card = { ...answer, display: first.form, spellings: [first, ...rest] };
+    const kids = kidsOf(key, rest);
+    const of = { key, display: answer.display };
+    return [{ id: `h${key}`, kind: 'bonus', of, answer: card, found: true, keys: [], kids }];
+  });
+  bonusRows.sort((a, b) => a.answer.display.localeCompare(b.answer.display, 'fr'));
+  return [...clueRows, ...bonusRows];
+}
+
+/*
+ * Where a player stands, the words in `found` being found: `score`, the riddles
+ * found, out of `total`; `bonus`, the bonus rows found (see listOf), out of
+ * `bonusTotal`; `star`, every riddle found; `trophy`, every word found.
  */
 export function progressOf(level, found) {
-  const opened = new Set(found.map((k) => familyOf(level, k)));
-  const families = level.families.filter((f) => opened.has(f.id));
-  const rare = families.filter((f) => f.rare).length;
-  const score = families.length - rare;
-  const total = level.families.filter((f) => !f.rare).length;
-  const rareTotal = level.families.length - total;
-  const steps = starSteps(total);
+  const words = found.filter((k) => level.answers.has(k));
+  const homonyms = (a) => a.clue != null && a.spellings.length > 1;
+  const bonusOf = (answers) => answers.filter((a) => a.clue == null || homonyms(a)).length;
+  const score = words.filter((k) => isRiddle(level, k)).length;
+  const total = level.riddles.length;
+  const bonus = bonusOf(words.map((k) => level.answers.get(k)));
+  const bonusTotal = bonusOf([...level.answers.values()]);
   return {
     score,
     total,
-    rare,
-    rareTotal,
-    steps,
-    stars: steps.filter((s) => score >= s).length,
-    book: rareTotal > 0 && rare === rareTotal,
+    bonus,
+    bonusTotal,
+    star: total > 0 && score === total,
+    trophy: words.length === level.answers.size,
   };
-}
-
-/* The most sub-words a spot of the list may show: its family's every spelling
- * but the one filling it. */
-export function kidsMax(level) {
-  const spellings = (f) => f.keys.reduce((n, k) => n + level.answers.get(k).spellings.length, 0);
-  return Math.max(0, ...level.families.filter((f) => !f.rare).map((f) => spellings(f) - 1));
-}
-
-/*
- * The level's list, alphabetical: a numbered spot per family of the list
- * ('main'), filled by its first find, and a row per rare family found ('rare'),
- * shown apart.
- * A row's `kids` are its word's homonyms then its family's later finds
- * (`variant`, with their own homonyms), oldest first; `keys`, every word it
- * shows.
- */
-export function listOf(level, found) {
-  const firstWord = (f) => level.answers.get(f.keys[0]);
-  const sorted = [...level.families].sort((a, b) =>
-    firstWord(a).display.localeCompare(firstWord(b).display, 'fr'),
-  );
-  // Each family's finds, oldest first.
-  const finds = new Map();
-  for (const key of [...found].reverse()) {
-    const id = familyOf(level, key);
-    finds.set(id, [...(finds.get(id) ?? []), key]);
-  }
-  const homonyms = (answer) =>
-    answer.spellings.slice(1).map((spelling) => ({ key: answer.key, spelling, kind: 'homonym' }));
-
-  let num = 0;
-  const rows = [];
-  for (const f of sorted) {
-    const [key, ...later] = finds.get(f.id) ?? [];
-    const answer = key ? level.answers.get(key) : null;
-    if (f.rare && !answer) continue;
-    const kids = !key
-      ? []
-      : [
-          ...homonyms(answer),
-          ...later.flatMap((k) => {
-            const a = level.answers.get(k);
-            return [{ key: k, spelling: a.spellings[0], kind: 'variant' }, ...homonyms(a)];
-          }),
-        ];
-    rows.push({
-      id: `f${f.id}`,
-      kind: f.rare ? 'rare' : 'main',
-      num: f.rare ? null : ++num,
-      answer,
-      found: !!key,
-      keys: key ? [key, ...later] : [],
-      kids,
-      // A spot stays put whichever word fills it.
-      sort: f.rare ? answer.display : firstWord(f).display,
-    });
-  }
-  return rows.sort((a, b) => a.sort.localeCompare(b.sort, 'fr'));
 }
 
 const VOWEL = /^[aeiouyàâäéèêëîïôöûùüœæ]/i;

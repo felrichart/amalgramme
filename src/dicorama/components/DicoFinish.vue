@@ -1,8 +1,7 @@
 <script setup>
 /*
- * The celebration over the board, a badge won: a star at a third of the list
- * ('one'), at two thirds ('two'), with all of it ('all'), or the golden book once
- * every rare word is found ('book'). Tiles burst out over it.
+ * The celebration over the board, a badge won: the star, every riddle found
+ * ('star'), or the trophy, every word found ('trophy'). Tiles burst out over it.
  */
 import { computed } from 'vue';
 import DicoStar from './DicoStar.vue';
@@ -16,28 +15,10 @@ const props = defineProps({
 });
 const emit = defineEmits(['more']);
 
-const STARS = { one: 1, two: 2, all: 3, book: 0 };
-const TITLES = {
-  one: 'Bravo !',
-  two: 'Superbe !',
-  all: 'Liste complète !',
-  book: 'Rien ne vous échappe !',
-};
-const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
-// The list words still to find for the next star.
-const left = computed(() => {
-  const { steps, score } = props.progress;
-  return { one: steps[1], two: steps[2] }[props.kind] - score;
-});
-const rareLeft = computed(() => props.progress.rare < props.progress.rareTotal);
+const TITLES = { star: 'Bravo !', trophy: 'Rien ne vous échappe !' };
+const bonusLeft = computed(() => props.progress.bonus < props.progress.bonusTotal);
 const moreLabel = computed(() =>
-  props.kind === 'one' || props.kind === 'two'
-    ? 'Trouver plus de mots'
-    : props.kind === 'all' && rareLeft.value
-      ? 'Chercher les rares'
-      : props.progress.stars < 3
-        ? 'Continuer'
-        : 'Revoir la liste',
+  props.kind === 'star' && bonusLeft.value ? 'Chercher les bonus' : 'Revoir la liste',
 );
 
 // Spread on the golden angle, so they look scattered with no randomness.
@@ -66,34 +47,18 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
       </span>
     </div>
     <div class="card" role="dialog" aria-modal="true" :aria-label="TITLES[kind]">
-      <DicoMarks
-        class="marks"
-        :stars="STARS[kind]"
-        :book="kind === 'book'"
-        :steps="progress.steps"
-        pop
-      />
+      <DicoMarks class="marks" :star="kind === 'star'" :trophy="kind === 'trophy'" pop />
       <h2 class="title">{{ TITLES[kind] }}</h2>
-      <template v-if="kind === 'one' || kind === 'two'">
+      <template v-if="kind === 'star'">
         <p class="text">
-          <strong>{{ plural(progress.score, 'mot') }}</strong> trouvés.
+          Les <strong>{{ progress.total }} énigmes</strong>, trouvées&#8239;: l’étoile est à vous.
         </p>
-        <p v-if="left > 0" class="text nudge">
-          Encore <strong>{{ left }}</strong> pour
-          {{ kind === 'one' ? 'la deuxième étoile' : 'compléter la liste' }}.
-        </p>
-      </template>
-      <template v-else-if="kind === 'all'">
-        <p class="text">
-          Les <strong>{{ progress.total }} mots</strong> de la liste, trouvés.
-        </p>
-        <p v-if="rareLeft" class="text rare-line">
-          <DicoBook class="book" />Il reste des mots rares à trouver…
+        <p v-if="bonusLeft" class="text bonus-line">
+          <DicoBook class="book" />Il reste des mots bonus à trouver…
         </p>
       </template>
       <p v-else class="text">
-        Les <strong>{{ plural(progress.rareTotal, 'mot rare') }}</strong
-        >, trouvés&#8239;: il n'y en a plus aucun.
+        <strong>Tous les mots</strong>, énigmes et bonus, trouvés&#8239;: il n’en reste plus aucun.
       </p>
       <div class="actions">
         <button class="dc-button" type="button" @click="emit('more')">
@@ -156,7 +121,7 @@ const tiles = Array.from({ length: TILES }, (_, i) => {
 .text.nudge {
   font-style: italic;
 }
-.rare-line {
+.bonus-line {
   display: flex;
   align-items: center;
   justify-content: center;

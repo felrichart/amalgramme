@@ -6,7 +6,15 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { keyOf, tierOf, tierLabel, wordPoints, storedWord, TIERS, RARE_POINTS } from '../game.js';
+import {
+  keyOf,
+  tierOf,
+  tierLabel,
+  wordPoints,
+  storedSpelling,
+  TIERS,
+  RARE_POINTS,
+} from '../game.js';
 
 const file = (name) => fileURLToPath(new URL(`../${name}`, import.meta.url));
 const tsvPath = process.argv[2] ?? file('data/dictionnaire.tsv');
@@ -23,22 +31,21 @@ const skipped = new Set(config.skipped);
 const isSkipped = (pattern) =>
   skipped.has(pattern) || config.skippedEndings.some((end) => pattern.endsWith(end));
 
-const LENGTHS = [4, 5, 6, 7];
-// Blanks per level, by its length: 2 for 4 letters, else 3 or 4.
-const blanksFor = (len) => (len === 4 ? [2] : [3, 4]);
-// Shown letters per level, at least.
+const LENGTHS = [4, 5, 6, 7, 8, 9];
+// Blanks per level, at least MIN_SHOWN letters staying shown.
+const BLANKS = [2, 3, 4];
 const MIN_SHOWN = 2;
-// Normal families (one spot each, not rare) per level.
-const MIN_SPOTS = 10;
-const MAX_SPOTS = 25;
-// A family is known when this common (per million); levels need enough of them.
-const KNOWN_FREQ = 1;
-const MIN_KNOWN = 5;
-// Share of families whose words are all plurals, at most (…ES, …ÉS farms).
-const MAX_PLURALS = 0.5;
-// Verb forms that fit a level (conjugations, present participles), fewer than
-// this: the player's told they're no answer, so a …AIS festival isn't a level.
-const MAX_CONJUGATED = 200;
+// Words per level: enough for its riddles (see CLUES_MIN in game.js), few enough
+// to find them all.
+const MIN_WORDS = 6;
+const MAX_WORDS = 30;
+// Common bases (under RARE_POINTS) per level, at least.
+const MIN_COMMON = 5;
+// Share of words that are plurals, at most (…ES, …ÉS farms).
+const MAX_PLURALS = 0.6;
+// Conjugated verb forms that fit a level, fewer than this: the player's told
+// they're no answer, so a …AIS festival isn't a level.
+const MAX_CONJUGATED = 250;
 // Frequency (per million) given to words added by hand.
 const ADDED_FREQ = 1;
 
@@ -49,13 +56,11 @@ const [MOT, LEMME, TAGS, FREQMOT, FREQLEMME] = [0, 1, 2, 3, 4];
 const isVerb = (tags) => tags.some((t) => /^v\d/.test(t));
 const isPlural = (tags) => tags.includes('pl') && !tags.includes('sg') && !tags.includes('inv');
 
-/* Whether a reading makes a playable word: anything but a verb, an infinitive, or
- * a past participle that agrees (fatigué, fatiguée; not dormi). Conjugations and
- * present participles are out: the lexicon can't tell il cogne from un cogne, and
- * a present participle used as an adjective has an entry of its own (fatigant). */
+/* Whether a reading makes a playable word: anything but a verb, an infinitive or
+ * a participle, past or present (dormi, fatiguées, chantant). Conjugations are
+ * out: the lexicon can't tell il cogne from un cogne. */
 function isPlayable(tags) {
-  if (!isVerb(tags)) return true;
-  return tags.includes('infi') || (tags.includes('ppas') && tags.includes('adj'));
+  return !isVerb(tags) || ['infi', 'ppas', 'ppre'].some((t) => tags.includes(t));
 }
 
 /* A reading's rank as a spelling's sense, best first: noun, adjective (or anything
@@ -69,11 +74,14 @@ function rankOf(tags) {
 }
 
 /* What a spelling is of its base, for the definition bubble: "fém. plur." (de
- * vert), "part. passé fém." (d'acheter); nothing when it's the base itself. A
- * feminine base's forms aren't called feminine (tortures: plur. de torture). */
+ * vert), "part. passé fém." (d'acheter), "part. présent" (de chanter); nothing
+ * when it's the base itself. A feminine base's forms aren't called feminine
+ * (tortures: plur. de torture). */
 function labelOf(form, sense, femBases) {
   if (sense.lemma === form) return '';
-  const parts = isVerb(sense.tags) ? ['part. passé'] : [];
+  const verb =
+    isVerb(sense.tags) && (sense.tags.includes('ppre') ? 'part. présent' : 'part. passé');
+  const parts = verb ? [verb] : [];
   if (sense.tags.includes('fem') && !femBases.has(sense.lemma)) parts.push('fém.');
   if (isPlural(sense.tags)) parts.push('plur.');
   return parts.join(' ') || 'forme';
@@ -143,8 +151,6 @@ function loadDictionary(path) {
         label,
         baseFreq: baseFreqs.get(base),
       })),
-      base: master.base,
-      freq: baseFreqs.get(master.base),
       plural: isPlural(master.sense.tags),
     });
   }
@@ -156,7 +162,7 @@ function masks(len) {
   const out = [];
   for (let bits = 0; bits < 1 << len; bits++) {
     const shown = [...Array(len).keys()].filter((i) => bits & (1 << i));
-    if (shown.length >= MIN_SHOWN && blanksFor(len).includes(len - shown.length)) out.push(shown);
+    if (shown.length >= MIN_SHOWN && BLANKS.includes(len - shown.length)) out.push(shown);
   }
   return out;
 }
@@ -172,9 +178,7 @@ function curate(pattern, words) {
   });
   const added = (config.added[pattern] ?? []).map((w) => ({
     key: keyOf(w).toLowerCase(),
-    spellings: [{ form: w, freq: ADDED_FREQ, base: w, label: '' }],
-    base: w,
-    freq: ADDED_FREQ,
+    spellings: [{ form: w, freq: ADDED_FREQ, base: w, label: '', baseFreq: ADDED_FREQ }],
     plural: false,
   }));
   return [...kept, ...added];
@@ -183,31 +187,20 @@ function curate(pattern, words) {
 // A frequency as bank.json stores it, which the game rates.
 const round = (f) => Number(f.toPrecision(3));
 
-/* A pattern's words in families, one per base: its own word first (tigre before
- * tigres), then the commonest. It's a plural when all its words are. */
-function familiesIn(words) {
-  const families = new Map();
-  for (const w of words) {
-    if (!families.has(w.base)) families.set(w.base, { base: w.base, freq: w.freq, words: [] });
-    families.get(w.base).words.push(w);
-  }
-  return [...families.values()].map((f) => {
-    const own = (w) => w.spellings[0].form === f.base;
-    f.words.sort((a, b) => own(b) - own(a) || b.spellings[0].freq - a.spellings[0].freq);
-    return { ...f, plural: f.words.every((w) => w.plural) };
-  });
-}
-
 /* The level for `pattern`, or null when it fails a threshold. `conjugated`: the
  * verb forms that fit it. */
 function evaluate(pattern, words, conjugated) {
   if (conjugated.length >= MAX_CONJUGATED) return null;
-  const families = familiesIn(words);
-  const spots = families.filter((f) => wordPoints(round(f.freq)) < RARE_POINTS).length;
-  if (spots < MIN_SPOTS || spots > MAX_SPOTS) return null;
-  if (families.filter((f) => f.freq >= KNOWN_FREQ).length < MIN_KNOWN) return null;
-  if (families.filter((f) => f.plural).length > families.length * MAX_PLURALS) return null;
-  return { pattern, families, conjugated };
+  if (words.length < MIN_WORDS || words.length > MAX_WORDS) return null;
+  const common = new Set(
+    words
+      .map((w) => w.spellings[0])
+      .filter((sp) => wordPoints(round(sp.baseFreq)) < RARE_POINTS)
+      .map((sp) => sp.base),
+  );
+  if (common.size < MIN_COMMON) return null;
+  if (words.filter((w) => w.plural).length > words.length * MAX_PLURALS) return null;
+  return { pattern, words, conjugated };
 }
 
 /* The levels no other level narrows down: A___E goes when A__TE is a level. */
@@ -247,7 +240,7 @@ function candidates({ byLength, verbForms }) {
         if (groups.has(pattern)) forms.set(pattern, [...(forms.get(pattern) ?? []), key]);
       }
       for (const [pattern, group] of groups) {
-        if (group.length < MIN_SPOTS || isSkipped(pattern)) continue;
+        if (group.length < MIN_WORDS || isSkipped(pattern)) continue;
         const curated = curate(pattern, group);
         // Not a word added by hand.
         const added = new Set(curated.map((w) => w.key.toUpperCase()));
@@ -262,44 +255,42 @@ function candidates({ byLength, verbForms }) {
   );
 }
 
-/* A level's families as bank.json stores them (see game.js), commonest first. */
-const familyRows = (families) =>
-  [...families]
-    .sort((a, b) => b.freq - a.freq)
-    .map(({ freq, base, words }) => [
-      round(freq),
-      base,
-      ...words.map(({ spellings }) =>
-        storedWord(
-          spellings.map((s) => ({ ...s, freq: s.baseFreq && round(s.baseFreq) })),
-          base,
-        ),
+/* A level's words as bank.json stores them (see buildLevel, game.js): their
+ * spellings, master first, the commonest word first. */
+const wordRows = (words) =>
+  [...words]
+    .sort((a, b) => b.spellings[0].freq - a.spellings[0].freq)
+    .flatMap(({ spellings }) =>
+      spellings.map((sp) =>
+        storedSpelling({ ...sp, freq: round(sp.freq), baseFreq: round(sp.baseFreq) }),
       ),
-    ]);
+    );
 
 const levels = candidates(loadDictionary(tsvPath));
 // One level per line (too big for prettier).
 const lines = levels.map((l) =>
   JSON.stringify({
     pattern: l.pattern,
-    words: familyRows(l.families),
+    words: wordRows(l.words),
     ...(l.conjugated.length && { conjugated: l.conjugated }),
   }),
 );
 writeFileSync(file('bank.json'), `[\n${lines.join(',\n')}\n]\n`);
 
-// Families of the 5 to 7-letter levels by points tier: what the points formula is
-// tuned on.
+// The bases of the 5 to 7-letter levels' words by points tier: what the points
+// formula is tuned on.
 const freqs = levels
   .filter((l) => l.pattern.length >= 5 && l.pattern.length <= 7)
-  .flatMap((l) => l.families.map((f) => f.freq));
+  .flatMap((l) => [
+    ...new Map(l.words.map((w) => [w.spellings[0].base, w.spellings[0].baseFreq])).values(),
+  ]);
 if (process.env.DUMP_FREQS) writeFileSync(process.env.DUMP_FREQS, JSON.stringify(freqs));
 const tiers = Array(TIERS).fill(0);
 for (const f of freqs) tiers[tierOf(wordPoints(f))]++;
 const split = tiers
   .map((n, i) => `${tierLabel(i)} ${Math.round((100 * n) / freqs.length)}%`)
   .join(' · ');
-console.log(`Points des familles : ${split}`);
+console.log(`Points des bases : ${split}`);
 const perLength = {};
 for (const l of levels) perLength[l.pattern.length] = (perLength[l.pattern.length] ?? 0) + 1;
 const lengths = Object.entries(perLength).map(([len, n]) => `${n} de ${len} lettres`);

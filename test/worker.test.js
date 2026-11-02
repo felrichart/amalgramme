@@ -494,22 +494,23 @@ describe('play stats', () => {
 });
 
 describe('dicorama', () => {
+  const clues = Object.fromEntries(
+    ['PERLE', 'PELLE', 'POULE', 'PILLE', 'POILS', 'PARLE'].map((k) => [k, 'Un indice']),
+  );
   const level = (extra = {}) => ({
     status: 'valid',
     date: '2026-01-02',
-    words: [[1, 'perle', 'perle']],
-    rare: [],
+    words: [['perle', 13, 14]],
+    clues,
     banned: [],
     ...extra,
   });
   const read = async (env, token) => (await call(env, 'GET', '/dicorama', undefined, token)).json();
 
-  it('ships the lab levels as undated drafts, for the admin only', async () => {
+  it('drops the levels before riddles, keeping the picked definitions', async () => {
     const env = fakeEnv();
-    expect((await read(env)).levels).toEqual([]);
     const all = await read(env, await signup(env, 'cara+'));
-    expect(all.levels).toHaveLength(6);
-    expect(all.levels.every((l) => l.status === 'draft' && l.date === null)).toBe(true);
+    expect(all.levels).toEqual([]);
     expect(all.definitions.peul.index).toBe(2);
   });
 
@@ -523,8 +524,8 @@ describe('dicorama', () => {
     expect((await put('B___N', level({ date: '2026-01-03' }))).status).toBe(200);
     expect((await put('__NC_E', level({ status: 'draft', date: null }))).status).toBe(200);
     expect((await read(env)).levels.map((l) => l.pattern)).toEqual(['P__L_']);
-    // The three overwrite lab levels: still six.
-    expect((await read(env, admin)).levels).toHaveLength(6);
+    expect((await read(env)).levels[0].clues).toEqual(clues);
+    expect((await read(env, admin)).levels).toHaveLength(3);
   });
 
   it('keeps a day to one level, and a validated level to its day', async () => {
@@ -532,7 +533,7 @@ describe('dicorama', () => {
     const admin = await signup(env, 'cara+');
     const put = (pattern, body) => call(env, 'PUT', `/dicorama/levels/${pattern}`, body, admin);
     expect((await put('P__L_', level())).status).toBe(200);
-    expect((await put('P__L_', level({ rare: ['perle'] }))).status).toBe(200);
+    expect((await put('P__L_', level({ banned: ['perle'] }))).status).toBe(200);
     expect((await put('B___N', level())).status).toBe(409);
     expect((await put('B___N', level({ date: null }))).status).toBe(422);
     expect((await put('PERLE', level({ date: '2026-02-02' }))).status).toBe(422);
@@ -542,8 +543,21 @@ describe('dicorama', () => {
       refused,
     );
     expect((await put('P__L_', level({ reasons: { perle: 'nope' } }))).status).toBe(422);
-    // Any day, past ones too.
+    // Any day, past ones too, and up to 9 letters.
     expect((await put('B___N', level({ date: '2001-01-01' }))).status).toBe(200);
+    expect((await put('CHA__ANTS', level({ date: '2001-01-03' }))).status).toBe(200);
+  });
+
+  it('validates a level with 6 to 12 riddles, each clued; a draft as it is', async () => {
+    const env = fakeEnv();
+    const admin = await signup(env, 'cara+');
+    const put = (body) => call(env, 'PUT', '/dicorama/levels/P__L_', body, admin);
+    const { PERLE, ...five } = clues;
+    expect((await put(level({ clues: five }))).status).toBe(422);
+    expect((await put(level({ clues: { ...clues, PERLE: ' ' } }))).status).toBe(422);
+    expect((await put(level({ clues: { ...clues, perle: 'x' } }))).status).toBe(422);
+    expect((await put(level({ status: 'draft', clues: { PERLE } }))).status).toBe(200);
+    expect((await put(level({ status: 'draft', clues: { PERLE: '' } }))).status).toBe(200);
   });
 
   it('lets only the admin write, levels and definitions', async () => {
@@ -558,6 +572,7 @@ describe('dicorama', () => {
     expect((await read(env)).definitions['bénin']).toEqual({ index: 1, text: 'Doux.' });
     expect((await call(env, 'DELETE', path, {}, admin)).status).toBe(200);
     expect((await read(env)).definitions['bénin']).toBeUndefined();
+    expect((await call(env, 'PUT', '/dicorama/levels/P__L_', level(), admin)).status).toBe(200);
     expect((await call(env, 'DELETE', '/dicorama/levels/P__L_', {}, admin)).status).toBe(200);
     expect((await call(env, 'DELETE', '/dicorama/levels/P__L_', {}, admin)).status).toBe(404);
   });

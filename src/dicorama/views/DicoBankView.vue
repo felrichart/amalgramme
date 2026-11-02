@@ -1,37 +1,38 @@
 <script setup>
 /* The bank, every level the generator found (admin only), to play any or edit it
  * into an official one: filter by length, by a piece of pattern ("RE_E", blanks
- * typed as _ . or space) or by a word it holds (frivole, also matching its
- * family: frivoles), or draw one at random. */
+ * typed as _ . or space) or by a word it holds (frivole, also matching the
+ * words of its base: frivoles), or draw one at random. */
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import '../theme.js';
 import { getToday } from '../../utils/today.js';
-import { bank, loadProgress } from '../levels.js';
+import { bank, loadProgress, withRiddles } from '../levels.js';
 import { officialLevel } from '../store.js';
 import { buildLevel, progressOf, keyOf } from '../game.js';
 import { dayColor } from '../days.js';
 
 const router = useRouter();
-const LENGTHS = [4, 5, 6, 7];
+const LENGTHS = [4, 5, 6, 7, 8, 9];
 const PAGE = 150;
 const STATUS = { draft: 'brouillon', valid: 'validé' };
 
 const rows = bank().map((l) => {
   const { found } = loadProgress(l.pattern);
   const level = buildLevel(l);
+  const bases = [...level.answers.values()].flatMap((a) => a.spellings.map((sp) => keyOf(sp.base)));
   const row = {
     pattern: l.pattern,
-    size: `${l.words.length} familles`,
+    size: `${level.answers.size} mots`,
     status: STATUS[officialLevel(l.pattern)?.status],
-    words: new Set([...level.answers.keys(), ...level.families.map((f) => keyOf(f.base))]),
+    words: new Set([...level.answers.keys(), ...bases]),
   };
   if (!found.length) return row;
-  const progress = progressOf(level, found);
+  const progress = progressOf(withRiddles(l), found);
   return {
     ...row,
     score: { value: progress.score, max: progress.total },
-    done: progress.stars === 3,
+    done: progress.trophy,
   };
 });
 
@@ -141,7 +142,6 @@ function playRandom() {
   --muted: var(--dc-muted);
   --panel: var(--dc-board);
   --line: var(--dc-board-edge);
-  --rare: #b07d00;
   --on-color: var(--dc-cream);
   --tint: var(--dc-board);
   max-width: 640px;

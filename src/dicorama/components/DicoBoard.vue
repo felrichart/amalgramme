@@ -1,19 +1,19 @@
 <script setup>
 /*
  * One Dicorama level being played, filling its screen: a bar (the `lead` slot,
- * then the score, the badges won and the level's menu), the words, which take all
+ * then the score, its star and the level's menu), the words, which take all
  * the height left, the word being typed in the housing above the keyboard, and
  * the celebrations over it all. Emits `progress` (see progressOf) as it changes.
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { isAdmin } from '../../composables/useAccount.js';
-import { REASONS, kidsMax } from '../game.js';
+import { REASONS } from '../game.js';
 import { useDicorama } from '../useDicorama.js';
 import DicoConfirm from './DicoConfirm.vue';
 import DicoScore from './DicoScore.vue';
 import DicoMarks from './DicoMarks.vue';
-import DicoRares from './DicoRares.vue';
+import DicoBonus from './DicoBonus.vue';
 import DicoFinish from './DicoFinish.vue';
 import DicoList from './DicoList.vue';
 import DicoInput from './DicoInput.vue';
@@ -36,14 +36,13 @@ const message = computed(() => {
   if (g.message.value === 'dup') return { text: 'déjà trouvé', tone: 'day' };
   if (g.typed.value) return null;
   // Until a full word is typed, what to aim for next.
-  const { stars, steps } = g.progress.value;
-  const aims = [
-    `trouve ${steps[0]} mots`,
-    `trouve ${steps[1]} mots`,
-    'trouve tous les mots de la liste',
-    'toute la liste a été trouvée',
-  ];
-  return { text: aims[stars], tone: 'day' };
+  const { star, trophy, total } = g.progress.value;
+  const aim = trophy
+    ? 'tous les mots ont été trouvés'
+    : star
+      ? 'trouve tous les mots bonus'
+      : `trouve les ${total} mots`;
+  return { text: aim, tone: 'day' };
 });
 
 const menu = ref(false);
@@ -57,10 +56,9 @@ function reset() {
   confirming.value = false;
 }
 
-const rows = computed(() => g.list.value.filter((r) => r.kind === 'main'));
-const rares = computed(() => g.list.value.filter((r) => r.kind === 'rare'));
-const reserve = kidsMax(props.level);
-const showingRares = ref(false);
+const rows = computed(() => g.list.value.filter((r) => r.kind === 'clue'));
+const bonus = computed(() => g.list.value.filter((r) => r.kind === 'bonus'));
+const showingBonus = ref(false);
 
 const LETTER = /^[a-zA-Zà-ÿÀ-ß]$/;
 const GAME_KEYS = ['Backspace', 'Delete', 'Escape', 'ArrowLeft', 'ArrowRight'];
@@ -69,8 +67,8 @@ function onKeydown(e) {
     if (e.key === 'Escape' || e.key === 'Enter') g.dismiss();
     return;
   }
-  if (confirming.value || showingRares.value) {
-    if (e.key === 'Escape') confirming.value = showingRares.value = false;
+  if (confirming.value || showingBonus.value) {
+    if (e.key === 'Escape') confirming.value = showingBonus.value = false;
     return;
   }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -94,13 +92,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     <header class="bar">
       <slot name="lead" />
       <div class="standing">
+        <DicoScore :value="g.progress.value.score" :max="g.progress.value.total" />
         <DicoMarks
           class="marks"
-          :stars="g.greeted.value.stars"
-          :book="g.greeted.value.book"
-          :steps="g.progress.value.steps"
+          :star="g.greeted.value.star"
+          :trophy="g.greeted.value.trophy"
+          hollow
         />
-        <DicoScore :value="g.progress.value.score" :max="g.progress.value.total" />
       </div>
       <div class="menu-wrap">
         <button
@@ -133,13 +131,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     <DicoList
       class="dc-board words"
       :rows="rows"
-      :rares="rares"
+      :bonus="bonus"
       fit
-      :reserve="reserve"
       :latest="g.latest.value"
       :arrival="arrival"
       :nudge="nudge"
-      @rares="showingRares = true"
+      @bonus="showingBonus = true"
     />
 
     <section class="housing">
@@ -174,11 +171,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       @more="g.dismiss"
     />
 
-    <DicoRares
-      v-if="showingRares"
-      :rows="rares"
-      :complete="g.progress.value.book"
-      @close="showingRares = false"
+    <DicoBonus
+      v-if="showingBonus"
+      :rows="bonus"
+      :complete="g.progress.value.bonus === g.progress.value.bonusTotal"
+      @close="showingBonus = false"
     />
 
     <DicoConfirm
@@ -213,7 +210,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   gap: 10px;
 }
 .marks {
-  font-size: 20px;
+  font-size: 28px;
 }
 .words {
   flex: 1;

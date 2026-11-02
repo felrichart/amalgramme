@@ -1,12 +1,13 @@
 <script setup>
-/* The rare words found, over the board, as the list shows its words (tap one for
- * its definition and other forms), and whether they're all found; a tap outside
+/* The bonus words found, over the board, as the list shows its words (tap one for
+ * its definition and homonyms), and whether they're all found; a tap outside
  * closes it. */
 import DicoList from './DicoList.vue';
 import DicoBook from './DicoBook.vue';
+import DicoTrophy from './DicoTrophy.vue';
 
 const props = defineProps({
-  // Rows of listOf, rare ones.
+  // Rows of listOf, bonus ones.
   rows: { type: Array, required: true },
   complete: { type: Boolean, default: false },
 });
@@ -16,14 +17,14 @@ const n = props.rows.length;
 
 <template>
   <div class="overlay" @click.self="emit('close')">
-    <div class="card" role="dialog" aria-modal="true" aria-label="Mots rares">
+    <div class="card" role="dialog" aria-modal="true" aria-label="Mots bonus">
       <header class="head">
         <DicoBook class="book" />
-        <h2 class="title">Mots rares</h2>
+        <h2 class="title">Mots bonus</h2>
         <span class="count">{{ n }} trouvé{{ n > 1 ? 's' : '' }}</span>
       </header>
       <p v-if="complete" class="done">
-        <DicoBook gold class="gold" />Tous les mots rares sont trouvés&#8239;!
+        <DicoTrophy class="gold" />Tous les mots bonus sont trouvés&#8239;!
       </p>
       <DicoList class="words" :rows="rows" />
       <button class="dc-button quiet" type="button" @click="emit('close')">Fermer</button>

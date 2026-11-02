@@ -3,7 +3,7 @@
  * (GET /dicorama) and kept on the device, so the game opens offline. Only the
  * admin writes them.
  *
- * `levels`: `{ pattern, status: 'draft' | 'valid', date, words, rare, banned, reasons,
+ * `levels`: `{ pattern, status: 'draft' | 'valid', date, words, clues, banned, reasons,
  * conjugated }` (see buildLevel in game.js). Players get the validated ones up
  * to today, one a day; the admin gets them all. `definitions`: base → `{ index,
  * text }`, the Wiktionnaire sense picked for that word, in every level.
@@ -12,10 +12,13 @@ import { reactive } from 'vue';
 import { API_URL, CACHE_MS } from '../config.js';
 import { request, mutate } from '../services/api.js';
 import { isAdmin } from '../composables/useAccount.js';
-import { readJSON, writeJSON, isObject } from '../utils/storage.js';
+import { readJSON, writeJSON, removeKey, isObject } from '../utils/storage.js';
 import { getToday } from '../utils/today.js';
+import { CLUES_MIN, CLUES_MAX } from './game.js';
 
-const KEY = 'dicorama:v1:official';
+const KEY = 'dicorama:v2:official';
+// The levels before riddles, gone.
+removeKey('dicorama:v1:official');
 
 const saved = readJSON(KEY, {}, isObject);
 export const official = reactive({
@@ -71,14 +74,15 @@ const MESSAGES = {
   date_taken: 'Un autre niveau a déjà ce jour.',
   bad_date: 'Choisis un jour pour valider le niveau.',
   invalid: 'Niveau invalide.',
+  bad_clues: `Il faut de ${CLUES_MIN} à ${CLUES_MAX} énigmes, chacune avec son indice.`,
 };
 
 /* Saves a level as `status`, played on `date` (required to validate). */
 export async function saveLevel(draft, status, date) {
-  const { pattern, words, rare, banned, reasons, conjugated } = draft;
+  const { pattern, words, clues, banned, reasons, conjugated } = draft;
   // A plain copy, not the editor's reactive draft.
   const body = JSON.parse(
-    JSON.stringify({ status, date: date || null, words, rare, banned, reasons, conjugated }),
+    JSON.stringify({ status, date: date || null, words, clues, banned, reasons, conjugated }),
   );
   const res = await mutate(`/dicorama/levels/${pattern}`, {
     method: 'PUT',

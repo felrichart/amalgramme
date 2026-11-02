@@ -1,20 +1,20 @@
 <script setup>
 /*
  * The level's words, a slot each (see listOf), in its parent (the cream board),
- * scrolling once they outgrow it: fades show there's more above or below. `fit`
- * spreads them over two columns, read down, the rare words' box last (see
- * DicoRareBox). Left of a slot: its number for the list, a book for a rare
- * word. A found word is a light card in
- * its slot; tapping it shows its definition, and opens its sub-list (homonyms,
- * then its family's later finds) when it has one, one at a time; its bubble opens
- * over it. A word landing in a sub-list opens it. The yellow arrow points at the
- * word last tapped, else the latest one.
+ * scrolling once they outgrow it: fades show there's more above or below. A
+ * riddle's slot shows its clue, and once found its word's card, the clue small
+ * beside it. With `bonus`, the bonus words' box comes last (see DicoBonusBox);
+ * `fit` shrinks the rows when they'd overflow. Left of a slot: its number for a
+ * riddle, a book for a bonus word. Tapping a found word shows its definition,
+ * and opens its homonyms' sub-list when it has one, one at a time; its bubble
+ * opens over it. The yellow arrow points at the word last tapped, else the
+ * latest one.
  */
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { deBefore } from '../game.js';
 import { definitionOf } from '../definitions.js';
 import DicoBook from './DicoBook.vue';
-import DicoRareBox from './DicoRareBox.vue';
+import DicoBonusBox from './DicoBonusBox.vue';
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -24,23 +24,18 @@ const props = defineProps({
   arrival: { type: String, default: null },
   // `{ key, n }`: the word typed again, nudged on each retry.
   nudge: { type: Object, default: null },
-  // The rare words found (rows too), for their box after the list; null: no box.
-  rares: { type: Array, default: null },
-  /* Two columns, the first filled first, keeping room under them, when there's
-   * some, for `reserve` sub-words (the longest sub-list), so none opening scrolls. */
+  // The bonus words found (rows too), for their box after the list; null: no box.
+  bonus: { type: Array, default: null },
   fit: { type: Boolean, default: false },
-  reserve: { type: Number, default: 0 },
 });
-const emit = defineEmits(['rares']);
+const emit = defineEmits(['bonus']);
 
 // Sizes in px (as in the CSS): sub-word, the gap between sub-words, the board's
 // vertical padding, and each row size's row and gap between rows.
 const KID = 22;
 const KID_GAP = 4;
-const PAD_Y = 28;
-const SIZES = { roomy: { row: 34, gap: 8 }, compact: { row: 28, gap: 5 } };
-// Two columns at most: three would leave words too narrow to read on a phone.
-const COLUMNS = 2;
+const PAD_Y = 24;
+const SIZES = { roomy: { row: 35, gap: 4 }, compact: { row: 29, gap: 3 } };
 const kidsHeight = (n) => (n ? n * (KID + KID_GAP) + 2 : 0);
 
 const boardEl = ref(null);
@@ -138,7 +133,8 @@ watch(
 const pointer = computed(() => pointed.value ?? props.latest);
 
 function tapWord(r, e) {
-  if (r.found) pointed.value = r.answer.key;
+  if (!r.found) return;
+  if (r.keys.length) pointed.value = r.keys[0];
   if (r.kids.length && open.value === r.id) {
     open.value = null;
     return hideTip();
@@ -148,11 +144,10 @@ function tapWord(r, e) {
   else showTip(r, r.answer.spellings[0], e.currentTarget);
 }
 function tapKid(r, kid, e) {
-  pointed.value = kid.key;
   showTip(r, kid.spelling, e.currentTarget);
 }
 const hover = (r, spelling) => (e) =>
-  e.pointerType === 'mouse' && showTip(r, spelling, e.currentTarget);
+  r.found && e.pointerType === 'mouse' && showTip(r, spelling, e.currentTarget);
 const unhover = (e) => e.pointerType === 'mouse' && hideTip();
 
 // A tap elsewhere closes the bubble.
@@ -160,18 +155,13 @@ const outside = (e) => !e.target.closest?.('.word') && hideTip();
 onMounted(() => window.addEventListener('pointerdown', outside));
 onUnmounted(() => window.removeEventListener('pointerdown', outside));
 
-const rowOf = (key) => props.rows.find((r) => r.keys.includes(key));
-
-/* A new word opens its row's sub-list if it has one (it may have just joined
- * it), else closes the open one; a word typed again opens the one it's in. */
+/* A new word closes the open sub-list, and brings its slot into view. */
 watch(
   () => props.arrival,
   (key) => {
     if (!key) return;
-    const r = rowOf(key);
-    open.value = r?.kids.length ? r.id : null;
+    open.value = null;
     hideTip();
-    // Brought into view if the list scrolls past it.
     nextTick(() =>
       boardEl.value
         ?.querySelector('.arrive')
@@ -180,27 +170,15 @@ watch(
     );
   },
 );
-watch(
-  () => props.nudge,
-  (nudge) => {
-    const r = nudge && rowOf(nudge.key);
-    if (r && r.answer.key !== nudge.key) open.value = r.id;
-  },
-);
 
-/* What a found word is, when it's not a word of the list: a rare one, or worth
- * nothing for a word's homonyms and a family's later finds. */
+/* A bonus word's homonyms say whose they are. */
 function worthOf(row, spelling) {
-  if (!row?.found) return null;
+  if (!row) return null;
   const kid = row.kids.find((k) => k.spelling === spelling);
-  if (kid?.kind === 'homonym') return { text: 'Homonyme (0 point)' };
-  if (kid) return { text: `Même famille que ${row.answer.display} (0 point)` };
-  if (row.kind === 'rare') return { text: 'Mot rare', rare: true };
+  if (row.of) return `Homonyme de ${row.of.display}`;
+  if (kid) return `Homonyme de ${row.answer.display}`;
   return null;
 }
-
-// A past participle is only playable as an adjective: say so first.
-const natureOf = (label) => (label.startsWith('part. passé') ? `adj., ${label}` : label);
 
 const tipText = computed(() => {
   if (!tip.value) return null;
@@ -210,7 +188,7 @@ const tipText = computed(() => {
   return {
     worth: worthOf(row, tip.value.spelling),
     word: cap(form),
-    nature: form === base ? label : `${natureOf(label)} ${deBefore(base)}${base}`.trim(),
+    nature: form === base ? label : `${label} ${deBefore(base)}${base}`.trim(),
     loading: definition === undefined,
     definition:
       definition === undefined
@@ -223,48 +201,26 @@ const tipText = computed(() => {
   };
 });
 
-const cells = computed(() => [...props.rows, ...(props.rares ? [{ id: 'rares', box: true }] : [])]);
-/* How many rows the first column takes, and their size. Fitting, it's filled
- * first: roomy rows and room for the longest sub-list, else roomy rows alone (a
- * sub-list opening then scrolls), else compact ones. Past that, the words
- * split in halves and scroll. */
-const layout = computed(() => {
-  const n = cells.value.length;
-  if (!props.fit) return { size: 'roomy', first: n };
-  const lines = (size, reserve) => {
-    const { row, gap } = SIZES[size];
-    return Math.floor((room.value - kidsHeight(reserve) + gap) / (row + gap));
-  };
-  const tries = [
-    ['roomy', props.reserve],
-    ['roomy', 0],
-    ['compact', 0],
-  ];
-  for (const [size, reserve] of tries) {
-    const fit = lines(size, reserve);
-    if (fit * COLUMNS >= n) return { size, first: Math.min(fit, n) };
-  }
-  return { size: 'compact', first: Math.ceil(n / COLUMNS) };
+const cells = computed(() => [...props.rows, ...(props.bonus ? [{ id: 'bonus', box: true }] : [])]);
+/* Roomy rows when they all fit, else compact ones, scrolling past that. */
+const size = computed(() => {
+  if (!props.fit) return 'roomy';
+  const { row, gap } = SIZES.roomy;
+  return cells.value.length * (row + gap) - gap <= room.value ? 'roomy' : 'compact';
 });
-const columns = computed(() => {
-  const { first } = layout.value;
-  // Two columns wide even when the first holds them all.
-  return props.fit ? [cells.value.slice(0, first), cells.value.slice(first)] : [cells.value];
-});
-const ROW = computed(() => SIZES[layout.value.size].row);
+const ROW = computed(() => SIZES[size.value].row);
 const slotHeight = (r) => ROW.value + (open.value === r.id ? kidsHeight(r.kids.length) : 0);
 const kidTop = (i) => ROW.value + i * (KID + KID_GAP);
 
-// The rare words' box: the word landing in it, pointed at or nudged there.
-const inRares = (key) => props.rares?.find((r) => r.keys.includes(key));
-const rareArrival = computed(() => {
-  const r = props.arrival && inRares(props.arrival);
-  if (!r) return null;
-  const fresh = r.answer.key === props.arrival;
-  const word = fresh ? r.answer.display : r.kids.find((k) => k.key === props.arrival).spelling.form;
-  return { word: cap(word), fresh };
+// The bonus words' box: the word landing in it, pointed at or nudged there. A
+// riddle's homonyms go in with it.
+const inBonus = (key) => props.bonus?.find((r) => r.keys.includes(key));
+const bonusArrival = computed(() => {
+  const key = props.arrival;
+  const r = key && props.bonus?.find((b) => b.keys.includes(key) || b.of?.key === key);
+  return r ? { word: cap(r.answer.display) } : null;
 });
-const rareNudge = computed(() => (props.nudge && inRares(props.nudge.key) ? props.nudge.n : null));
+const bonusNudge = computed(() => (props.nudge && inBonus(props.nudge.key) ? props.nudge.n : null));
 
 // Remade on each retry, so the nudge replays.
 const nudgeKey = (key) => key + (props.nudge?.key === key ? `-${props.nudge.n}` : '');
@@ -274,81 +230,76 @@ const nudged = (key) => props.nudge?.key === key;
 <template>
   <section ref="boardEl" class="board" @scroll="onScroll">
     <div class="less" :class="{ shown: above }" aria-hidden="true" />
-    <div ref="rowsEl" class="rows" :class="layout.size">
-      <div v-for="(col, c) in columns" :key="c" class="col">
-        <template v-for="r in col" :key="r.id">
-          <DicoRareBox
-            v-if="r.box"
-            class="line"
-            :count="rares.length"
-            :arrival="rareArrival"
-            :nudge="rareNudge"
-            :pointed="!!inRares(pointer)"
-            @open="emit('rares')"
-          />
-          <div v-else class="line">
-            <span class="mark" aria-hidden="true">
-              <span v-if="r.kind === 'main'" class="num" :class="{ on: r.found }">{{
-                pad(r.num)
-              }}</span>
-              <DicoBook v-else class="book" />
-            </span>
-            <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
-              <template v-if="r.answer">
-                <button
-                  v-for="(kid, i) in r.kids"
-                  :key="kid.spelling.form + (kid.kind === 'variant' ? nudgeKey(kid.key) : '')"
-                  class="word kid"
-                  type="button"
-                  :tabindex="open === r.id ? 0 : -1"
-                  :class="{
-                    shown: open === r.id,
-                    variant: kid.kind === 'variant',
-                    arrive: kid.kind === 'variant' && kid.key === arrival,
-                    nudge: kid.kind === 'variant' && nudged(kid.key),
-                  }"
-                  :style="{
-                    top: `${kidTop(i)}px`,
-                    transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
-                    animationDelay: kid.key === arrival ? `${110 + i * 60}ms` : null,
-                  }"
-                  @click="tapKid(r, kid, $event)"
-                  @pointerenter="hover(r, kid.spelling)($event)"
-                  @pointerleave="unhover"
-                >
-                  <span class="text">{{ cap(kid.spelling.form) }}</span>
-                </button>
-                <button
-                  :key="nudgeKey(r.answer.key)"
-                  class="word card"
-                  :class="{
-                    missed: !r.found,
-                    arrive: r.answer.key === arrival,
-                    nudge: nudged(r.answer.key),
-                  }"
-                  type="button"
-                  :aria-expanded="r.kids.length ? open === r.id : undefined"
-                  :aria-label="
-                    r.kids.length
-                      ? `${r.answer.display}, ${r.kids.length + 1} formes`
-                      : r.answer.display
-                  "
-                  @click="tapWord(r, $event)"
-                  @pointerenter="hover(r, r.answer.spellings[0])($event)"
-                  @pointerleave="unhover"
-                >
-                  <span class="text">{{ cap(r.answer.display) }}</span>
-                  <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
-                </button>
-              </template>
-              <span v-else class="sr-only">mot à trouver</span>
-            </div>
-            <span class="pointer">
-              <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
+    <div ref="rowsEl" class="rows" :class="size">
+      <template v-for="r in cells" :key="r.id">
+        <DicoBonusBox
+          v-if="r.box"
+          class="line"
+          :count="bonus.length"
+          :arrival="bonusArrival"
+          :nudge="bonusNudge"
+          :pointed="!!inBonus(pointer)"
+          @open="emit('bonus')"
+        />
+        <div v-else class="line">
+          <span class="mark" aria-hidden="true">
+            <span v-if="r.kind === 'clue'" class="num" :class="{ on: r.found }">{{
+              pad(r.num)
+            }}</span>
+            <DicoBook v-else class="book" />
+          </span>
+          <div class="slot" :style="{ height: `${slotHeight(r)}px` }">
+            <template v-if="r.found">
+              <button
+                v-for="(kid, i) in r.kids"
+                :key="kid.spelling.form"
+                class="word kid"
+                type="button"
+                :tabindex="open === r.id ? 0 : -1"
+                :class="{ shown: open === r.id }"
+                :style="{
+                  top: `${kidTop(i)}px`,
+                  transitionDelay: `${open === r.id ? 110 + i * 60 : (r.kids.length - 1 - i) * 40}ms`,
+                }"
+                @click="tapKid(r, kid, $event)"
+                @pointerenter="hover(r, kid.spelling)($event)"
+                @pointerleave="unhover"
+              >
+                <span class="text">{{ cap(kid.spelling.form) }}</span>
+              </button>
+              <button
+                :key="nudgeKey(r.keys[0] ?? r.id)"
+                class="word card"
+                :class="{
+                  clued: !!r.clue,
+                  arrive: r.keys[0] === arrival,
+                  nudge: nudged(r.keys[0]),
+                }"
+                type="button"
+                :aria-expanded="r.kids.length ? open === r.id : undefined"
+                :aria-label="
+                  [r.clue, r.answer.display, r.kids.length ? `${r.kids.length + 1} formes` : '']
+                    .filter(Boolean)
+                    .join(', ')
+                "
+                @click="tapWord(r, $event)"
+                @pointerenter="hover(r, r.answer.spellings[0])($event)"
+                @pointerleave="unhover"
+              >
+                <span class="text">{{ cap(r.answer.display) }}</span>
+                <span v-if="r.clue" class="card-clue">{{ r.clue }}</span>
+                <span v-if="r.kids.length" class="chevron" :class="{ up: open === r.id }" />
+              </button>
+            </template>
+            <span v-else class="clue">
+              {{ r.clue }}<span class="sr-only">, mot à trouver</span>
             </span>
           </div>
-        </template>
-      </div>
+          <span class="pointer">
+            <span v-if="r.keys.includes(pointer)" class="dc-arrow-left" />
+          </span>
+        </div>
+      </template>
     </div>
     <div
       v-if="tip?.box"
@@ -369,11 +320,7 @@ const nudged = (key) => props.nudge?.key === key;
         <span v-if="tipText.nature" class="tip-nature">{{ tipText.nature }}</span>
       </div>
       <div class="tip-def" :class="{ loading: tipText.loading }">{{ tipText.definition }}</div>
-      <span v-if="tipText.worth" class="worth-line">
-        <span class="worth" :class="{ rare: tipText.worth.rare }"
-          ><DicoBook v-if="tipText.worth.rare" />{{ tipText.worth.text }}</span
-        >
-      </span>
+      <span v-if="tipText.worth" class="worth">{{ tipText.worth }}</span>
       <span class="tail" />
     </div>
     <div class="more" :class="{ shown: below }" aria-hidden="true" />
@@ -385,7 +332,7 @@ const nudged = (key) => props.nudge?.key === key;
   position: relative;
   flex: 1;
   min-height: 0;
-  padding: 14px 8px 14px 4px;
+  padding: 12px 8px 12px 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -404,18 +351,18 @@ const nudged = (key) => props.nudge?.key === key;
   transition: opacity 0.2s;
 }
 .less {
-  top: -14px;
+  top: -12px;
   height: 30px;
-  margin-top: -14px;
+  margin-top: -12px;
   margin-bottom: -16px;
   background: linear-gradient(to top, transparent, var(--dc-board) 70%);
 }
 /* A thin cream fade at the foot, over the words further down. */
 .more {
-  bottom: -14px;
+  bottom: -12px;
   height: 26px;
   margin-top: -26px;
-  margin-bottom: -14px;
+  margin-bottom: -12px;
   background: linear-gradient(to bottom, transparent, var(--dc-board) 80%);
 }
 .less.shown,
@@ -423,31 +370,29 @@ const nudged = (key) => props.nudge?.key === key;
   opacity: 1;
 }
 .rows {
-  --row: 34px;
+  --row: 35px;
   --card: 27px;
   --num-w: 22px;
   --pointer-w: 12px;
-  --gap: 5px;
-  --fs: 15.5px;
-  --kid-fs: 13.5px;
-  --num-fs: 12.5px;
-  --row-gap: 8px;
+  --gap: 6px;
+  --fs: 17px;
+  --clue-fs: 13.5px;
+  --card-clue-fs: 12px;
+  --kid-fs: 14px;
+  --num-fs: 12px;
+  --row-gap: 4px;
   --kid: 22px;
-  display: flex;
-  gap: 6px;
-}
-.rows.compact {
-  --row: 28px;
-  --card: 23px;
-  --fs: 14px;
-  --row-gap: 5px;
-}
-.col {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--row-gap);
+}
+.rows.compact {
+  --row: 29px;
+  --card: 23px;
+  --fs: 15px;
+  --clue-fs: 12.5px;
+  --card-clue-fs: 11px;
+  --row-gap: 3px;
 }
 
 .line {
@@ -513,16 +458,12 @@ const nudged = (key) => props.nudge?.key === key;
   right: 3px;
   top: calc((var(--row) - var(--card)) / 2);
   height: var(--card);
-  padding: 0 6px 0 9px;
+  gap: 9px;
+  padding: 0 8px 0 11px;
   background: var(--dc-tint);
   box-shadow:
     inset 3px 0 0 var(--dc-day-soft),
     inset 0 1px 0 rgb(255 255 255 / 0.5);
-}
-.card.missed {
-  background: transparent;
-  box-shadow: none;
-  color: var(--dc-dash);
 }
 .card.arrive {
   animation: dico-arrive 0.36s cubic-bezier(0.25, 0.8, 0.3, 1) both;
@@ -542,21 +483,32 @@ const nudged = (key) => props.nudge?.key === key;
 .kid.shown {
   transform: translateX(0);
 }
-/* A family's later find: its card's band, which a homonym's lighter one isn't. */
-.kid.variant {
-  box-shadow: inset 2px 0 0 var(--day);
+/* A riddle's clue, read in its empty slot. */
+.clue {
+  position: absolute;
+  inset: 0 8px 0 12px;
+  display: flex;
+  align-items: center;
+  font-size: var(--clue-fs);
+  font-style: italic;
+  font-weight: 500;
+  color: #d6cdbb;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.kid.arrive {
-  animation: kid-in 0.3s cubic-bezier(0.25, 0.8, 0.3, 1) both;
+.clue,
+.card-clue {
+  text-overflow: ellipsis;
 }
-.kid.nudge {
-  animation: dico-nudge 0.42s ease-in-out both;
-}
-/* Slides in even when its sub-list is already open. */
-@keyframes kid-in {
-  from {
-    transform: translateX(-104%);
-  }
+.card-clue {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--card-clue-fs);
+  font-style: italic;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--dc-day-ink) 78%, var(--dc-tint));
 }
 .text {
   flex: 1;
@@ -570,6 +522,10 @@ const nudged = (key) => props.nudge?.key === key;
 }
 .kid .text {
   font-size: var(--kid-fs);
+}
+/* Beside its clue, the word takes only its width. */
+.clued .text {
+  flex: none;
 }
 .chevron {
   flex: none;
@@ -630,27 +586,13 @@ const nudged = (key) => props.nudge?.key === key;
 .tip-def.loading {
   font-style: italic;
 }
-/* What the word is worth, at the foot of its bubble: a rare word stands out. */
-.worth-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 7px;
-  margin-top: 3px;
-}
+/* Whose homonym the word is, at the foot of its bubble. */
 .worth {
+  margin-top: 3px;
   font-size: 11.5px;
   font-style: italic;
   font-weight: 600;
   color: var(--dc-faint);
-}
-.worth.rare {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-style: normal;
-  font-weight: 700;
-  color: var(--day);
 }
 /* Points down at the word, or up when the bubble is under it. */
 .tail {

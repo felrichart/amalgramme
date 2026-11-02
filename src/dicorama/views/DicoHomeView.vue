@@ -1,8 +1,8 @@
 <script setup>
 /*
  * Dicorama's home: today's pattern, big, to play, then the days before, each
- * with its score and badges. The admin also reaches the levels to come and the
- * bank.
+ * with its score, its bonus words found and its badges. The admin also reaches
+ * the levels to come and the bank.
  */
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -13,6 +13,7 @@ import { official, playedLevels } from '../store.js';
 import { resultOf } from '../levels.js';
 import { dayColor, longDayLabel, dayOfMonth, shortMonth, shortWeekday } from '../days.js';
 import DicoMarks from '../components/DicoMarks.vue';
+import DicoBook from '../components/DicoBook.vue';
 
 const router = useRouter();
 const today = getToday();
@@ -32,8 +33,7 @@ const days = computed(() =>
 const todays = computed(() => days.value.find((d) => d.date === today) ?? null);
 const past = computed(() => days.value.filter((d) => d.date !== today));
 
-const started = (d) => d.score > 0 || d.rare > 0;
-const done = (d) => d.stars === 3 && (d.book || !d.rareTotal);
+const started = (d) => d.score > 0 || d.bonus > 0;
 const play = (d) => router.push(`/dicorama/${d.date}`);
 </script>
 
@@ -89,15 +89,13 @@ const play = (d) => router.push(`/dicorama/${d.date}`);
           <p v-if="started(todays)" class="progress">
             <span class="big-score">{{ pad(todays.score) }}</span>
             <span class="big-max">/{{ todays.total }}</span>
+            <span v-if="todays.bonus" class="bonus big" :aria-label="`${todays.bonus} mots bonus`">
+              <DicoBook />{{ todays.bonus }}
+            </span>
           </p>
-          <DicoMarks
-            class="marks big"
-            :stars="todays.stars"
-            :book="todays.book"
-            :steps="todays.steps"
-          />
+          <DicoMarks class="marks big" :star="todays.star" :trophy="todays.trophy" />
           <button class="dc-button play" type="button" @click="play(todays)">
-            {{ done(todays) ? 'Revoir' : started(todays) ? 'Continuer' : 'Jouer' }}
+            {{ todays.trophy ? 'Revoir' : started(todays) ? 'Continuer' : 'Jouer' }}
           </button>
         </template>
         <p v-else class="none">Pas de Dicorama aujourd'hui, reviens demain.</p>
@@ -129,8 +127,11 @@ const play = (d) => router.push(`/dicorama/${d.date}`);
                 >
                   <span class="value">{{ pad(d.score) }}</span>
                   <span class="max">/{{ d.total }}</span>
+                  <span v-if="d.bonus" class="bonus" :aria-label="`${d.bonus} mots bonus`">
+                    <DicoBook />{{ d.bonus }}
+                  </span>
                 </span>
-                <DicoMarks class="marks" :stars="d.stars" :book="d.book" :steps="d.steps" />
+                <DicoMarks class="marks" :star="d.star" :trophy="d.trophy" />
               </span>
             </button>
           </li>
@@ -220,6 +221,21 @@ const play = (d) => router.push(`/dicorama/${d.date}`);
 }
 .marks.big {
   font-size: 34px;
+}
+/* The bonus words found, beside the score, much smaller. */
+.bonus {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  font-family: var(--dc-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dc-faint);
+}
+.bonus.big {
+  font-size: 14px;
 }
 .play {
   min-width: 160px;

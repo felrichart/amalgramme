@@ -706,7 +706,7 @@ async function claimPlays({ request, env, user }) {
 
 /* --- Dicorama --- */
 
-const DICO_PATTERN = /^[A-Z_]{4,7}$/;
+const DICO_PATTERN = /^[A-Z_]{4,9}$/;
 const DICO_MAX_BYTES = 64 * 1024;
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
@@ -721,11 +721,29 @@ const dicoLevel = (r) => ({
   status: r.status,
   date: r.date,
   words: JSON.parse(r.words),
-  rare: JSON.parse(r.rare),
+  clues: JSON.parse(r.clues),
   banned: JSON.parse(r.banned),
   reasons: JSON.parse(r.reasons),
   conjugated: JSON.parse(r.conjugated),
 });
+
+// Riddles per validated level (see CLUES_MIN and CLUES_MAX, src/dicorama/game.js).
+const DICO_CLUES = [6, 12];
+const DICO_CLUE_MAX = 200;
+// `{ typed key: clue }`.
+const isClues = (v) =>
+  !!v &&
+  typeof v === 'object' &&
+  !Array.isArray(v) &&
+  Object.entries(v).every(
+    ([k, c]) => /^[A-Z]{4,9}$/.test(k) && typeof c === 'string' && c.length <= DICO_CLUE_MAX,
+  );
+/* Whether a validated level has its riddles, each clued. */
+function isClued(clues) {
+  const texts = Object.values(clues);
+  const [min, max] = DICO_CLUES;
+  return texts.length >= min && texts.length <= max && texts.every((c) => c.trim());
+}
 
 // Why a spelling is banned (see REASONS, src/dicorama/game.js).
 const DICO_REASONS = ['conj', 'invalid', 'offensive'];
@@ -739,13 +757,12 @@ const isReasons = (v) =>
  * day; the client keeps the ones up to its own today. */
 async function getDicorama({ request, env }) {
   const user = await sessionUser(env, request);
-  const cols = 'pattern, status, date, words, rare, banned, reasons, conjugated';
-  const levels =
-    user?.username === ADMIN_NAME
-      ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
-      : env.DB.prepare(
-          `SELECT ${cols} FROM dicorama_levels WHERE status = 'valid' AND date <= ? ORDER BY date`,
-        ).bind(addDays(serverToday(), 1));
+  const cols = 'pattern, status, date, words, clues, banned, reasons, conjugated';
+  const levels = user?.username === ADMIN_NAME
+    ? env.DB.prepare(`SELECT ${cols} FROM dicorama_levels ORDER BY date, pattern`)
+    : env.DB.prepare(
+        `SELECT ${cols} FROM dicorama_levels WHERE status = 'valid' AND date <= ? ORDER BY date`,
+      ).bind(addDays(serverToday(), 1));
   const [{ results: rows }, { results: defs }] = await Promise.all([
     levels.all(),
     env.DB.prepare('SELECT base, idx, text FROM dicorama_definitions').all(),
@@ -756,12 +773,14 @@ async function getDicorama({ request, env }) {
   });
 }
 
-/* A validated level needs its day, which no other level may hold. */
+/* A validated level needs its day, which no other level may hold, and its
+ * riddles. */
 async function saveDicoLevel({ request, env, params }) {
   const body = await readBody(request);
   if (!body) return fail('bad_json', 400);
   const { pattern } = params;
-  const { status, words, rare, banned } = body;
+  const { status, words, banned } = body;
+  const clues = body.clues ?? {};
   const reasons = body.reasons ?? {};
   const conjugated = body.conjugated ?? [];
   const date = body.date ?? null;
@@ -769,10 +788,11 @@ async function saveDicoLevel({ request, env, params }) {
   if (status !== 'draft' && status !== 'valid') return fail('invalid', 422);
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad_date', 422);
   if (status === 'valid' && !date) return fail('bad_date', 422);
-  if (!Array.isArray(words) || !words.length || !isStrings(rare) || !isStrings(banned))
+  if (!Array.isArray(words) || !words.length || !isClues(clues) || !isStrings(banned))
     return fail('invalid', 422);
   if (!isReasons(reasons) || !isStrings(conjugated)) return fail('invalid', 422);
-  const stored = [words, rare, banned, reasons, conjugated].map((v) => JSON.stringify(v));
+  if (status === 'valid' && !isClued(clues)) return fail('bad_clues', 422);
+  const stored = [words, clues, banned, reasons, conjugated].map((v) => JSON.stringify(v));
   if (stored.join('').length > DICO_MAX_BYTES) return fail('invalid', 422);
   if (date) {
     const taken = await env.DB.prepare(
@@ -785,16 +805,16 @@ async function saveDicoLevel({ request, env, params }) {
 
   await env.DB.prepare(
     `INSERT INTO dicorama_levels
-       (pattern, status, date, words, rare, banned, reasons, conjugated, updated_at)
+       (pattern, status, date, words, clues, banned, reasons, conjugated, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(pattern) DO UPDATE SET status = excluded.status, date = excluded.date,
-       words = excluded.words, rare = excluded.rare, banned = excluded.banned,
+       words = excluded.words, clues = excluded.clues, banned = excluded.banned,
        reasons = excluded.reasons, conjugated = excluded.conjugated,
        updated_at = excluded.updated_at`,
   )
     .bind(pattern, status, date, ...stored, Date.now())
     .run();
-  return json({ pattern, status, date, words, rare, banned, reasons, conjugated });
+  return json({ pattern, status, date, words, clues, banned, reasons, conjugated });
 }
 
 async function deleteDicoLevel({ env, params }) {

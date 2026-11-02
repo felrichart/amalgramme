@@ -1,37 +1,30 @@
 <script setup>
 /*
- * A level's badges, 1em high, none until the first is won: a star at a third of
- * the list, two at two thirds, three with all of it, then the golden book once
- * every rare word is found. Hovering a badge, or tapping it (which then doesn't reach a
+ * A level's badges, 1em high: the star once every riddle is found, then the
+ * trophy once every word is. `hollow` shows the star's outline until it's won
+ * (none otherwise). Hovering a badge, or tapping it (which then doesn't reach a
  * row it sits in), shows what it's won for in a bubble above it. `pop` animates
  * the last one on mount.
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import DicoStar from './DicoStar.vue';
-import DicoBook from './DicoBook.vue';
+import DicoTrophy from './DicoTrophy.vue';
 
 const props = defineProps({
-  stars: { type: Number, required: true },
-  book: { type: Boolean, default: false },
-  // The list words found to win each star (see progressOf).
-  steps: { type: Array, required: true },
+  star: { type: Boolean, default: false },
+  trophy: { type: Boolean, default: false },
+  hollow: { type: Boolean, default: false },
   pop: { type: Boolean, default: false },
 });
-const BOOK_TIP = 'Tous les mots rares';
 
 const badges = computed(() => [
-  ...[`${props.steps[0]} mots trouvés`, `${props.steps[1]} mots trouvés`, 'Toute la liste']
-    .slice(0, props.stars)
-    .map((tip) => ({ tip, book: false })),
-  ...(props.book ? [{ tip: BOOK_TIP, book: true }] : []),
+  ...(props.star || props.hollow
+    ? [{ tip: props.star ? 'Toutes les énigmes' : 'Trouve toutes les énigmes', won: props.star }]
+    : []),
+  ...(props.trophy ? [{ tip: 'Tous les mots', won: true, trophy: true }] : []),
 ]);
 const label = computed(() =>
-  [
-    props.stars ? `${props.stars} étoile${props.stars > 1 ? 's' : ''}` : '',
-    props.book ? 'tous les mots rares' : '',
-  ]
-    .filter(Boolean)
-    .join(', '),
+  [props.star ? 'étoile' : '', props.trophy ? 'trophée' : ''].filter(Boolean).join(', '),
 );
 
 // The star whose bubble shows.
@@ -68,19 +61,24 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
     class="marks"
     :class="{ pop }"
     role="img"
-    :aria-label="label"
+    :aria-label="label || 'pas encore d’étoile'"
   >
     <span
       v-for="(b, i) in badges"
       :key="i"
       class="slot"
-      :class="{ apart: b.book }"
+      :class="{ apart: b.trophy }"
       @pointerenter="hover(i)($event)"
       @pointerleave="unhover"
       @click.stop.prevent="tap(i)"
     >
-      <DicoBook v-if="b.book" gold class="mark" :class="{ fresh: i === badges.length - 1 }" />
-      <DicoStar v-else class="mark" :class="{ fresh: i === badges.length - 1 }" />
+      <DicoTrophy v-if="b.trophy" class="mark" :class="{ fresh: i === badges.length - 1 }" />
+      <DicoStar
+        v-else
+        class="mark"
+        :class="{ fresh: b.won && i === badges.length - 1, hollow: !b.won }"
+        :hollow="!b.won"
+      />
       <span
         v-if="tip === i"
         :ref="setBubble"
@@ -110,6 +108,11 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside));
 .mark {
   color: var(--dc-yellow);
   filter: drop-shadow(0 0.05em 0 rgb(60 40 0 / 0.55));
+}
+/* The star still to win: an outline in the day's colour. */
+.mark.hollow {
+  color: var(--dc-day-soft);
+  filter: none;
 }
 /* Above the star, its tail at the star's middle, the text running left: the
  * stars often sit at the right of a row. */

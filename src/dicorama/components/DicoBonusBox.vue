@@ -1,20 +1,20 @@
 <script setup>
 /*
- * The rare words' box, the list's last spot: empty until one is found, then a
- * small button to see them ("✦ 3"), at the spot's start. A rare word landing
+ * The bonus words' box, the list's last spot: empty until one is found, then a
+ * small button to see them (book, 3), at the spot's start. A bonus word landing
  * grows it into a slot as wide as the spot: the word's card slides out, shows
  * itself and slides back in, then the slot shrinks into the button again.
  */
 import { ref, computed, watch, onUnmounted } from 'vue';
-import { RARE_MS } from '../useDicorama.js';
+import { BONUS_MS } from '../useDicorama.js';
 import DicoBook from './DicoBook.vue';
 
 const props = defineProps({
-  // The rare families found.
+  // The bonus rows found.
   count: { type: Number, required: true },
-  // `{ word, fresh }`: the rare word landing, `fresh` when its family is new.
+  // `{ word }`: the bonus word landing.
   arrival: { type: Object, default: null },
-  // Changes with each rare word typed again.
+  // Changes with each bonus word typed again.
   nudge: { type: Number, default: null },
   pointed: { type: Boolean, default: false },
 });
@@ -29,8 +29,8 @@ watch(
   (a) => {
     if (!a) return;
     clearTimeout(timer);
-    playing.value = { word: a.word, before: props.count - (a.fresh ? 1 : 0), n: ++runs };
-    timer = setTimeout(() => (playing.value = null), RARE_MS);
+    playing.value = { word: a.word, before: props.count - 1, n: ++runs };
+    timer = setTimeout(() => (playing.value = null), BONUS_MS);
   },
 );
 onUnmounted(() => clearTimeout(timer));
@@ -42,11 +42,11 @@ watch(
 );
 
 const shown = computed(() => playing.value?.before ?? props.count);
-const label = computed(() => `${shown.value} mot${shown.value > 1 ? 's rares' : ' rare'}`);
+const label = computed(() => `${shown.value} mot${shown.value > 1 ? 's' : ''} bonus`);
 </script>
 
 <template>
-  <div class="rare-line" :class="{ arrive: playing }" :style="{ '--rare-ms': `${RARE_MS}ms` }">
+  <div class="bonus-line" :class="{ arrive: playing }" :style="{ '--bonus-ms': `${BONUS_MS}ms` }">
     <span class="mark" aria-hidden="true" />
     <div class="box">
       <button
@@ -126,7 +126,7 @@ const label = computed(() => `${shown.value} mot${shown.value > 1 ? 's rares' : 
   font-family: var(--dc-mono);
 }
 .open.playing {
-  animation: open-away var(--rare-ms) ease-in-out both;
+  animation: open-away var(--bonus-ms) ease-in-out both;
 }
 .open.first {
   animation-name: open-first;
@@ -144,7 +144,7 @@ const label = computed(() => `${shown.value} mot${shown.value > 1 ? 's rares' : 
   box-shadow:
     inset 0 2px 3px rgb(0 0 0 / 0.6),
     0 1px 0 rgb(255 255 255 / 0.4);
-  animation: hole var(--rare-ms) cubic-bezier(0.3, 0.7, 0.3, 1) both;
+  animation: hole var(--bonus-ms) cubic-bezier(0.3, 0.7, 0.3, 1) both;
 }
 .card {
   position: absolute;
@@ -161,7 +161,7 @@ const label = computed(() => `${shown.value} mot${shown.value > 1 ? 's rares' : 
     inset 3px 0 0 var(--day),
     inset 0 1px 0 rgb(255 255 255 / 0.5);
   color: var(--dc-day-ink);
-  animation: card-in-out var(--rare-ms) cubic-bezier(0.25, 0.8, 0.3, 1) both;
+  animation: card-in-out var(--bonus-ms) cubic-bezier(0.25, 0.8, 0.3, 1) both;
 }
 .text {
   min-width: 0;

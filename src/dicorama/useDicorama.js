@@ -1,6 +1,6 @@
 import { reactive, ref, computed, watch, onScopeDispose } from 'vue';
 import { normalizeChar } from '../../shared/word-rules.js';
-import { BLANK, judge, progressOf, listOf } from './game.js';
+import { BLANK, judge, progressOf, listOf, isRiddle } from './game.js';
 import { loadProgress, saveProgress } from './levels.js';
 
 // Timings, in ms. A full word is answered at REPLY_AT, once its last card has
@@ -14,12 +14,10 @@ const OUT_MS = 320;
 const IN_MS = 560;
 // How long "mot inconnu" or "déjà trouvé" stays, unless one types on.
 const MESSAGE_MS = 2400;
-// How long a rare word takes to go into its box (see DicoRareBox).
-export const RARE_MS = 1700;
+// How long a bonus word takes to go into its box (see DicoBonusBox).
+export const BONUS_MS = 1700;
 // The pause between a word settling in the list and the level's celebration.
 const CELEBRATE_MS = 250;
-// The celebration of each star.
-const CELEBRATIONS = [null, 'one', 'two', 'all'];
 
 /*
  * One Dicorama level being played: the blanks being typed (fixed letters stay
@@ -27,9 +25,9 @@ const CELEBRATIONS = [null, 'one', 'two', 'all'];
  * next empty one after a letter), else the first empty one, else the last one,
  * so a full word's last letter can be retyped at once. A full word is checked as
  * soon as its last letter is typed; a rejected one stays on screen. The word that
- * wins a star is celebrated (`celebration`: 'one' | 'two' | 'all', for one, two or
- * three stars), as is the last rare one ('book'); the marks shown follow the
- * badges `greeted`, once each celebration is over. Auto-saves.
+ * wins the star (`celebration`: 'star') or the trophy ('trophy') is celebrated;
+ * the marks shown follow the badges `greeted`, once each celebration is over.
+ * Auto-saves.
  */
 export function useDicorama(level) {
   const saved = loadProgress(level.pattern);
@@ -54,7 +52,7 @@ export function useDicorama(level) {
   // The word just retyped, pointed at in the list until the next letter.
   const marked = ref(null);
   const celebration = ref(null);
-  // The badges celebrated (or won before this visit): `{ stars, book }`.
+  // The badges celebrated (or won before this visit): `{ star, trophy }`.
   const greeted = ref(null);
   // Whether a full word was typed since the level opened (or was reset).
   const typed = ref(false);
@@ -84,7 +82,7 @@ export function useDicorama(level) {
   });
 
   const progress = computed(() => progressOf(level, state.found));
-  const badges = () => ({ stars: progress.value.stars, book: progress.value.book });
+  const badges = () => ({ star: progress.value.star, trophy: progress.value.trophy });
   greeted.value = badges();
   const list = computed(() => listOf(level, state.found));
   const latest = computed(() => marked.value ?? state.found[0] ?? null);
@@ -185,9 +183,9 @@ export function useDicorama(level) {
     round.value++;
     setCells(blanks.map(() => null));
     later(() => phase.value === 'in' && (phase.value = null), IN_MS);
-    const { stars, book } = progress.value;
-    const kind = stars > before.stars ? CELEBRATIONS[stars] : book && !before.book ? 'book' : null;
-    const settled = level.families[level.answers.get(key).family].rare ? RARE_MS : IN_MS;
+    const { star, trophy } = progress.value;
+    const kind = trophy && !before.trophy ? 'trophy' : star && !before.star ? 'star' : null;
+    const settled = isRiddle(level, key) ? IN_MS : BONUS_MS;
     if (kind) later(() => (celebration.value = kind), settled + CELEBRATE_MS);
   }
 

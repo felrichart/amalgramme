@@ -1,11 +1,10 @@
 <script setup>
 /*
  * The admin's level editor: a bank level, or an official one, to save as a draft
- * or validate on a day. Each family can be put in the list or among the rare
- * ones, each word given another master spelling (it then follows that spelling's
- * base), each spelling banned from the level, and each base its Wiktionnaire
- * definition (saved at once, for every level). The list needs LIST_MIN families,
- * so each of the first two stars has its own moment.
+ * or validate on a day. Each word can be made a riddle, with its clue, or a
+ * bonus word, given another master spelling, its spellings banned from the
+ * level, and its bases their Wiktionnaire definition (saved at once, for every
+ * level). Validating takes CLUES_MIN to CLUES_MAX riddles, each clued.
  */
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -15,8 +14,17 @@ import { getToday } from '../../utils/today.js';
 import { addDays } from '../../utils/date.js';
 import { bank } from '../levels.js';
 import { official, officialLevel, saveLevel, removeLevel } from '../store.js';
-import { buildLevel, LIST_MIN, REASONS } from '../game.js';
-import { draftFrom, setRare, setMaster, ban, unban, bannedOf } from '../editor.js';
+import { buildLevel, REASONS, CLUES_MIN, CLUES_MAX } from '../game.js';
+import {
+  draftFrom,
+  setRiddle,
+  setClue,
+  validOf,
+  setMaster,
+  ban,
+  unban,
+  bannedOf,
+} from '../editor.js';
 import { dayColor, longDayLabel } from '../days.js';
 import DicoSenses from '../components/DicoSenses.vue';
 
@@ -26,15 +34,8 @@ const pattern = route.params.pattern;
 
 const stored = officialLevel(pattern);
 const fromBank = bank().find((l) => l.pattern === pattern);
-/* A plain copy: the stored level is reactive, which structuredClone refuses. A
- * level saved before the generator listed its verb forms takes the bank's. */
-function source() {
-  if (!stored) return fromBank;
-  const level = JSON.parse(JSON.stringify(stored));
-  if (!level.conjugated?.length) level.conjugated = fromBank?.conjugated ?? [];
-  return level;
-}
-const draft = ref(draftFrom(source()));
+// A plain copy: the stored level is reactive, which structuredClone refuses.
+const draft = ref(draftFrom(stored ? JSON.parse(JSON.stringify(stored)) : fromBank));
 const status = ref(stored?.status ?? null);
 
 /* The first day from today no other level holds. */
@@ -52,37 +53,35 @@ const dirty = computed(() => snapshot() !== savedAs.value);
 const message = ref(null);
 
 const level = computed(() => buildLevel(draft.value));
-/* The families, the list's then the rare ones, each alphabetical by its first word, with its words' spellings and
- * the other bases they're homonyms of. */
+/* The riddles, alphabetical as players see them, then the bonus words,
+ * commonest first; each word with its spellings' bases. */
 const sections = computed(() => {
-  const { answers, families } = level.value;
-  const first = (f) => answers.get(f.keys[0]).display;
-  const sorted = [...families].sort((a, b) => first(a).localeCompare(first(b), 'fr'));
-  const withWords = (f) => ({
-    ...f,
-    words: f.keys.map((k) => {
-      const a = answers.get(k);
-      const others = new Set(a.spellings.map((sp) => sp.base).filter((b) => b !== f.base));
-      return { ...a, others: [...others] };
-    }),
-  });
+  const { answers, riddles } = level.value;
+  const withBases = (a) => ({ ...a, bases: [...new Set(a.spellings.map((sp) => sp.base))] });
+  const others = [...answers.values()].filter((a) => a.clue == null);
   return [
-    { title: 'Liste', min: LIST_MIN, families: sorted.filter((f) => !f.rare).map(withWords) },
-    { title: 'Rares', families: sorted.filter((f) => f.rare).map(withWords) },
+    {
+      title: 'Énigmes',
+      range: `${CLUES_MIN} à ${CLUES_MAX}`,
+      words: riddles.map((k) => withBases(answers.get(k))),
+    },
+    { title: 'Bonus', words: others.sort((a, b) => b.freq - a.freq).map(withBases) },
   ];
 });
+const riddleCount = computed(() => level.value.riddles.length);
 
 const KINDS = [
-  [false, 'Liste'],
-  [true, 'Rare'],
+  [true, 'Énigme'],
+  [false, 'Bonus'],
 ];
-const move = (base, rare) => (draft.value = setRare(draft.value, base, rare));
+const move = (key, riddle) => (draft.value = setRiddle(draft.value, key, riddle));
+const clue = (key, text) => (draft.value = setClue(draft.value, key, text));
 const master = (key, form) => (draft.value = setMaster(draft.value, key, form));
 const REASON_LABELS = { conj: 'conjugaison', invalid: 'mot invalide', offensive: 'mot offensant' };
 // The spelling whose ✕ was tapped, its reason to pick.
 const banning = ref(null);
-function banOne(key, form, reason) {
-  draft.value = ban(draft.value, key, form, reason);
+function banOne(form, reason) {
+  draft.value = ban(draft.value, form, reason);
   banning.value = null;
 }
 const unbanOne = (form) => (draft.value = unban(draft.value, form));
@@ -97,8 +96,7 @@ const bannedBy = computed(() =>
   })),
 );
 const bannedCount = computed(() => banned.value.length + draft.value.conjugated.length);
-const listCount = computed(() => level.value.families.filter((f) => !f.rare).length);
-const listOk = computed(() => listCount.value >= LIST_MIN);
+const valid = computed(() => validOf(draft.value));
 
 async function save(as) {
   if (as === 'valid' && !date.value) date.value = freeDay();
@@ -161,76 +159,87 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
       <section v-for="s in sections" :key="s.title" class="section">
         <h2 class="heading">
           {{ s.title }}
-          <span class="count" :class="{ off: s.families.length < s.min }">
-            {{ s.families.length }}<template v-if="s.min"> (au moins {{ s.min }})</template>
+          <span class="count">
+            {{ s.words.length }}<template v-if="s.range"> ({{ s.range }})</template>
           </span>
         </h2>
-        <p v-if="!s.families.length" class="none">Aucune.</p>
-        <article v-for="f in s.families" :key="f.base" class="family" :class="{ rare: f.rare }">
-          <header class="family-top">
-            <span class="note" title="note de rareté">{{ f.points }}</span>
-            <DicoSenses class="family-def" :word="f.base" />
-            <div class="kinds" role="group" aria-label="sorte de famille">
+        <p v-if="!s.words.length" class="none">Aucun.</p>
+        <article
+          v-for="w in s.words"
+          :key="w.key"
+          class="entry"
+          :class="{ riddle: w.clue != null }"
+        >
+          <header class="entry-top">
+            <span class="note" title="note de rareté de sa base">{{ w.points }}</span>
+            <div class="spellings">
+              <span
+                v-for="(sp, i) in w.spellings"
+                :key="sp.form"
+                class="spelling"
+                :class="{ master: i === 0 }"
+              >
+                <button
+                  class="form"
+                  type="button"
+                  :disabled="i === 0"
+                  :title="i === 0 ? 'maître mot' : 'en faire le maître mot'"
+                  @click="master(w.key, sp.form)"
+                >
+                  {{ sp.form }}
+                  <span v-if="sp.label || sp.base !== sp.form" class="label">
+                    {{ sp.label }}<template v-if="sp.base !== sp.form"> de {{ sp.base }}</template>
+                  </span>
+                </button>
+                <button
+                  class="ban"
+                  type="button"
+                  :aria-label="`bannir ${sp.form}`"
+                  title="bannir du niveau"
+                  :aria-expanded="banning === sp.form"
+                  @click="banning = banning === sp.form ? null : sp.form"
+                >
+                  ✕
+                </button>
+                <span v-if="banning === sp.form" class="reasons" role="group" aria-label="raison">
+                  <button
+                    v-for="(_, reason) in REASONS"
+                    :key="reason"
+                    class="reason"
+                    type="button"
+                    @click="banOne(sp.form, reason)"
+                  >
+                    {{ REASON_LABELS[reason] }}
+                  </button>
+                </span>
+              </span>
+            </div>
+            <div class="kinds" role="group" aria-label="sorte de mot">
               <button
-                v-for="[rare, label] in KINDS"
+                v-for="[riddle, label] in KINDS"
                 :key="label"
                 class="kind"
-                :class="{ on: f.rare === rare }"
+                :class="{ on: (w.clue != null) === riddle }"
                 type="button"
-                :aria-pressed="f.rare === rare"
-                @click="move(f.base, rare)"
+                :aria-pressed="(w.clue != null) === riddle"
+                @click="move(w.key, riddle)"
               >
                 {{ label }}
               </button>
             </div>
           </header>
-          <ul class="words">
-            <li v-for="w in f.words" :key="w.key" class="word">
-              <div class="spellings">
-                <span
-                  v-for="(sp, i) in w.spellings"
-                  :key="sp.form"
-                  class="spelling"
-                  :class="{ master: i === 0 }"
-                >
-                  <button
-                    class="form"
-                    type="button"
-                    :disabled="i === 0"
-                    :title="i === 0 ? 'maître mot' : 'en faire le maître mot'"
-                    @click="master(w.key, sp.form)"
-                  >
-                    {{ sp.form }}
-                    <span v-if="sp.label || sp.base !== f.base" class="label">
-                      {{ sp.label }}<template v-if="sp.base !== f.base"> de {{ sp.base }}</template>
-                    </span>
-                  </button>
-                  <button
-                    class="ban"
-                    type="button"
-                    :aria-label="`bannir ${sp.form}`"
-                    title="bannir du niveau"
-                    :aria-expanded="banning === sp.form"
-                    @click="banning = banning === sp.form ? null : sp.form"
-                  >
-                    ✕
-                  </button>
-                  <span v-if="banning === sp.form" class="reasons" role="group" aria-label="raison">
-                    <button
-                      v-for="(_, reason) in REASONS"
-                      :key="reason"
-                      class="reason"
-                      type="button"
-                      @click="banOne(w.key, sp.form, reason)"
-                    >
-                      {{ REASON_LABELS[reason] }}
-                    </button>
-                  </span>
-                </span>
-              </div>
-              <DicoSenses v-for="b in w.others" :key="b" class="other-def" :word="b" />
-            </li>
-          </ul>
+          <input
+            v-if="w.clue != null"
+            class="clue"
+            :class="{ empty: !w.clue.trim() }"
+            type="text"
+            maxlength="80"
+            placeholder="Indice"
+            :aria-label="`indice de ${w.display}`"
+            :value="w.clue"
+            @input="clue(w.key, $event.target.value)"
+          />
+          <DicoSenses v-for="b in w.bases" :key="b" class="definition" :word="b" />
         </article>
       </section>
       <section class="section">
@@ -262,19 +271,22 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
     </div>
 
     <footer class="foot">
-      <p v-if="!listOk" class="message bad">
-        La liste doit avoir au moins {{ LIST_MIN }} familles ({{ listCount }} pour l'instant).
+      <p v-if="!valid" class="message bad">
+        Pour valider : de {{ CLUES_MIN }} à {{ CLUES_MAX }} énigmes, chacune avec son indice ({{
+          riddleCount
+        }}
+        pour l'instant).
       </p>
       <p v-else-if="message" class="message" :class="message.tone">{{ message.text }}</p>
       <div class="actions">
         <template v-if="status === 'valid'">
-          <button class="cta ghost press" type="button" :disabled="!listOk" @click="save('draft')">
+          <button class="cta ghost press" type="button" @click="save('draft')">
             Repasser en brouillon
           </button>
           <button
             class="cta validate press"
             type="button"
-            :disabled="!dirty || !listOk"
+            :disabled="!dirty || !valid"
             @click="save('valid')"
           >
             Enregistrer
@@ -284,7 +296,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
           <button
             class="cta ghost press"
             type="button"
-            :disabled="(status && !dirty) || !listOk"
+            :disabled="status && !dirty"
             @click="save('draft')"
           >
             Enregistrer le brouillon
@@ -292,7 +304,7 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
           <button
             class="cta validate press"
             type="button"
-            :disabled="!listOk"
+            :disabled="!valid"
             @click="save('valid')"
           >
             Valider
@@ -321,7 +333,6 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   --muted: var(--dc-muted);
   --panel: var(--dc-board);
   --line: var(--dc-board-edge);
-  --rare: #b07d00;
   --on-color: var(--dc-cream);
   max-width: 640px;
   margin: 0 auto;
@@ -375,9 +386,6 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   color: var(--dc-muted);
   cursor: pointer;
 }
-.family-top .note {
-  font-family: var(--dc-mono);
-}
 .foot {
   padding: 0.6rem 1rem max(1rem, env(safe-area-inset-bottom));
   border-top: 1.5px solid var(--dc-board-edge);
@@ -409,33 +417,34 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   font-size: 0.8rem;
   color: var(--muted);
 }
-/* A list under LIST_MIN families shows, and blocks saving. */
-.count.off {
-  color: var(--danger);
-}
 .none {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--muted);
 }
-/* A family: its rarity note, its base's definition, and its words. */
-.family {
+/* A word: its rarity note, its spellings, its kind, its clue when it's a
+   riddle, and its bases' definitions. */
+.entry {
   padding: 0.6rem 0.7rem;
   border: 1.5px solid var(--line);
   border-radius: 0.8rem;
   background: var(--panel);
 }
-.family + .family {
+.entry + .entry {
   margin-top: 0.5rem;
 }
-.family.rare {
-  border-color: var(--rare);
+.entry.riddle {
+  border-color: var(--day);
 }
-.family-top {
+.entry-top {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
+}
+.entry-top .spellings {
+  flex: 1;
+  min-width: 0;
 }
 .note {
   flex: none;
@@ -443,20 +452,33 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   padding: 0.1rem 0.3rem;
   border-radius: 999px;
   text-align: center;
+  font-family: var(--dc-mono);
   font-size: 0.75rem;
   font-weight: 900;
   color: var(--muted);
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
-.rare .note {
-  color: var(--on-color);
-  background: var(--rare);
+.clue {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1.5px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--dc-cream);
+  font: inherit;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--ink);
 }
-.family-def {
-  flex: 1;
-  min-width: 0;
+/* A riddle still to clue blocks validating. */
+.clue.empty {
+  border-color: var(--danger);
 }
-/* The family's kind: in the list, or rare. */
+.definition {
+  margin-top: 0.4rem;
+}
+/* The word's kind: a riddle, or a bonus word. */
 .kinds {
   flex: none;
   display: flex;
@@ -481,16 +503,8 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   color: var(--on-color);
   background: var(--ink);
 }
-.rare .kind.on {
-  background: var(--rare);
-}
-.words {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+.riddle .kind.on {
+  background: var(--day);
 }
 .spellings {
   display: flex;
@@ -583,9 +597,6 @@ const play = () => router.push(`/dicorama/motif/${pattern}`);
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--muted);
-}
-.other-def {
-  margin: 0.25rem 0 0 0.6rem;
 }
 
 .foot {
