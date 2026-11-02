@@ -67,14 +67,14 @@ inconnu ».
 
 Les niveaux sont tous les motifs qui passent les seuils (en tête de
 `scripts/build-levels.mjs`) : de 4 à 9 lettres, 2 à 4 cases vides, au moins 2
-lettres visibles, 6 à 30 mots, au moins 5 bases courantes différentes, au plus
+lettres visibles, 10 à 30 mots, au moins 6 bases courantes différentes, au plus
 60 % de mots au pluriel, moins de 250 formes de verbe qui le remplissent (pas de
 ____AIS). Quand un niveau en précise un autre (A__TE dans A___E), seul le plus
 précis reste.
 
 ## Banque et niveaux officiels
 
-Ce que génère `dicorama:levels` est la **banque** (`bank.json`, environ 17 Mo),
+Ce que génère `dicorama:levels` est la **banque** (`bank.json`, environ 15 Mo),
 réservée à l'admin (le compte `cara+`) : elle n'est chargée qu'à l'ouverture de la
 banque ou de l'éditeur, jamais par les joueurs. Ses niveaux n'ont pas d'énigmes :
 jouée depuis la banque, un niveau prend ses 6 mots les plus courants, une base

@@ -35,12 +35,12 @@ const LENGTHS = [4, 5, 6, 7, 8, 9];
 // Blanks per level, at least MIN_SHOWN letters staying shown.
 const BLANKS = [2, 3, 4];
 const MIN_SHOWN = 2;
-// Words per level: enough for its riddles (see CLUES_MIN in game.js), few enough
-// to find them all.
-const MIN_WORDS = 6;
+// Words per level: enough to pick riddles from, few enough to find them all.
+const MIN_WORDS = 10;
 const MAX_WORDS = 30;
-// Common bases (under RARE_POINTS) per level, at least.
-const MIN_COMMON = 5;
+// Common bases (under RARE_POINTS) per level, at least: one per default riddle
+// (see defaultClues in game.js).
+const MIN_COMMON = 6;
 // Share of words that are plurals, at most (…ES, …ÉS farms).
 const MAX_PLURALS = 0.6;
 // Conjugated verb forms that fit a level, fewer than this: the player's told

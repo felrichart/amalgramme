@@ -3,3 +3,4 @@ node_modules
 package-lock.json
 lab/lexilouhette/levels.json
 lab/lexilouhette/official.json
+src/dicorama/bank.json

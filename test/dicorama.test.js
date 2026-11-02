@@ -334,7 +334,7 @@ describe('useDicorama', () => {
 });
 
 describe('levels', () => {
-  it('ships levels of 6 to 30 words, each fitting its silhouette', () => {
+  it('ships levels of 10 to 30 words, each fitting its silhouette', () => {
     expect(BANK.length).toBeGreaterThan(500);
     expect(new Set(BANK.map((l) => l.pattern)).size).toBe(BANK.length);
     for (const l of BANK.map(buildLevel)) {
@@ -343,7 +343,7 @@ describe('levels', () => {
       expect(l.pattern.length - blanks).toBeGreaterThanOrEqual(2);
       expect(l.pattern.length).toBeGreaterThanOrEqual(4);
       expect(l.pattern.length).toBeLessThanOrEqual(9);
-      expect(l.answers.size).toBeGreaterThanOrEqual(6);
+      expect(l.answers.size).toBeGreaterThanOrEqual(10);
       expect(l.answers.size).toBeLessThanOrEqual(30);
       for (const a of l.answers.values()) {
         expect(a.key).toHaveLength(l.pattern.length);
